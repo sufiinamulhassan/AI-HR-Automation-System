@@ -1,0 +1,78 @@
+
+.adm-tabs {
+  display: flex;
+  gap: .25rem;
+  margin: 0 1.75rem 1.25rem;
+  border-bottom: 1.5px solid var(--gray-200);
+}
+
+.adm-tab {
+  position: relative;
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .7rem 1.1rem;
+  background: none; border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  font-family: inherit; font-size: .85rem; font-weight: 600;
+  color: var(--gray-400);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .18s, border-color .18s;
+}
+
+.adm-tab:hover { color: var(--gray-600); }
+
+.adm-tab-active,
+.adm-tab-active:hover {
+  color: var(--secondary);
+  border-bottom-color: var(--primary);
+}
+
+.adm-tab:focus-visible {
+  outline: 2px solid rgba(71, 120, 243, .6);
+  outline-offset: -2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.adm-tab-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.35rem; height: 1.35rem; padding: 0 .4rem;
+  border-radius: var(--radius);
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--gray-400);
+  transition: background .18s, color .18s, border-color .18s;
+}
+
+.adm-tab-active .adm-tab-count {
+  background: var(--primary-light);
+  border-color: rgba(71, 120, 243, .35);
+  color: var(--primary-dark);
+}
+
+.adm-link {
+  padding: 0; border: none; background: none;
+  font: inherit; color: var(--primary-dark);
+  font-weight: 600; text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.adm-link:hover { color: var(--primary); }
+.adm-link:focus-visible { outline: 2px solid rgba(71, 120, 243, .6); outline-offset: 2px; border-radius: 3px; }
+
+.adm-field-hint {
+  display: block;
+  margin-top: .4rem;
+  font-size: .72rem; font-weight: 500; line-height: 1.5;
+  color: var(--gray-400);
+}
+
+@media (max-width: 640px) {
+  .adm-tabs {
+    margin: 0 1rem 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .adm-tab { padding: .65rem .75rem; font-size: .8rem; }
+}

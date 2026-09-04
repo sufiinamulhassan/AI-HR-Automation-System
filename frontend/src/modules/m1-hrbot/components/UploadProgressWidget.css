@@ -1,0 +1,75 @@
+.upw {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  width: 320px;
+  max-width: calc(100vw - 3rem);
+  padding: .85rem 1rem;
+  background: var(--white, #fff);
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-left: 4px solid var(--primary, var(--primary));
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .18);
+  cursor: pointer;
+  animation: upw-in .25s ease;
+  transition: transform .15s, box-shadow .15s;
+}
+.upw:hover { transform: translateY(-2px); box-shadow: 0 16px 40px rgba(0, 0, 0, .22); }
+.upw-done   { border-left-color: var(--success, #16a34a); }
+.upw-failed { border-left-color: var(--danger, #dc2626); }
+
+@keyframes upw-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.upw-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--primary-light, var(--primary-light));
+  color: var(--primary, var(--primary));
+}
+.upw-done .upw-icon   { background: #dcfce7; color: var(--success, #16a34a); }
+.upw-failed .upw-icon { background: #fee2e2; color: var(--danger, #dc2626); }
+
+.upw-spin { animation: upw-rotate .9s linear infinite; }
+@keyframes upw-rotate { to { transform: rotate(360deg); } }
+
+.upw-body { flex: 1; min-width: 0; }
+.upw-title {
+  font-size: .85rem; font-weight: 700; color: var(--gray-900, #111827);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.upw-sub { font-size: .72rem; color: var(--gray-500, #6b7280); margin-top: .1rem; }
+
+.upw-bar-wrap {
+  margin-top: .4rem;
+  height: 5px;
+  background: var(--gray-200, #e5e7eb);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.upw-bar {
+  height: 100%;
+  background: var(--primary, var(--primary));
+  border-radius: var(--radius);
+  transition: width .4s ease;
+}
+.upw-done .upw-bar   { background: var(--success, #16a34a); }
+.upw-failed .upw-bar { background: var(--danger, #dc2626); }
+
+.upw-close {
+  flex-shrink: 0;
+  border: none; background: transparent;
+  color: var(--gray-400, #9ca3af);
+  font-size: .85rem; cursor: pointer; line-height: 1;
+  padding: .25rem; border-radius: 6px;
+}
+.upw-close:hover { background: var(--gray-100, #f3f4f6); color: var(--gray-700, #374151); }

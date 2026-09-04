@@ -1,0 +1,1126 @@
+{
+  "meta": {
+    "title": "Hirely.ai v3.0 \u2014 API Reference",
+    "base_url": "/api/v1 (same origin as the site)",
+    "version": "3.0",
+    "modules": [
+      "hr_module"
+    ],
+    "auth": "Bearer token (JWT) via Authorization header",
+    "generated_at": "2026-06-10"
+  },
+  "endpoints": {
+    "system": [
+      {
+        "id": "health",
+        "method": "GET",
+        "path": "/health",
+        "description": "Health check \u2014 returns platform status and active modules",
+        "auth_required": false,
+        "payload": null,
+        "response": {
+          "status": "ok",
+          "version": "3.0.0",
+          "modules": [
+            "hr_module"
+          ]
+        }
+      }
+    ],
+    "auth": [
+      {
+        "id": "auth_login",
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "description": "Login with email and password. Returns JWT or triggers OTP flow.",
+        "auth_required": false,
+        "payload": {
+          "email": "admin@acme.com",
+          "password": "S3cur3P@ssword!"
+        },
+        "response_no_otp": {
+          "otp_required": false,
+          "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBhY21lLmNvbSIsImV4cCI6MTc0OTIwMDAwMH0.abc123",
+          "token_type": "bearer",
+          "user": {
+            "email": "admin@acme.com",
+            "name": "Alice Admin",
+            "role": "admin"
+          }
+        },
+        "response_with_otp": {
+          "otp_required": true,
+          "message": "OTP sent to your email"
+        }
+      },
+      {
+        "id": "auth_verify_otp",
+        "method": "POST",
+        "path": "/api/v1/auth/verify-otp",
+        "description": "Verify OTP code sent to email. Returns JWT on success.",
+        "auth_required": false,
+        "payload": {
+          "email": "admin@acme.com",
+          "otp_code": "847291"
+        },
+        "response": {
+          "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBhY21lLmNvbSIsImV4cCI6MTc0OTIwMDAwMH0.xyz789",
+          "token_type": "bearer",
+          "user": {
+            "email": "admin@acme.com",
+            "name": "Alice Admin",
+            "role": "admin"
+          }
+        }
+      },
+      {
+        "id": "auth_token",
+        "method": "POST",
+        "path": "/api/v1/auth/token",
+        "description": "OAuth2 password flow \u2014 form-encoded credentials. Used by Swagger UI.",
+        "auth_required": false,
+        "payload_form_encoded": {
+          "username": "admin@acme.com",
+          "password": "S3cur3P@ssword!"
+        },
+        "response": {
+          "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBhY21lLmNvbSIsImV4cCI6MTc0OTIwMDAwMH0.abc123",
+          "token_type": "bearer"
+        }
+      },
+      {
+        "id": "auth_me",
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "description": "Get the currently authenticated user's profile.",
+        "auth_required": true,
+        "payload": null,
+        "response": {
+          "email": "admin@acme.com",
+          "name": "Alice Admin",
+          "role": "admin",
+          "otp_required": false,
+          "is_active": true,
+          "created_at": "2026-01-15T09:00:00Z",
+          "last_login_at": "2026-06-06T14:00:00Z"
+        }
+      },
+      {
+        "id": "auth_create_user",
+        "method": "POST",
+        "path": "/api/v1/auth/users",
+        "description": "Create a new platform user. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload": {
+          "name": "Bob Recruiter",
+          "email": "bob@acme.com",
+          "password": "Temp@1234",
+          "role": "standard",
+          "otp_required": false
+        },
+        "response": {
+          "message": "User created"
+        }
+      },
+      {
+        "id": "auth_list_users",
+        "method": "GET",
+        "path": "/api/v1/auth/users",
+        "description": "List platform users. Superadmins see all users; admins see standard users only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload": null,
+        "response": [
+          {
+            "email": "admin@acme.com",
+            "name": "Alice Admin",
+            "role": "admin",
+            "otp_required": false,
+            "is_active": true,
+            "created_at": "2026-01-15T09:00:00Z",
+            "last_login_at": "2026-06-06T14:00:00Z"
+          },
+          {
+            "email": "bob@acme.com",
+            "name": "Bob Recruiter",
+            "role": "standard",
+            "otp_required": false,
+            "is_active": true,
+            "created_at": "2026-03-10T11:00:00Z",
+            "last_login_at": "2026-06-05T09:30:00Z"
+          }
+        ]
+      },
+      {
+        "id": "auth_update_user",
+        "method": "PATCH",
+        "path": "/api/v1/auth/users/{email}",
+        "description": "Update user fields (name, role, otp_required, is_active). Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "email": "bob@acme.com"
+        },
+        "payload": {
+          "name": "Bob Senior Recruiter",
+          "role": "admin",
+          "otp_required": true,
+          "is_active": true
+        },
+        "response": {
+          "message": "Updated"
+        }
+      },
+      {
+        "id": "auth_delete_user",
+        "method": "DELETE",
+        "path": "/api/v1/auth/users/{email}",
+        "description": "Delete a user. Superadmin only. Cannot delete yourself.",
+        "auth_required": true,
+        "roles_required": [
+          "superadmin"
+        ],
+        "path_params": {
+          "email": "bob@acme.com"
+        },
+        "payload": null,
+        "response": {
+          "message": "Deleted"
+        }
+      },
+      {
+        "id": "auth_change_password",
+        "method": "POST",
+        "path": "/api/v1/auth/change-password",
+        "description": "Change current user's own password.",
+        "auth_required": true,
+        "payload": {
+          "current_password": "S3cur3P@ssword!",
+          "new_password": "NewP@ss2026!"
+        },
+        "response": {
+          "message": "Password changed"
+        }
+      },
+      {
+        "id": "auth_admin_reset_password",
+        "method": "POST",
+        "path": "/api/v1/auth/admin/reset-password",
+        "description": "Admin resets any user's password by email.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload": {
+          "email": "bob@acme.com",
+          "new_password": "Reset@Temp1"
+        },
+        "response": {
+          "message": "Password reset"
+        }
+      },
+      {
+        "id": "auth_list_models",
+        "method": "GET",
+        "path": "/api/v1/auth/models",
+        "description": "List available LLM models and current default.",
+        "auth_required": true,
+        "payload": null,
+        "response": {
+          "models": [
+            {
+              "id": "gpt-4o",
+              "label": "GPT-4o",
+              "provider": "openai"
+            },
+            {
+              "id": "gpt-4o-mini",
+              "label": "GPT-4o Mini",
+              "provider": "openai"
+            },
+            {
+              "id": "claude-3-5-sonnet-20241022",
+              "label": "Claude 3.5 Sonnet",
+              "provider": "anthropic"
+            },
+            {
+              "id": "gemini-2.0-flash",
+              "label": "Gemini 2.0 Flash",
+              "provider": "google"
+            }
+          ],
+          "current": "gpt-4o"
+        }
+      },
+      {
+        "id": "auth_set_default_model",
+        "method": "PATCH",
+        "path": "/api/v1/auth/models/default",
+        "description": "Set the platform-wide default LLM model. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload": {
+          "default_model": "claude-3-5-sonnet-20241022"
+        },
+        "response": {
+          "message": "Default model \u2192 claude-3-5-sonnet-20241022"
+        }
+      }
+    ],
+    "jobs": [
+      {
+        "id": "jobs_create",
+        "method": "POST",
+        "path": "/api/v1/jobs/",
+        "description": "Create a job description. Triggers async AI parsing, embedding, resume matching, and auto-invites. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload": {
+          "title": "Senior Backend Engineer",
+          "description": "We are looking for a Senior Backend Engineer with 5+ years of experience in Python and distributed systems. You will design scalable APIs, manage cloud infrastructure, and mentor junior developers.",
+          "difficulty": "senior",
+          "employment_type": "full-time",
+          "location": "Lahore, Pakistan",
+          "salary_min": 150000,
+          "salary_max": 250000,
+          "is_remote": true,
+          "company_name": "Acme Corp",
+          "model_override": null
+        },
+        "response": {
+          "doc_type": "job",
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "title": "Senior Backend Engineer",
+          "description": "We are looking for a Senior Backend Engineer...",
+          "difficulty": "senior",
+          "employment_type": "full-time",
+          "location": "Lahore, Pakistan",
+          "salary_min": 150000,
+          "salary_max": 250000,
+          "is_remote": true,
+          "company_name": "Acme Corp",
+          "parsed_criteria": {},
+          "targeting": {},
+          "candidate_pipeline": [],
+          "created_by": "admin@acme.com",
+          "created_at": "2026-06-06T14:10:00Z",
+          "updated_at": "2026-06-06T14:10:00Z"
+        }
+      },
+      {
+        "id": "jobs_list",
+        "method": "GET",
+        "path": "/api/v1/jobs/",
+        "description": "List all jobs with pagination and optional full-text search.",
+        "auth_required": true,
+        "query_params": {
+          "page": 1,
+          "limit": 20,
+          "search": "backend"
+        },
+        "payload": null,
+        "response": {
+          "jobs": [
+            {
+              "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+              "title": "Senior Backend Engineer",
+              "difficulty": "senior",
+              "employment_type": "full-time",
+              "location": "Lahore, Pakistan",
+              "salary_min": 150000,
+              "salary_max": 250000,
+              "is_remote": true,
+              "company_name": "Acme Corp",
+              "candidate_pipeline": [],
+              "created_by": "admin@acme.com",
+              "created_at": "2026-06-06T14:10:00Z",
+              "updated_at": "2026-06-06T14:10:00Z"
+            }
+          ],
+          "total": 1,
+          "page": 1,
+          "limit": 20
+        }
+      },
+      {
+        "id": "jobs_get",
+        "method": "GET",
+        "path": "/api/v1/jobs/{job_id}",
+        "description": "Retrieve a single job by ID.",
+        "auth_required": true,
+        "path_params": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789"
+        },
+        "payload": null,
+        "response": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "title": "Senior Backend Engineer",
+          "description": "We are looking for a Senior Backend Engineer with 5+ years of experience...",
+          "difficulty": "senior",
+          "employment_type": "full-time",
+          "location": "Lahore, Pakistan",
+          "salary_min": 150000,
+          "salary_max": 250000,
+          "is_remote": true,
+          "company_name": "Acme Corp",
+          "parsed_criteria": {
+            "required_skills": [
+              "Python",
+              "FastAPI",
+              "PostgreSQL",
+              "Redis",
+              "Docker"
+            ],
+            "preferred_skills": [
+              "Kubernetes",
+              "AWS",
+              "LangChain"
+            ],
+            "min_experience_years": 5,
+            "education_level": "bachelor"
+          },
+          "targeting": {
+            "job_domain": "Software Engineering",
+            "seniority_level": "senior"
+          },
+          "candidate_pipeline": [
+            {
+              "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+              "similarity_score": 0.91,
+              "pipeline_stage": "invited",
+              "added_at": "2026-06-06T14:15:00Z"
+            }
+          ],
+          "created_by": "admin@acme.com",
+          "created_at": "2026-06-06T14:10:00Z",
+          "updated_at": "2026-06-06T14:15:00Z"
+        }
+      },
+      {
+        "id": "jobs_update",
+        "method": "PATCH",
+        "path": "/api/v1/jobs/{job_id}",
+        "description": "Update a job. If description is changed, re-runs AI parsing and matching. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789"
+        },
+        "payload": {
+          "title": "Lead Backend Engineer",
+          "salary_max": 300000
+        },
+        "response": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "title": "Lead Backend Engineer",
+          "salary_max": 300000,
+          "updated_at": "2026-06-06T15:00:00Z"
+        }
+      },
+      {
+        "id": "jobs_delete",
+        "method": "DELETE",
+        "path": "/api/v1/jobs/{job_id}",
+        "description": "Delete a job. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789"
+        },
+        "payload": null,
+        "response": {
+          "message": "Job deleted"
+        }
+      },
+      {
+        "id": "jobs_get_pipeline",
+        "method": "GET",
+        "path": "/api/v1/jobs/{job_id}/pipeline",
+        "description": "Get full candidate pipeline for a job with enriched resume data.",
+        "auth_required": true,
+        "path_params": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789"
+        },
+        "payload": null,
+        "response": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "pipeline": [
+            {
+              "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+              "similarity_score": 0.91,
+              "pipeline_stage": "invited",
+              "added_at": "2026-06-06T14:15:00Z",
+              "resume": {
+                "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+                "candidate_name": "Sara Khan",
+                "filename": "sara_khan_cv.pdf",
+                "processing_status": "processed",
+                "classification": {
+                  "job_domain": "Software Engineering",
+                  "seniority_level": "senior"
+                }
+              }
+            }
+          ],
+          "total": 1
+        }
+      },
+      {
+        "id": "jobs_update_pipeline_stage",
+        "method": "PATCH",
+        "path": "/api/v1/jobs/{job_id}/pipeline/{resume_id}",
+        "description": "Move a candidate to a new pipeline stage. Valid stages: matched, shortlisted, invited, interviewing, completed, hired, rejected. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "resume_id": "a1b2c3d4-0000-1111-2222-333344445555"
+        },
+        "query_params": {
+          "stage": "shortlisted"
+        },
+        "payload": null,
+        "response": {
+          "message": "Stage updated to shortlisted"
+        }
+      }
+    ],
+    "resumes": [
+      {
+        "id": "resumes_upload",
+        "method": "POST",
+        "path": "/api/v1/resumes/upload",
+        "description": "Upload a single resume (PDF/DOCX). Triggers async ResumeAgent pipeline: extract \u2192 classify \u2192 embed \u2192 match_jds \u2192 store \u2192 auto_invite. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload_multipart_form": {
+          "file": "<binary PDF/DOCX>",
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "model_override": null
+        },
+        "response": {
+          "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+          "status": "processing"
+        }
+      },
+      {
+        "id": "resumes_list",
+        "method": "GET",
+        "path": "/api/v1/resumes/",
+        "description": "List all resumes with pagination, full-text search, domain, and seniority filters.",
+        "auth_required": true,
+        "query_params": {
+          "page": 1,
+          "limit": 20,
+          "search": "sara",
+          "domain": "Software Engineering",
+          "seniority": "senior"
+        },
+        "payload": null,
+        "response": {
+          "resumes": [
+            {
+              "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+              "filename": "sara_khan_cv.pdf",
+              "candidate_name": "Sara Khan",
+              "candidate_email": "sara.khan@gmail.com",
+              "processing_status": "processed",
+              "classification": {
+                "job_domain": "Software Engineering",
+                "seniority_level": "senior",
+                "primary_skills": [
+                  "Python",
+                  "FastAPI",
+                  "PostgreSQL",
+                  "AWS"
+                ],
+                "years_of_experience": 7
+              },
+              "match_scores": [
+                {
+                  "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+                  "score": 0.91
+                }
+              ],
+              "outcome": null,
+              "created_at": "2026-06-06T14:12:00Z"
+            }
+          ],
+          "total": 1,
+          "page": 1,
+          "limit": 20
+        }
+      },
+      {
+        "id": "resumes_get",
+        "method": "GET",
+        "path": "/api/v1/resumes/{resume_id}",
+        "description": "Retrieve a single resume. Optionally include raw extracted text.",
+        "auth_required": true,
+        "path_params": {
+          "resume_id": "a1b2c3d4-0000-1111-2222-333344445555"
+        },
+        "query_params": {
+          "include_text": false
+        },
+        "payload": null,
+        "response": {
+          "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+          "filename": "sara_khan_cv.pdf",
+          "candidate_name": "Sara Khan",
+          "candidate_email": "sara.khan@gmail.com",
+          "candidate_phone": "+92-300-1234567",
+          "processing_status": "processed",
+          "classification": {
+            "job_domain": "Software Engineering",
+            "seniority_level": "senior",
+            "primary_skills": [
+              "Python",
+              "FastAPI",
+              "PostgreSQL",
+              "AWS",
+              "Docker"
+            ],
+            "secondary_skills": [
+              "Redis",
+              "Celery",
+              "GitHub Actions"
+            ],
+            "years_of_experience": 7,
+            "education": "BS Computer Science, LUMS 2018"
+          },
+          "match_scores": [
+            {
+              "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+              "score": 0.91
+            }
+          ],
+          "outcome": null,
+          "auto_invited": true,
+          "created_at": "2026-06-06T14:12:00Z"
+        }
+      },
+      {
+        "id": "resumes_delete",
+        "method": "DELETE",
+        "path": "/api/v1/resumes/{resume_id}",
+        "description": "Delete a resume from DB and Pinecone vector store. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "resume_id": "a1b2c3d4-0000-1111-2222-333344445555"
+        },
+        "payload": null,
+        "response": {
+          "message": "Resume deleted"
+        }
+      }
+    ],
+    "candidates": [
+      {
+        "id": "candidates_create",
+        "method": "POST",
+        "path": "/api/v1/candidates/",
+        "description": "Manually invite a candidate for a job interview. Sends invite email. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "name": "Sara Khan",
+          "email": "sara.khan@gmail.com",
+          "resume_id": "a1b2c3d4-0000-1111-2222-333344445555"
+        },
+        "response": {
+          "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222",
+          "secure_token": "tok_3f8e9a1b2c4d",
+          "interview_url": "https://hirely.acme.com/interview/tok_3f8e9a1b2c4d",
+          "invite_type": "manual"
+        }
+      },
+      {
+        "id": "candidates_list",
+        "method": "GET",
+        "path": "/api/v1/candidates/",
+        "description": "List all candidates with filters for job, status, and invite type.",
+        "auth_required": true,
+        "query_params": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "status": "invited",
+          "invite_type": "manual",
+          "page": 1,
+          "limit": 20
+        },
+        "payload": null,
+        "response": {
+          "candidates": [
+            {
+              "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222",
+              "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+              "name": "Sara Khan",
+              "email": "sara.khan@gmail.com",
+              "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+              "secure_token": "tok_3f8e9a1b2c4d",
+              "token_status": "active",
+              "status": "invited",
+              "pipeline_stage": "invited",
+              "invite_type": "manual",
+              "session_active": false,
+              "invited_by": "admin@acme.com",
+              "invite_sent_at": "2026-06-06T14:20:00Z",
+              "invite_resent_count": 0,
+              "transcript": [],
+              "integrity_flags": [],
+              "report": null,
+              "eval_score": null,
+              "created_at": "2026-06-06T14:20:00Z"
+            }
+          ],
+          "total": 1
+        }
+      },
+      {
+        "id": "candidates_get",
+        "method": "GET",
+        "path": "/api/v1/candidates/{candidate_id}",
+        "description": "Retrieve a single candidate record.",
+        "auth_required": true,
+        "path_params": {
+          "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222"
+        },
+        "payload": null,
+        "response": {
+          "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222",
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "name": "Sara Khan",
+          "email": "sara.khan@gmail.com",
+          "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+          "secure_token": "tok_3f8e9a1b2c4d",
+          "token_status": "consumed",
+          "status": "completed",
+          "pipeline_stage": "completed",
+          "invite_type": "manual",
+          "session_active": false,
+          "invited_by": "admin@acme.com",
+          "invite_sent_at": "2026-06-06T14:20:00Z",
+          "invite_resent_count": 1,
+          "interview_started_at": "2026-06-06T15:00:00Z",
+          "interview_ended_at": "2026-06-06T15:35:00Z",
+          "transcript": [
+            {
+              "role": "agent",
+              "content": "Tell me about your experience with Python.",
+              "timestamp": "2026-06-06T15:00:05Z"
+            },
+            {
+              "role": "candidate",
+              "content": "I have 7 years of Python experience, primarily with FastAPI and async programming.",
+              "timestamp": "2026-06-06T15:01:30Z"
+            }
+          ],
+          "integrity_flags": [],
+          "eval_score": 87,
+          "report": {
+            "overall_score": 87,
+            "technical_score": 90,
+            "communication_score": 85,
+            "problem_solving_score": 86,
+            "cultural_fit_score": 88,
+            "recommendation": "hire",
+            "summary": "Strong senior backend engineer with excellent Python expertise and communication skills.",
+            "strengths": [
+              "Deep Python knowledge",
+              "Strong system design",
+              "Clear communicator"
+            ],
+            "areas_for_improvement": [
+              "Limited Kubernetes experience",
+              "Could improve on behavioral answers"
+            ],
+            "integrity_assessment": "No integrity concerns detected."
+          },
+          "match_score": 0.91,
+          "created_at": "2026-06-06T14:20:00Z"
+        }
+      },
+      {
+        "id": "candidates_resend_invite",
+        "method": "POST",
+        "path": "/api/v1/candidates/{candidate_id}/resend-invite",
+        "description": "Resend interview invite email using the candidate's current secure token. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222"
+        },
+        "payload": null,
+        "response": {
+          "message": "Invite resent successfully",
+          "sent_to": "sara.khan@gmail.com",
+          "sent_by": "admin@acme.com",
+          "resent_count": 2
+        }
+      },
+      {
+        "id": "candidates_regenerate_token",
+        "method": "POST",
+        "path": "/api/v1/candidates/{candidate_id}/regenerate-token",
+        "description": "Generate a new secure token (invalidates old link). Optionally resend invite email. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222"
+        },
+        "payload": {
+          "resend": true
+        },
+        "response": {
+          "secure_token": "tok_9z8y7x6w5v4u",
+          "interview_url": "https://hirely.acme.com/interview/tok_9z8y7x6w5v4u",
+          "email_resent": true
+        }
+      },
+      {
+        "id": "candidates_decision",
+        "method": "POST",
+        "path": "/api/v1/candidates/{candidate_id}/decision",
+        "description": "Record a hire / reject / hold decision for a candidate. Updates pipeline stage and applies resume outcome. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222"
+        },
+        "payload": {
+          "decision": "hire",
+          "notes": "Exceptional technical performance. Recommended for immediate onboarding."
+        },
+        "response": {
+          "message": "Decision recorded: hire",
+          "stage": "hired"
+        }
+      }
+    ],
+    "interview": [
+      {
+        "id": "interview_session_start",
+        "method": "GET",
+        "path": "/api/v1/interview/session/{secure_token}",
+        "description": "Start a live interview session. The secure_token in the path is the only credential. Returns the full question list; the client drives the turn-by-turn flow and enforces the timer. There is no WebSocket \u2014 the backend runs on a Lambda Function URL, which is HTTP request/response only.",
+        "auth_required": false,
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": null,
+        "response": {
+          "candidate_name": "Sara Khan",
+          "duration_minutes": 30,
+          "questions": [
+            "Tell me about your most challenging backend project."
+          ]
+        },
+        "errors": {
+          "403": "Interview is scheduled to begin later",
+          "404": "Invalid interview link",
+          "410": "Link already used or expired"
+        }
+      },
+      {
+        "id": "interview_speak",
+        "method": "POST",
+        "path": "/api/v1/interview/session/{secure_token}/speak",
+        "description": "Synthesize a question to speech so the AI can read it aloud to the candidate. Returns raw audio/mpeg bytes, not a URL \u2014 the audio is ephemeral and candidate-specific.",
+        "auth_required": false,
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": {
+          "text": "Tell me about your most challenging backend project."
+        },
+        "response": "binary MP3 (Content-Type: audio/mpeg)",
+        "errors": {
+          "400": "No text to speak",
+          "413": "Question exceeds MAX_TTS_INPUT_CHARS",
+          "502": "Speech synthesis unavailable"
+        }
+      },
+      {
+        "id": "interview_transcribe",
+        "method": "POST",
+        "path": "/api/v1/interview/session/{secure_token}/transcribe",
+        "description": "Transcribe a recorded spoken answer. Multipart upload of the audio blob the browser just captured. The candidate confirms the returned text before it enters the transcript.",
+        "auth_required": false,
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": "multipart/form-data; field `file` = audio blob (webm/opus or mp4/aac)",
+        "response": {
+          "text": "I led a team of four engineers rebuilding our ingest pipeline."
+        },
+        "errors": {
+          "400": "Empty audio upload",
+          "413": "Recording exceeds MAX_ANSWER_AUDIO_MB",
+          "502": "Transcription unavailable"
+        }
+      },
+      {
+        "id": "interview_followup",
+        "method": "POST",
+        "path": "/api/v1/interview/session/{secure_token}/followup",
+        "description": "Ask whether the just-answered Q&A pair warrants an adaptive probing follow-up. Best-effort \u2014 a null followup means move on to the next scripted question.",
+        "auth_required": false,
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": {
+          "question": "Tell me about your most challenging backend project.",
+          "answer": "We rebuilt our ingest pipeline."
+        },
+        "response": {
+          "followup": "What was the hardest tradeoff you had to make in that rebuild?"
+        }
+      },
+      {
+        "id": "interview_flag",
+        "method": "POST",
+        "path": "/api/v1/interview/session/{secure_token}/flag",
+        "description": "Record an integrity event during the session. Appended ($push) to integrity_flags with a server-side timestamp. Known events: tab_switch (-10), window_blur (-8), page_unload_attempt (-20), connection_lost (-5), connection_restored (0), no_face_detected (-12), multiple_faces_detected (-15), face_detected (0), gaze_off_screen (-6), gaze_on_screen (0), terminated_tab_switches (-40). Unrecognised events score -3.",
+        "auth_required": false,
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": {
+          "event": "tab_switch"
+        },
+        "response": {
+          "recorded": true
+        }
+      },
+      {
+        "id": "interview_submit",
+        "method": "POST",
+        "path": "/api/v1/interview/session/{secure_token}/submit",
+        "description": "Submit the completed transcript and trigger background evaluation. Consumes the token. Any flags sent here are APPENDED to the integrity_flags already accumulated via /flag, never replacing them.",
+        "auth_required": false,
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": {
+          "transcript": [
+            {
+              "question": "Tell me about your Python experience.",
+              "answer": "Seven years, mostly FastAPI.",
+              "answered_at": "2026-06-06T15:01:30Z"
+            }
+          ],
+          "flags": [
+            "terminated_tab_switches@2026-06-06T15:20:00Z"
+          ],
+          "termination_reason": "max_tab_switches"
+        },
+        "response": {
+          "status": "submitted"
+        }
+      },
+      {
+        "id": "interview_report",
+        "method": "GET",
+        "path": "/api/v1/interview/report/{secure_token}",
+        "description": "Full AI evaluation report for a completed interview session. Admin only. Never shared with candidate.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": null,
+        "response": {
+          "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222",
+          "name": "Sara Khan",
+          "email": "sara.khan@gmail.com",
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "eval_score": 87,
+          "status": "completed",
+          "invite_type": "manual",
+          "match_score": 0.91,
+          "transcript": [
+            {
+              "role": "agent",
+              "content": "Tell me about your Python experience.",
+              "timestamp": "2026-06-06T15:00:05Z"
+            },
+            {
+              "role": "candidate",
+              "content": "I have 7 years of experience with Python, specializing in FastAPI.",
+              "timestamp": "2026-06-06T15:01:30Z"
+            }
+          ],
+          "integrity_flags": [],
+          "report": {
+            "overall_score": 87,
+            "technical_score": 90,
+            "communication_score": 85,
+            "problem_solving_score": 86,
+            "cultural_fit_score": 88,
+            "recommendation": "hire",
+            "summary": "Strong senior backend engineer with excellent Python expertise and communication skills.",
+            "strengths": [
+              "Deep Python knowledge",
+              "Strong system design",
+              "Clear communicator"
+            ],
+            "areas_for_improvement": [
+              "Limited Kubernetes experience"
+            ],
+            "integrity_assessment": "No integrity concerns detected."
+          }
+        }
+      },
+      {
+        "id": "interview_report_pdf",
+        "method": "GET",
+        "path": "/api/v1/interview/report/{secure_token}/pdf",
+        "description": "Download interview report as a PDF file. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "path_params": {
+          "secure_token": "tok_3f8e9a1b2c4d"
+        },
+        "payload": null,
+        "response": {
+          "content_type": "application/pdf",
+          "content_disposition": "attachment; filename=report_tok_3f8e.pdf",
+          "note": "Binary PDF stream \u2014 download directly"
+        }
+      }
+    ],
+    "intel": [
+      {
+        "id": "intel_bulk_upload",
+        "method": "POST",
+        "path": "/api/v1/intel/resumes/upload-bulk",
+        "description": "Bulk upload up to MAX_BULK_UPLOAD_FILES resumes. Returns batch_id immediately; processing runs async via ResumeAgent. Admin only.",
+        "auth_required": true,
+        "roles_required": [
+          "admin",
+          "superadmin"
+        ],
+        "payload_multipart_form": {
+          "files": [
+            "<binary file 1>",
+            "<binary file 2>",
+            "..."
+          ],
+          "model_override": null
+        },
+        "response": {
+          "batch_id": "b9c8d7e6-ffff-eeee-dddd-cccc00001111",
+          "total_files": 12,
+          "status": "processing",
+          "auto_invite_threshold": 0.8
+        }
+      },
+      {
+        "id": "intel_batch_status",
+        "method": "GET",
+        "path": "/api/v1/intel/resumes/batch/{batch_id}/status",
+        "description": "Poll processing status of a bulk upload batch.",
+        "auth_required": true,
+        "path_params": {
+          "batch_id": "b9c8d7e6-ffff-eeee-dddd-cccc00001111"
+        },
+        "payload": null,
+        "response": {
+          "batch_id": "b9c8d7e6-ffff-eeee-dddd-cccc00001111",
+          "total_files": 12,
+          "processed": 10,
+          "skipped_duplicates": 1,
+          "failed": 1,
+          "auto_invited": 3,
+          "status": "completed",
+          "uploaded_by": "admin@acme.com",
+          "created_at": "2026-06-06T14:30:00Z",
+          "updated_at": "2026-06-06T14:32:45Z"
+        }
+      },
+      {
+        "id": "intel_resume_stats",
+        "method": "GET",
+        "path": "/api/v1/intel/resumes/stats",
+        "description": "Resume pool statistics including invite funnel metrics for dashboard graphs.",
+        "auth_required": true,
+        "payload": null,
+        "response": {
+          "total": 342,
+          "by_domain": {
+            "Software Engineering": 145,
+            "Data Science": 67,
+            "Product Management": 42,
+            "DevOps": 38,
+            "Design": 28,
+            "Marketing": 22
+          },
+          "by_seniority": {
+            "senior": 98,
+            "mid": 134,
+            "junior": 88,
+            "lead": 22
+          },
+          "invite_funnel": {
+            "auto_invited": 78,
+            "manually_invited": 34,
+            "interviewed": 92,
+            "hired": 19
+          }
+        }
+      }
+    ]
+  }
+}

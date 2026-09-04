@@ -1,0 +1,17 @@
+.job-list { flex: 1; overflow-y: auto; }
+.job-list-empty { padding: 2rem 1rem; text-align: center; color: var(--gray-400); font-size: .85rem; }
+.job-item {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: .75rem 1rem; cursor: pointer;
+  border-bottom: 1px solid var(--gray-100);
+  transition: background .1s;
+}
+.job-item:hover { background: var(--gray-50); }
+.job-item.active { background: var(--primary-light); border-left: 3px solid var(--primary); }
+.job-item-body { flex: 1; min-width: 0; }
+.job-title { font-size: .875rem; font-weight: 600; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-meta { font-size: .75rem; color: var(--gray-400); margin-top: .15rem; }
+.job-pipeline-count { font-size: .7rem; color: var(--primary); font-weight: 600; margin-top: .25rem; }
+.job-item-actions { display: flex; gap: .25rem; margin-left: .5rem; opacity: 0; transition: opacity .1s; }
+.job-item:hover .job-item-actions { opacity: 1; }
+.icon-btn { background: none; border: none; padding: .15rem; font-size: .9rem; cursor: pointer; }

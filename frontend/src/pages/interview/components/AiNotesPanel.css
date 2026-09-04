@@ -1,0 +1,50 @@
+.notes-panel { padding: 1rem; overflow-y: auto; min-height: 0; height: 100%; }
+
+.notes-header { display: flex; margin-bottom: .9rem; }
+
+.notes-badge {
+  font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+  padding: .2rem .55rem; border-radius: var(--radius);
+  background: var(--gray-50); color: var(--gray-400);
+  border: 1px solid var(--gray-200);
+}
+
+.notes-empty { font-size: .84rem; line-height: 1.6; color: var(--gray-400); }
+
+.notes-tips { list-style: none; display: flex; flex-direction: column; gap: .6rem; }
+
+.notes-tip {
+  display: flex; gap: .6rem;
+  padding: .7rem .85rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  animation: notes-tip-in .25s cubic-bezier(.16, 1, .3, 1);
+}
+
+.notes-tip-icon {
+  flex-shrink: 0;
+  width: 19px; height: 19px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; font-weight: 800;
+  margin-top: .1rem;
+}
+
+.notes-tip-good  { background: #f0fdf4; border-color: #bbf7d0; }
+.notes-tip-good  .notes-tip-icon { background: #dcfce7; color: #15803d; }
+.notes-tip-watch { background: #fffbeb; border-color: #fde68a; }
+.notes-tip-watch .notes-tip-icon { background: #fef3c7; color: #92400e; }
+.notes-tip-tip   { background: var(--primary-light); border-color: rgba(71, 120, 243, .3); }
+.notes-tip-tip   .notes-tip-icon { background: rgba(71, 120, 243, .22); color: var(--primary-dark); }
+
+.notes-tip-title { font-size: .84rem; font-weight: 700; color: var(--gray-800); }
+.notes-tip-body  { font-size: .8rem; line-height: 1.55; color: var(--gray-500); margin-top: .15rem; }
+
+@keyframes notes-tip-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notes-tip { animation: none; }
+}

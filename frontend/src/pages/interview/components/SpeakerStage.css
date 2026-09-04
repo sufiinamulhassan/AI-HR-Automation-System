@@ -1,0 +1,193 @@
+
+.speaker-stage {
+  width: 100%; min-height: 0; flex-shrink: 0;
+  display: flex; justify-content: center;
+}
+
+.stage-well {
+  position: relative;
+  width: 100%;
+  max-width: calc(min(42vh, 400px) * 16 / 9);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: radial-gradient(110% 90% at 50% -10%, #23375c 0%, var(--secondary) 48%, #0b1120 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 18px 44px rgba(11, 17, 32, .28);
+}
+
+.stage-tile {
+  position: absolute;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #0b1120;
+  transition:
+    inset .38s cubic-bezier(.16, 1, .3, 1),
+    width .38s cubic-bezier(.16, 1, .3, 1),
+    height .38s cubic-bezier(.16, 1, .3, 1),
+    box-shadow .25s ease;
+}
+
+.stage-tile-focused {
+  inset: 0;
+  width: 100%; height: 100%;
+  border-radius: var(--radius-lg);
+  z-index: 1;
+}
+
+.stage-tile-strip {
+  bottom: auto; left: auto;
+  top: 12px;
+  right: calc(12px + var(--strip-i, 0) * 168px);
+  width: 154px; height: 87px;
+  z-index: 2;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);
+}
+
+.tile-media { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+
+.tile-video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: #0b1120;
+}
+
+.tile-initials {
+  width: 64px; height: 64px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(71, 120, 243, .16);
+  color: var(--primary);
+  font-family: var(--font-display); font-weight: 800; font-size: 1.5rem;
+}
+.stage-tile-strip .tile-initials { width: 34px; height: 34px; font-size: .9rem; }
+
+.tile-ring {
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 3px var(--primary), 0 0 26px rgba(71, 120, 243, .32);
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+
+.tile-footer {
+  position: absolute; left: 10px; bottom: 9px; z-index: 3;
+  display: flex; align-items: center; gap: .45rem;
+  max-width: calc(100% - 20px);
+  padding: .22rem .55rem;
+  border-radius: var(--radius);
+  background: rgba(11, 17, 32, .66);
+  backdrop-filter: blur(6px);
+}
+
+.tile-name {
+  font-size: .78rem; font-weight: 600; color: #f1f5f9;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stage-tile-strip .tile-name { font-size: .68rem; }
+
+.tile-bars { display: flex; align-items: center; gap: 2px; height: 12px; }
+.tile-bars i {
+  display: block; width: 2.5px; height: 5px; border-radius: 2px;
+  background: var(--primary);
+  transition: transform .09s linear;
+}
+
+.tile-sublabel {
+  position: absolute; left: 12px; top: 12px; z-index: 3;
+  padding: .25rem .6rem; border-radius: var(--radius);
+  background: rgba(11, 17, 32, .66);
+  backdrop-filter: blur(6px);
+  font-size: .72rem; font-weight: 600; color: #cbd5e1;
+}
+
+.stage-caption {
+  position: absolute; left: 12px; right: 12px; bottom: 44px;
+  z-index: 4;
+  padding: .55rem .9rem;
+  border-radius: var(--radius);
+  background: rgba(11, 17, 32, .78);
+  backdrop-filter: blur(8px);
+  color: #e2e8f0; font-size: .88rem; line-height: 1.5;
+  text-align: center;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.stage-cc-toggle {
+  position: absolute; right: 12px; bottom: 9px; z-index: 4;
+  padding: .22rem .55rem;
+  border: none; border-radius: var(--radius); cursor: pointer;
+  background: rgba(11, 17, 32, .66);
+  backdrop-filter: blur(6px);
+  color: #cbd5e1; font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+  transition: color .15s ease, background .15s ease;
+}
+.stage-cc-toggle:hover { background: rgba(11, 17, 32, .82); color: #f1f5f9; }
+.stage-cc-toggle[aria-pressed="true"] {
+  background: var(--primary); color: var(--secondary);
+}
+
+.ai-avatar { position: relative; display: flex; align-items: center; justify-content: center; }
+.ai-avatar-lg { width: 150px; height: 150px; }
+.ai-avatar-sm { width: 54px; height: 54px; }
+
+.ai-avatar-core {
+  position: relative; z-index: 2;
+  width: 46%; height: 46%;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #24365a, #16233d);
+  box-shadow: 0 0 0 1px rgba(71, 120, 243, .35), 0 10px 26px rgba(0, 0, 0, .45);
+}
+.ai-avatar-core svg { width: 62%; height: 62%; }
+
+.ai-ring {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(71, 120, 243, .28);
+  opacity: 0;
+}
+
+.ai-avatar-speaking .ai-ring { animation: ai-pulse 2.4s cubic-bezier(.16, 1, .3, 1) infinite; }
+.ai-avatar-speaking .ai-ring-2 { animation-delay: .8s; }
+.ai-avatar-speaking .ai-ring-3 { animation-delay: 1.6s; }
+
+.ai-avatar:not(.ai-avatar-speaking) .ai-ring-1 {
+  opacity: 1;
+  transform: scale(.62);
+  border-color: rgba(71, 120, 243, .16);
+}
+
+@keyframes ai-pulse {
+  0%   { transform: scale(.5);  opacity: .85; }
+  70%  { transform: scale(1);   opacity: 0; }
+  100% { transform: scale(1);   opacity: 0; }
+}
+
+.speaker-stage-compact { justify-content: flex-start; }
+.speaker-stage-compact .stage-well {
+  max-width: 208px;
+  aspect-ratio: 16 / 9;
+}
+.speaker-stage-compact .stage-tile-strip {
+  top: 6px;
+  right: calc(6px + var(--strip-i, 0) * 66px);
+  width: 60px; height: 34px;
+}
+.speaker-stage-compact .ai-avatar-lg { width: 62px; height: 62px; }
+.speaker-stage-compact .ai-avatar-sm { width: 26px; height: 26px; }
+.speaker-stage-compact .tile-sublabel { display: none; }
+.speaker-stage-compact .tile-footer { left: 6px; bottom: 5px; padding: .14rem .4rem; }
+.speaker-stage-compact .tile-name { font-size: .64rem; }
+.speaker-stage-compact .stage-tile-strip .tile-name { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-tile { transition: none; }
+  .ai-avatar-speaking .ai-ring { animation: none; opacity: .5; transform: scale(.8); }
+  .tile-bars i { transition: none; }
+}
+
+@media (max-width: 900px) {
+  .stage-tile-strip { width: 110px; height: 62px; right: calc(10px + var(--strip-i, 0) * 120px); top: 10px; }
+  .ai-avatar-lg { width: 104px; height: 104px; }
+  .stage-caption { left: 10px; right: 10px; bottom: 40px; font-size: .8rem; }
+}

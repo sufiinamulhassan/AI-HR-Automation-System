@@ -1,0 +1,6 @@
+# Vercel installs Python dependencies from the requirements.txt at the project
+# root. The real list lives with the code it belongs to; this only points at it.
+#
+# Deliberately NOT requirements-dev.txt — pytest has no business in a
+# serverless bundle, and the bundle has a 250 MB unzipped ceiling.
+-r backend/requirements.txt

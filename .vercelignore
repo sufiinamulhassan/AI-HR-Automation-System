@@ -1,0 +1,27 @@
+# Keep the function bundle under Vercel's 250 MB unzipped limit, and keep
+# secrets and local state out of a deploy entirely.
+
+# Never deploy
+.env
+.env.*
+!.env.example
+backend/venv/
+backend/.venv/
+
+# Test and dev-only material — not reachable from any route
+backend/tests/
+backend/scripts/
+backend/requirements-dev.txt
+
+# Build and tool caches
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+**/*.tsbuildinfo
+
+# Docs
+docs/
+*.md
+!README.md

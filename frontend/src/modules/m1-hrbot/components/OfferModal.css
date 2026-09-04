@@ -1,0 +1,76 @@
+.offer-modal-box {
+  max-width: 480px;
+}
+
+.offer-modal-body {
+  padding: 1.1rem 1.4rem;
+  display: flex; flex-direction: column; gap: 1rem;
+  max-height: 62vh; overflow-y: auto;
+}
+
+.offer-modal-toast {
+  background: var(--gray-900);
+  color: var(--white);
+  border-radius: var(--radius);
+  padding: .55rem .85rem;
+  font-size: .82rem;
+  text-align: center;
+}
+
+.offer-modal-loading,
+.offer-modal-empty {
+  color: var(--gray-500);
+  font-size: .85rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.offer-modal-list {
+  display: flex; flex-direction: column; gap: .6rem;
+}
+
+.offer-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .75rem;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: .65rem .85rem;
+}
+
+.offer-row-main { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+
+.offer-row-top { display: flex; align-items: center; gap: .5rem; }
+
+.offer-row-salary { font-size: .85rem; font-weight: 700; color: var(--gray-900); }
+
+.offer-row-meta {
+  display: flex; gap: .6rem; flex-wrap: wrap;
+  font-size: .76rem; color: var(--gray-500);
+}
+
+.offer-row-actions {
+  display: flex; align-items: center; gap: .4rem; flex-shrink: 0;
+}
+
+.offer-withdraw-btn {
+  color: var(--danger);
+}
+
+.offer-create-form {
+  border-top: 1px solid var(--gray-200);
+  padding-top: 1rem;
+  display: flex; flex-direction: column; gap: .7rem;
+}
+
+.offer-create-title {
+  font-family: var(--font-display);
+  font-size: .88rem; font-weight: 800; color: var(--gray-800);
+}
+
+.offer-field {
+  display: flex; flex-direction: column; gap: .3rem;
+}
+
+.offer-create-btn {
+  align-self: flex-start;
+}

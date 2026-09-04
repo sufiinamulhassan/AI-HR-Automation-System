@@ -1,0 +1,67 @@
+.proctor-monitor {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  width: 160px;
+  z-index: 40;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.proctor-video {
+  display: block;
+  width: 160px;
+  height: 120px;
+  object-fit: cover;
+  background: #111;
+  transform: scaleX(-1);
+}
+
+.proctor-label {
+  padding: .3rem .5rem;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-align: center;
+  background: var(--gray-50);
+  border-top: 1px solid var(--gray-200);
+}
+
+.proctor-notice {
+  width: 220px;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .6rem .75rem;
+}
+
+.proctor-notice-icon { font-size: 1rem; flex-shrink: 0; }
+
+.proctor-notice-text {
+  font-size: .72rem;
+  line-height: 1.4;
+  color: var(--gray-600);
+}
+
+@media (max-width: 640px) {
+  .proctor-monitor { width: 110px; right: .75rem; bottom: .75rem; }
+  .proctor-video { width: 110px; height: 82px; }
+  .proctor-notice { width: 180px; }
+}
+
+.proctor-monitor-headless {
+  position: fixed;
+  width: 1px; height: 1px;
+  right: auto; bottom: auto;
+  left: -9999px; top: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.proctor-monitor-headless .proctor-video { width: 1px; height: 1px; }
+
+@media (max-width: 640px) {
+  .proctor-monitor-headless, .proctor-monitor-headless .proctor-video { width: 1px; height: 1px; }
+}

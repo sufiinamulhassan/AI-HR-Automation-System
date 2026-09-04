@@ -1,0 +1,58 @@
+.ijd-modal { max-width: 560px; }
+.ijd-body { padding: 1.1rem 1.4rem .4rem; }
+.ijd-intro { font-size: .82rem; color: var(--gray-500); line-height: 1.5; margin-bottom: 1rem; }
+
+.ijd-sources {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin-bottom: 1.1rem;
+}
+.ijd-source {
+  position: relative;
+  display: flex; align-items: center; gap: .6rem;
+  padding: .6rem .75rem; border-radius: 11px; cursor: pointer;
+  border: 1.5px solid var(--gray-200); background: #fff;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+  text-align: left;
+}
+.ijd-source:hover:not(.disabled) { border-color: var(--primary); }
+.ijd-source.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(71, 120, 243,.15); background: var(--primary-light); }
+.ijd-source.disabled { opacity: .55; cursor: not-allowed; }
+.ijd-source-logo {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
+  display: grid; place-items: center; color: #fff;
+}
+.ijd-source-label { font-size: .88rem; font-weight: 700; color: var(--gray-900); }
+.ijd-source-tag {
+  position: absolute; top: -7px; right: -6px;
+  font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  background: var(--gray-200); color: var(--gray-600);
+  padding: .1rem .35rem; border-radius: 20px;
+}
+
+.ijd-fields { display: flex; gap: .7rem; flex-wrap: wrap; }
+.ijd-field { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 150px; }
+.ijd-field-sm { flex: 0 0 80px; min-width: 80px; }
+.ijd-field span { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); }
+.ijd-field span i { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--gray-400); }
+.ijd-field input,
+.ijd-field select {
+  border: 1px solid var(--gray-300); border-radius: 9px; padding: .5rem .65rem;
+  font-size: .85rem; color: var(--gray-900); background: #fff;
+}
+.ijd-field input:focus, .ijd-field select:focus { outline: none; border-color: var(--primary); }
+
+.ijd-filters { margin-top: .75rem; align-items: flex-end; }
+.ijd-checkbox {
+  display: flex; align-items: center; gap: .4rem;
+  font-size: .82rem; font-weight: 600; color: var(--gray-700);
+  white-space: nowrap; padding-bottom: .55rem;
+}
+.ijd-checkbox input { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
+
+.ijd-note { margin-top: 1rem; padding: .65rem .8rem; border-radius: 10px; font-size: .8rem; line-height: 1.5; }
+.ijd-note-ok   { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.ijd-note-warn { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.ijd-note-err  { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+@media (max-width: 520px) {
+  .ijd-sources { grid-template-columns: 1fr; }
+}

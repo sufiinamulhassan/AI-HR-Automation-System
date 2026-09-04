@@ -1,0 +1,237 @@
+.intel-panel {
+  flex: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
+  background: #e5e5e5;
+}
+
+.intel-loading {
+  color: var(--gray-400);
+  font-size: .9rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.intel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.intel-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--gray-900);
+  letter-spacing: -0.02em;
+  margin: 0 0 .2rem;
+}
+
+.intel-subtitle {
+  font-size: .875rem;
+  color: var(--gray-500);
+  margin: 0;
+}
+
+.intel-header-actions {
+  display: flex;
+  gap: .6rem;
+  flex-shrink: 0;
+}
+
+.intel-action-btn {
+  font-size: .82rem;
+  padding: .4rem .85rem;
+}
+
+.intel-funnel {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  background: var(--white);
+  border: 1px solid rgba(0,0,0,.05);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.intel-funnel-tile {
+  flex: 1;
+  min-width: 88px;
+  text-align: center;
+  padding: .25rem;
+}
+
+.intel-funnel-sep {
+  color: var(--gray-300);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  font-weight: 300;
+}
+
+.intel-tile-val {
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-family: var(--font-display);
+  color: var(--primary);
+  line-height: 1.1;
+}
+
+.intel-tile-label {
+  font-size: .62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--gray-400);
+  margin-top: .2rem;
+}
+
+.intel-tile-total .intel-tile-val       { font-size: 1.9rem; color: var(--gray-900); }
+.intel-tile-auto .intel-tile-val        { color: var(--primary); }
+.intel-tile-manual .intel-tile-val      { color: #0369a1; }
+.intel-tile-interviewed .intel-tile-val { color: #b45309; }
+.intel-tile-hired .intel-tile-val       { color: var(--success); }
+
+.intel-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 780px) {
+  .intel-charts { grid-template-columns: 1fr; }
+  .intel-funnel-sep { display: none; }
+  .intel-funnel-tile { min-width: 40%; }
+}
+
+.intel-chart-card {
+  background: var(--white);
+  border: 1px solid rgba(0,0,0,.05);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.25rem 1rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.intel-chart-title {
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--gray-400);
+  margin: 0 0 1rem;
+}
+
+.intel-bars {
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+}
+
+.intel-bar-row {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+}
+
+.intel-bar-label {
+  font-size: .78rem;
+  color: var(--gray-700);
+  font-weight: 500;
+  width: 130px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.intel-bar-track {
+  flex: 1;
+  height: 5px;
+  background: var(--gray-100);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.intel-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width .5s ease;
+  min-width: 2px;
+}
+
+.intel-bar-count {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.intel-seniority-grid {
+  display: flex;
+  gap: .75rem;
+  align-items: flex-end;
+  justify-content: space-around;
+  padding: 0 .5rem;
+}
+
+.intel-sen-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .3rem;
+  flex: 1;
+}
+
+.intel-sen-count {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--gray-800);
+}
+
+.intel-sen-bar-wrap {
+  width: 36px;
+  height: 64px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.intel-sen-bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  min-height: 4px;
+  transition: height .5s ease;
+}
+
+.intel-sen-junior .intel-sen-bar { background: #10b981; }
+.intel-sen-mid    .intel-sen-bar { background: #3b82f6; }
+.intel-sen-senior .intel-sen-bar { background: var(--primary); }
+.intel-sen-lead   .intel-sen-bar { background: #f59e0b; }
+
+.intel-sen-label {
+  font-size: .65rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: var(--gray-500);
+}
+
+.intel-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 3rem;
+  color: var(--gray-400);
+  font-size: .9rem;
+}
