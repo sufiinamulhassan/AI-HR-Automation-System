@@ -137,6 +137,19 @@ async def _seed_superadmin():
     """Create the default superadmin once without resetting edited passwords."""
     if _db is None:
         return
+
+    # DEFAULT_SUPERADMIN_PASSWORD has no default. Without this guard a blank
+    # value would be hashed into a real account, which is worse than the
+    # published default it replaced. validate_security_config() already treats
+    # blank as fatal at import; this is the second line of defence for any
+    # caller that reaches seeding another way.
+    if not settings.DEFAULT_SUPERADMIN_PASSWORD:
+        logger.warning(
+            "DEFAULT_SUPERADMIN_PASSWORD is not set, so no superadmin was "
+            "created. Set it and restart to seed the account."
+        )
+        return
+
     from passlib.context import CryptContext
 
     pwd_ctx = CryptContext(schemes=["bcrypt"])

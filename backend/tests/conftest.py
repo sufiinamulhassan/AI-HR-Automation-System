@@ -15,7 +15,9 @@ from config.settings import settings
 settings.DEBUG = True
 if settings.SECRET_KEY == "change-me-in-production-32-chars-min":
     settings.SECRET_KEY = "test-secret-key-not-used-in-production-32chars"
-if settings.DEFAULT_SUPERADMIN_PASSWORD == "qwerty@54321":
+if not settings.DEFAULT_SUPERADMIN_PASSWORD or (
+    settings.DEFAULT_SUPERADMIN_PASSWORD == "qwerty@54321"
+):
     settings.DEFAULT_SUPERADMIN_PASSWORD = "test-superadmin-password"
 
 from config.database import get_db, init_db, close_db

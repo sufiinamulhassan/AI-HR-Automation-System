@@ -96,7 +96,11 @@ class Settings(BaseSettings):
     AWS_SES_REGION: str = Field(default="")
 
     DEFAULT_SUPERADMIN_EMAIL: str = "superadmin@hirely.ai"
-    DEFAULT_SUPERADMIN_PASSWORD: str = "qwerty@54321"
+    # No default on purpose. A shipped superadmin password is a published
+    # credential the moment the repository goes public, and it pairs with the
+    # equally public DEFAULT_SUPERADMIN_EMAIL above. Deployments must set this
+    # explicitly; _seed_superadmin() refuses to create the account without it.
+    DEFAULT_SUPERADMIN_PASSWORD: str = Field(default="")
 
     CODE_SANDBOX_PROVIDER: str = Field(default="judge0")
     JUDGE0_API_URL: str = Field(default="")
@@ -166,7 +170,11 @@ def sandbox_not_configured_message() -> str:
 
 
 _INSECURE_DEFAULT_SECRET_KEY = "change-me-in-production-32-chars-min"
-_INSECURE_DEFAULT_SUPERADMIN_PASSWORD = "qwerty@54321"
+
+# Superadmin passwords that shipped as a default in this repository's public
+# history. Deleting the default from the settings class does not un-publish
+# them, so they stay rejected by name for anyone who sets one back.
+_LEAKED_SUPERADMIN_PASSWORDS = {"qwerty@54321"}
 
 _PLACEHOLDER_MARKERS = ("change-me", "changeme", "change_me", "your-", "placeholder", "example", "todo", "xxx")
 _MIN_SECRET_KEY_LENGTH = 32
@@ -216,8 +224,16 @@ def audit_security_config() -> tuple[list[str], list[str]]:
         )
 
     password = settings.DEFAULT_SUPERADMIN_PASSWORD or ""
-    if password == _INSECURE_DEFAULT_SUPERADMIN_PASSWORD:
-        fatal.append("DEFAULT_SUPERADMIN_PASSWORD is still the shipped default")
+    if not password:
+        fatal.append(
+            "DEFAULT_SUPERADMIN_PASSWORD is not set. There is no default, and "
+            "the superadmin account is not created without one"
+        )
+    elif password in _LEAKED_SUPERADMIN_PASSWORDS:
+        fatal.append(
+            "DEFAULT_SUPERADMIN_PASSWORD is a credential published in this "
+            "repository's git history. Choose a new one"
+        )
     elif _looks_like_placeholder(password):
         weak.append("DEFAULT_SUPERADMIN_PASSWORD looks like an unreplaced placeholder")
     elif password.lower() in _WEAK_PASSWORDS:
