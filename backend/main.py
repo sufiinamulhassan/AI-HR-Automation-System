@@ -17,6 +17,7 @@ Auto-invite:
   Admins can also manually invite, resend, or regenerate interview links at any time.
 """
 import logging
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -110,9 +111,30 @@ elif settings.ALLOW_NGROK_ORIGINS or settings.DEBUG:
 )
  
 
-app.add_middleware(CORSMiddleware, **cors_settings)
+_DEMO_BLOCKED_PATH_SUFFIXES = (
+    "/purge",
+    "/purge-expired",
+    "/batches/clear",
+    "/admin/reset-password",
+    "/decision",
+    "/send-email",
+    "/resend-invite",
+    "/regenerate-token",
+    "/withdraw",
+)
 
-_DEMO_BLOCKED_POST_PATH_SUFFIXES = ("/purge", "/purge-expired", "/batches/clear")
+_DEMO_BLOCKED_PATH_PATTERNS = (
+    re.compile(r"/jobs/[^/]+/pipeline/[^/]+/?$"),
+    re.compile(r"/offers/[^/]+/send/?$"),
+)
+
+
+def _is_demo_blocked(method: str, path: str) -> bool:
+    if method == "DELETE":
+        return True
+    if path.endswith(_DEMO_BLOCKED_PATH_SUFFIXES):
+        return True
+    return any(p.search(path) for p in _DEMO_BLOCKED_PATH_PATTERNS)
 
 
 @app.middleware("http")
@@ -120,14 +142,20 @@ async def block_demo_account_deletes(request: Request, call_next):
     auth_header = request.headers.get("authorization", "")
     token = auth_header[7:] if auth_header.lower().startswith("bearer ") else ""
     is_demo_account = settings.HACKATHON_DEMO_MODE and settings.ALLOW_DEMO_AUTH and token.startswith("demo-")
-    is_destructive = request.method == "DELETE" or request.url.path.endswith(_DEMO_BLOCKED_POST_PATH_SUFFIXES)
+    is_destructive = _is_demo_blocked(request.method, request.url.path)
     if is_demo_account and is_destructive:
         return JSONResponse({
-            "message": "Hackathon demo mode — deletion is simulated and no data was removed.",
+            "message": "Demo mode — this action was simulated and nothing was changed.",
             "demo": True,
             "deleted": 0,
+            "deleted_count": 0,
+            "modified_count": 0,
+            "success": True,
         })
     return await call_next(request)
+
+
+app.add_middleware(CORSMiddleware, **cors_settings)
 
 app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["hr_module · Auth"])
 app.include_router(jobs.router,       prefix="/api/v1/jobs",       tags=["hr_module · Jobs"])

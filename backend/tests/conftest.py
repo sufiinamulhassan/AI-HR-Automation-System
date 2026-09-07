@@ -31,6 +31,7 @@ def apply_test_database_settings() -> None:
     settings.PINECONE_INDEX_NAME = settings.PINECONE_INDEX_NAME_TEST
     settings.PINECONE_ENV = settings.PINECONE_ENV_TEST
     settings.ALLOW_DEMO_AUTH = True
+    settings.HACKATHON_DEMO_MODE = False
 
 
 apply_test_database_settings()

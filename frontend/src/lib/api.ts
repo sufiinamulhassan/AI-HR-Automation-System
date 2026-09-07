@@ -18,6 +18,14 @@ api.interceptors.response.use(
   r => r,
   err => {
     if (err.response?.status === 401) {
+      const token = useAuthStore.getState().token
+      if (token && token.startsWith('demo-')) {
+        try {
+          sessionStorage.setItem('demo-auth-rejected', '1')
+        } catch {
+          void 0
+        }
+      }
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }

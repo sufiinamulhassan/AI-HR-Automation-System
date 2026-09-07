@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { applyDemoStages, isDemoSession, setDemoStage } from '../../../lib/demoMode'
 import { renderAsync } from 'docx-preview'
 import { jobsApi, candidatesApi, resumesApi, scenariosApi } from '../../../lib/api'
 import { codingApi, type CodingQuestion } from '../../../lib/codingApi'
@@ -305,7 +306,7 @@ export default function CandidatePipeline({ job, onViewReport, onRefresh }: Prop
       const r = await jobsApi.pipeline(job.job_id as string)
       const list: Record<string, unknown>[] = [...(r.data.pipeline || [])]
       list.sort((a, b) => Number(b.similarity_score || 0) - Number(a.similarity_score || 0))
-      setPipeline(list)
+      setPipeline(applyDemoStages(job.job_id as string, list))
       setRequiredSkills((r.data.required_skills as string[]) || [])
     } catch { setPipeline([]) }
     finally { if (!silent) setLoading(false) }
@@ -321,6 +322,7 @@ export default function CandidatePipeline({ job, onViewReport, onRefresh }: Prop
     try {
       if (candidateId) await candidatesApi.decision(candidateId, decision)
       await jobsApi.updateStage(job.job_id as string, resumeId, decision)
+      if (isDemoSession()) setDemoStage(job.job_id as string, resumeId, decision)
       showToast(decision === 'hired' ? '✓ Marked as hired' : '✕ Candidate rejected')
       load(true); onRefresh()
     } catch { showToast('Failed to update - please try again') }

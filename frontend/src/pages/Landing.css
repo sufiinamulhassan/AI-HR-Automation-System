@@ -1,4 +1,3 @@
-
 @import '../assets/fonts/fonts.css';
 
 .xv {
@@ -858,9 +857,9 @@
     padding-block: 2.5rem;
     transform: translateY(0.625rem);
   }
-  .xv-hero-word span { position: relative; z-index: 20; white-space: nowrap; font-size: clamp(2rem, 3.85vw, 3.8rem); transform: scale(1.5); }
-  .xv-hero-word-left { padding-right: 1rem; }
-  .xv-hero-word-right { padding-left: 1rem; }
+  .xv-hero-word span { position: relative; z-index: 20; white-space: nowrap; font-size: clamp(2.05rem, 3.7vw, 3.95rem); transform: scale(1.5); }
+  .xv-hero-word-left { padding-right: 3.5rem; }
+  .xv-hero-word-right { padding-left: 3.5rem; }
   .xv-hero-img {
     position: relative;
     z-index: 10;
@@ -937,7 +936,7 @@
   .xv-droplines { height: 10rem; }
   .xv-checker-tl { width: 13rem; }
   .xv-checker-br { width: 14rem; }
-  .xv-hero-img { height: 10rem; width: 10rem; margin-inline: 2.5rem; transform: translateY(0.75rem) scale(1.25); }
+  .xv-hero-img { height: 9rem; width: 9rem; margin-inline: 4rem; transform: translateY(0.75rem) scale(1.25); }
   .xv-nodes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .xv-why-shape { width: 18rem; }
 }
@@ -945,7 +944,7 @@
 @media (min-width: 1280px) {
   .xv-ghost-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .xv-ghost-inner { min-height: 32rem; }
-  .xv-hero-img { height: 12rem; width: 12rem; margin-inline: 3rem; }
+  .xv-hero-img { height: 10.5rem; width: 10.5rem; margin-inline: 6rem; }
   .xv-why-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
