@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     ALLOW_DEMO_AUTH: bool = Field(default=False)
+    HACKATHON_DEMO_MODE: bool = Field(default=False)
     STRICT_SECURITY_VALIDATION: bool = Field(default=False)
     LOGIN_RATE_LIMIT: int = 10
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300

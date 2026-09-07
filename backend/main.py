@@ -26,10 +26,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from config.database import init_db, close_db
 from config.settings import settings, validate_runtime_config, validate_security_config
@@ -111,6 +111,23 @@ elif settings.ALLOW_NGROK_ORIGINS or settings.DEBUG:
  
 
 app.add_middleware(CORSMiddleware, **cors_settings)
+
+_DEMO_BLOCKED_POST_PATH_SUFFIXES = ("/purge", "/purge-expired", "/batches/clear")
+
+
+@app.middleware("http")
+async def block_demo_account_deletes(request: Request, call_next):
+    auth_header = request.headers.get("authorization", "")
+    token = auth_header[7:] if auth_header.lower().startswith("bearer ") else ""
+    is_demo_account = settings.HACKATHON_DEMO_MODE and settings.ALLOW_DEMO_AUTH and token.startswith("demo-")
+    is_destructive = request.method == "DELETE" or request.url.path.endswith(_DEMO_BLOCKED_POST_PATH_SUFFIXES)
+    if is_demo_account and is_destructive:
+        return JSONResponse({
+            "message": "Hackathon demo mode — deletion is simulated and no data was removed.",
+            "demo": True,
+            "deleted": 0,
+        })
+    return await call_next(request)
 
 app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["hr_module · Auth"])
 app.include_router(jobs.router,       prefix="/api/v1/jobs",       tags=["hr_module · Jobs"])
