@@ -226,11 +226,11 @@ pipelines.
 AI-HR-Automation-System/
 ├── api/index.py            Vercel entrypoint, wraps backend/main.py and nothing else
 ├── vercel.json             build, function config, /api rewrites
-├── requirements.txt        points at backend/requirements.txt (Vercel reads root)
+├── requirements.txt        the deployable dependency list (Vercel reads root)
 │
 ├── backend/
 │   ├── main.py             app + CORS + include_router per area + lifespan
-│   ├── requirements.txt    deployable dependency set
+│   ├── requirements.txt    includes the root list, for local installs
 │   ├── requirements-dev.txt  adds pytest, never installed by Vercel
 │   ├── .env.example        every setting, one comment line each
 │   ├── routes/             23 routers, 158 endpoints
