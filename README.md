@@ -13,7 +13,7 @@ scored report, with an admin layer for users, roles, branding, prompts and workf
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blueviolet?style=flat-square)
 [![License](https://img.shields.io/badge/license-Apache_2.0-green?style=flat-square)](LICENSE)
-[![Visitors](https://visitor-badge.laobi.icu/badge?page_id=sufiinamulhassan.AI-HR-Automation-System&style=flat-square)](https://github.com/sufiinamulhassan/AI-HR-Automation-System)
+[![Visits](https://visitor-badge.laobi.icu/badge?page_id=sufiinamulhassan.AI-HR-Automation-System&left_text=visits&left_color=555555&right_color=blueviolet&style=flat-square)](https://github.com/sufiinamulhassan/AI-HR-Automation-System)
 
 <!--
   LIVE GITHUB BADGES: swap the static block above for this once the repository is
