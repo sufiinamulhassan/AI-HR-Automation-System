@@ -1,0 +1,131 @@
+.pf-page { padding-bottom: 2rem; }
+
+.pf-toast {
+  position: fixed; top: 1.25rem; right: 1.25rem; z-index: 1100;
+  background: var(--secondary); color: #fff;
+  padding: .7rem 1.1rem; border-radius: var(--radius);
+  font-size: .82rem; font-weight: 600;
+  box-shadow: var(--shadow-lg);
+}
+
+.pf-loading-page, .pf-no-access {
+  margin: 0 1.75rem;
+  padding: 2rem;
+  text-align: center;
+  color: var(--gray-500);
+  font-size: .88rem;
+}
+
+.pf-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0 1.75rem 1.75rem;
+}
+
+.pf-table-wrap { overflow-x: auto; }
+
+.pf-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pf-table th {
+  text-align: left;
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  padding: .8rem 1.1rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.pf-table td {
+  padding: .75rem 1.1rem;
+  font-size: .82rem;
+  color: var(--gray-800);
+  border-bottom: 1px solid var(--gray-50);
+  vertical-align: middle;
+}
+
+.pf-empty, .pf-loading {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--gray-500);
+  font-size: .85rem;
+}
+
+.pf-row-actions {
+  display: flex;
+  gap: .5rem;
+}
+
+.pf-action-btn {
+  background: none; border: 1px solid var(--gray-200);
+  border-radius: 40px; padding: .3rem .8rem;
+  font-size: .72rem; font-weight: 700; color: var(--gray-600);
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+}
+.pf-action-btn:hover { background: var(--gray-50); border-color: var(--primary); }
+
+.pf-action-danger { color: var(--danger); border-color: #fecaca; }
+.pf-action-danger:hover { background: #fef2f2; border-color: var(--danger); }
+
+.pf-modal-form {
+  padding: 1.1rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+}
+
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.pf-field-row {
+  display: flex;
+  gap: .9rem;
+}
+.pf-field-row .pf-field { flex: 1; }
+
+.pf-checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .9rem;
+}
+
+.pf-checkbox {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .8rem;
+  color: var(--gray-700);
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.pf-scale-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1.1rem 1.4rem;
+}
+.pf-scale-row .pf-field { width: 100px; }
+.pf-scale-save { height: fit-content; }
+
+.pf-review-modal { max-width: 520px; }
+
+.pf-coverage-summary {
+  font-size: .85rem;
+  color: var(--gray-700);
+  margin: 0;
+}
+.pf-coverage-summary strong { color: var(--gray-900); }
+
+@media (max-width: 720px) {
+  .pf-table th, .pf-table td { padding: .6rem .7rem; }
+  .pf-field-row { flex-direction: column; }
+}

@@ -1,0 +1,28 @@
+.sc-page .xv-info-body a,
+.sc-page .xv-info-list a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sc-page .xv-card-ink .xv-info-body a,
+.sc-page .xv-card-ink .xv-info-list a { color: #fff; }
+
+.sc-table { margin-top: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem); }
+.sc-table .xv-table { min-width: 32rem; }
+.sc-table .xv-table tbody th { width: 11rem; }
+
+.sc-body { margin-top: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem); }
+.sc-body > :last-child { margin-bottom: 0; }
+
+.sc-after {
+  max-width: 46rem;
+  margin-top: 1.75rem;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.sc-after a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

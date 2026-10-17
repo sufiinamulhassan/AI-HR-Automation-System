@@ -1,0 +1,17 @@
+.xv-foot-email { display: block; margin-top: 0.25rem; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 1rem; font-weight: 500; letter-spacing: -0.03em; color: #fff; overflow-wrap: anywhere; }
+.xv-foot-email:hover { color: var(--accent); }
+.xv-foot-contact-link { gap: 0.5rem; align-items: center; margin-top: 1.25rem; }
+
+.xv-foot-cols-v2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.xv-foot-bottom-v2 { justify-content: center; gap: 0.75rem 1.5rem; }
+
+@media (min-width: 768px) {
+  .xv-foot-cols-v2 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2.5rem 1.5rem; }
+}
+
+@media (min-width: 1280px) {
+  .xv-foot-grid-v2 { grid-template-columns: 17rem 1fr; gap: 3rem; }
+  .xv-foot-cols-v2 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2.5rem 1.25rem; }
+  .xv-foot-cols-v2 .xv-foot-list li { font-size: 0.875rem; }
+}

@@ -1,0 +1,72 @@
+.xv-links {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+}
+.xv-link-card {
+  position: relative;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.xv-link-card:hover,
+.xv-link-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 12px 28px -18px rgba(71, 120, 243, 0.55);
+  transform: translateY(-2px);
+}
+.xv-link-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.5rem;
+  border-radius: var(--radius-chip);
+  background: var(--ink);
+  color: #fff;
+  transition: background 0.2s ease;
+}
+.xv-link-card:hover .xv-link-icon { background: var(--accent); }
+.xv-link-title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 1.1875rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.xv-link-text { font-size: 0.9375rem; line-height: 1.55; color: var(--muted); }
+.xv-link-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-strong);
+}
+.xv-link-more svg { transition: transform 0.2s ease; }
+.xv-link-card:hover .xv-link-more svg { transform: translateX(4px); }
+
+@media (min-width: 640px) {
+  .xv-links-2, .xv-links-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .xv-links-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xv-link-card, .xv-link-more svg { transition: none; }
+  .xv-link-card:hover, .xv-link-card:focus-visible { transform: none; }
+  .xv-link-card:hover .xv-link-more svg { transform: none; }
+}

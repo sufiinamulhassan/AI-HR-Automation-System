@@ -3,7 +3,6 @@ import type { MutableRefObject } from 'react'
 import { SILENCE_FLOOR } from './useAudioLevel'
 import type { Status, TurnPhase } from '../useInterviewSession'
 
-
 const ARM_DELAY_MS = 450
 const SPEECH_ON = 0.024
 const SPEECH_OFF = SILENCE_FLOOR

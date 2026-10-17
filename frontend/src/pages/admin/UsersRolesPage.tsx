@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { authApi, rbacApi } from '../../lib/api'
+import { adminConfigApi, authApi, rbacApi } from '../../lib/api'
+import { usePasswordPolicy } from '../../lib/passwordPolicy'
 import { useAuthStore } from '../../store/auth.store'
 import '../../styles/admin-tabs.css'
 import './UserManagementPage.css'
@@ -8,15 +9,22 @@ import './RolesPermissionsPage.css'
 import './AuditLogPage.css'
 import './UsersRolesPage.css'
 
-
 interface User {
   email: string
   name: string
   role: string
   is_active: boolean
   otp_required: boolean
+  department_id?: string | null
   created_at?: string
   last_login_at?: string
+  invite_pending?: boolean
+  totp_enabled?: boolean
+}
+
+interface Department {
+  department_id: string
+  name: string
 }
 
 interface AuditEntry {
@@ -40,6 +48,7 @@ interface AuditFilters {
   actor_email: string
   action: string
   resource_type: string
+  resource_id: string
   start_date: string
   end_date: string
 }
@@ -52,14 +61,10 @@ interface AuditFacets {
 
 type Tab = 'users' | 'roles' | 'audit'
 
-const TAB_SUBTITLES: Record<Tab, string> = {
-  users: 'Manage platform users and the role each one holds',
-  roles: 'Custom roles and the permission matrix behind every role',
-  audit: 'Every recorded mutating action across the platform, with actor, action, and resource',
-}
-
 const AUDIT_LIMIT = 25
-const EMPTY_AUDIT_FILTERS: AuditFilters = { actor_email: '', action: '', resource_type: '', start_date: '', end_date: '' }
+const USERS_PAGE = 100
+const SEARCH_DELAY_MS = 300
+const EMPTY_AUDIT_FILTERS: AuditFilters = { actor_email: '', action: '', resource_type: '', resource_id: '', start_date: '', end_date: '' }
 
 function entryId(e: AuditEntry, idx: number): string { return e.id || e.audit_id || e._id || String(idx) }
 function entryActor(e: AuditEntry): string { return e.actor_email || e.actor || '-' }
@@ -86,6 +91,7 @@ interface CustomRole {
   role_name: string
   permissions: string[]
   description?: string
+  user_count?: number
 }
 
 const BUILTIN_ROLE_NAMES = ['standard', 'admin', 'superadmin']
@@ -113,7 +119,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   audit: 'Audit Log',
 }
 
-const EMPTY_FORM = { email: '', name: '', role: 'standard', password: '', is_active: true, otp_required: false }
+const EMPTY_FORM = { email: '', name: '', role: 'standard', password: '', send_invite: false, is_active: true, otp_required: false, department_id: '' }
+
+const CREATED_NOT_EMAILED = 'The account was created but the email could not be sent'
+
+const PRIVILEGED_ROLES = ['admin', 'superadmin']
+const SUPER_ADMIN_ONLY = 'Only a Super Admin can do this'
 
 function titleCase(s: string) {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
@@ -160,7 +171,7 @@ function errorMessage(e: unknown, fallback: string): string {
 }
 
 const PencilIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
   </svg>
 )
@@ -171,9 +182,15 @@ const TrashIcon = () => (
   </svg>
 )
 
+const MailIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" fill="none" />
+  </svg>
+)
+
 const LockIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" />
   </svg>
 )
 
@@ -183,9 +200,38 @@ const CheckIcon = () => (
   </svg>
 )
 
+function StatIcon({ tone }: { tone: string }) {
+  if (tone === 'purple') {
+    return (
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    )
+  }
+  if (tone === 'blue') {
+    return (
+      <svg width="16" height="16" fill="currentColor" fillOpacity="0.16" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    )
+  }
+  if (tone === 'green') {
+    return (
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 10-6 0" />
+    </svg>
+  )
+}
+
 const SearchIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" fill="none" />
   </svg>
 )
 
@@ -214,6 +260,9 @@ function MatrixSkeleton() {
 export default function UsersRolesPage() {
   const currentUser = useAuthStore(s => s.user) as Record<string, string> | null
   const isSuperAdmin = currentUser?.role === 'superadmin'
+  const currentEmail = (currentUser?.email ?? '').trim().toLowerCase()
+  const isSelf = (u: User) => !!currentEmail && u.email.trim().toLowerCase() === currentEmail
+  const canManageAccount = (u: User) => isSuperAdmin || !PRIVILEGED_ROLES.includes(u.role)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
@@ -226,23 +275,38 @@ export default function UsersRolesPage() {
   const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
   const [builtinPerms, setBuiltinPerms] = useState<Record<string, string[]>>({})
   const [permissions, setPermissions] = useState<string[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [loading, setLoading] = useState(true)
-  const [listBlocked, setListBlocked] = useState(false)
+  const [usersError, setUsersError] = useState('')
   const [toast, setToast] = useState('')
+  const [toastWarn, setToastWarn] = useState(false)
+  const { hint: passwordHint } = usePasswordPolicy()
 
   const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [total, setTotal] = useState(0)
+  const [moreBusy, setMoreBusy] = useState(false)
+  const [exhausted, setExhausted] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const usersSeq = useRef(0)
+  const [resettingTotp, setResettingTotp] = useState<string | null>(null)
   const [modal, setModal] = useState<'create' | 'edit' | 'reset' | null>(null)
   const [selected, setSelected] = useState<User | null>(null)
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [resetEmail, setResetEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [inviting, setInviting] = useState<string | null>(null)
 
   const [permSearch, setPermSearch] = useState('')
   const [pendingCell, setPendingCell] = useState<string | null>(null)
   const [roleModal, setRoleModal] = useState<'create' | 'edit' | null>(null)
   const [roleSelected, setRoleSelected] = useState<CustomRole | null>(null)
   const [roleForm, setRoleForm] = useState({ name: '', description: '' })
+  const [roleToDelete, setRoleToDelete] = useState<CustomRole | null>(null)
+  const [deleteHolders, setDeleteHolders] = useState(0)
+  const [reassignTo, setReassignTo] = useState('')
+  const [deleteError, setDeleteError] = useState('')
 
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
   const [auditTotal, setAuditTotal] = useState(0)
@@ -262,6 +326,17 @@ export default function UsersRolesPage() {
   }, [tab, auditPage, auditApplied])
 
   useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), SEARCH_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const searchedOnce = useRef(false)
+  useEffect(() => {
+    if (!searchedOnce.current) { searchedOnce.current = true; return }
+    void searchUsers()
+  }, [query])
+
+  useEffect(() => {
     if (tab !== 'audit' || auditFacets.actions.length || auditFacets.resource_types.length) return
     rbacApi.auditLogFacets()
       .then(r => {
@@ -272,20 +347,23 @@ export default function UsersRolesPage() {
           actors: Array.isArray(d?.actors) ? d.actors : [],
         })
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [tab])
 
   async function load() {
     setLoading(true)
-    setListBlocked(false)
+    setUsersError('')
     await Promise.all([
-      authApi.listUsers().then(r => {
-        setUsers(Array.isArray(r.data) ? r.data : [])
-      }).catch((e: unknown) => {
-        const status = (e as { response?: { status?: number } })?.response?.status
-        if (status === 403) setListBlocked(true)
+      readFirstPage().catch((e: unknown) => {
+        setUsersError(errorMessage(e, 'Could not load users.'))
         setUsers([])
+        setTotal(0)
       }),
+
+      adminConfigApi.listDepartments().then(r => {
+        const list = (r.data as { departments?: Department[] })?.departments
+        setDepartments(Array.isArray(list) ? list : [])
+      }).catch(() => setDepartments([])),
 
       rbacApi.listRoles().then(r => {
         const data = r.data as { custom_roles?: CustomRole[]; built_in_defaults?: Record<string, string[]> }
@@ -302,6 +380,47 @@ export default function UsersRolesPage() {
     setLoading(false)
   }
 
+  async function readFirstPage() {
+    const seq = ++usersSeq.current
+    const r = await authApi.listUsers({ limit: USERS_PAGE, skip: 0, ...(query ? { search: query } : {}) })
+    if (seq !== usersSeq.current) return
+    const list: User[] = Array.isArray(r.data) ? r.data : []
+    setUsers(list)
+    setTotal(typeof r.total === 'number' ? r.total : list.length)
+    setExhausted(false)
+  }
+
+  async function searchUsers() {
+    setSearching(true)
+    setUsersError('')
+    try {
+      await readFirstPage()
+    } catch (e: unknown) {
+      setUsersError(errorMessage(e, 'Could not load users.'))
+      setUsers([])
+      setTotal(0)
+    }
+    setSearching(false)
+  }
+
+  async function loadMore() {
+    setMoreBusy(true)
+    const seq = usersSeq.current
+    try {
+      const r = await authApi.listUsers({ limit: USERS_PAGE, skip: users.length, ...(query ? { search: query } : {}) })
+      if (seq !== usersSeq.current) { setMoreBusy(false); return }
+      const next: User[] = Array.isArray(r.data) ? r.data : []
+      const known = new Set(users.map(u => u.email))
+      const added = next.filter(u => !known.has(u.email))
+      setUsers(prev => [...prev, ...added])
+      if (typeof r.total === 'number') setTotal(r.total)
+      if (added.length === 0) setExhausted(true)
+    } catch (e: unknown) {
+      showToast(errorMessage(e, 'Could not load more users'))
+    }
+    setMoreBusy(false)
+  }
+
   async function loadAudit() {
     setAuditLoading(true)
     setAuditErrored(false)
@@ -310,6 +429,7 @@ export default function UsersRolesPage() {
       if (auditApplied.actor_email) params.actor_email = auditApplied.actor_email
       if (auditApplied.action) params.action = auditApplied.action
       if (auditApplied.resource_type) params.resource_type = auditApplied.resource_type
+      if (auditApplied.resource_id) params.resource_id = auditApplied.resource_id
       if (auditApplied.start_date) params.start_date = auditApplied.start_date
       if (auditApplied.end_date) params.end_date = auditApplied.end_date
 
@@ -334,6 +454,7 @@ export default function UsersRolesPage() {
       actor_email: auditDraft.actor_email.trim(),
       action: auditDraft.action.trim(),
       resource_type: auditDraft.resource_type.trim(),
+      resource_id: auditDraft.resource_id.trim(),
       start_date: auditDraft.start_date,
       end_date: auditDraft.end_date,
     })
@@ -345,9 +466,10 @@ export default function UsersRolesPage() {
     setAuditApplied({ ...EMPTY_AUDIT_FILTERS })
   }
 
-  function showToast(msg: string) {
+  function showToast(msg: string, ms = 3000, warn = false) {
     setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+    setToastWarn(warn)
+    setTimeout(() => setToast(''), ms)
   }
 
   const overridable = customRoles.filter(r => !BUILTIN_ROLE_NAMES.includes(r.role_name))
@@ -364,7 +486,6 @@ export default function UsersRolesPage() {
     return opts
   }, [customRoles])
 
-
   function openCreate() {
     setForm({ ...EMPTY_FORM })
     setSelected(null)
@@ -373,7 +494,10 @@ export default function UsersRolesPage() {
 
   function openEdit(u: User) {
     setSelected(u)
-    setForm({ email: u.email, name: u.name, role: u.role, password: '', is_active: u.is_active, otp_required: u.otp_required })
+    setForm({
+      email: u.email, name: u.name, role: u.role, password: '', send_invite: false, is_active: u.is_active,
+      otp_required: u.otp_required, department_id: u.department_id ?? '',
+    })
     setModal('edit')
   }
 
@@ -385,41 +509,73 @@ export default function UsersRolesPage() {
   }
 
   async function handleCreate() {
+    if (!createReady) return
     setSaving(true)
+    const email = form.email.trim().toLowerCase()
+    const role = isSuperAdmin ? form.role : 'standard'
+    const isCustomRole = !BUILTIN_ROLE_NAMES.includes(role)
+    const invite = form.send_invite || form.password === ''
+    let created = false
     try {
-      const isCustomRole = !BUILTIN_ROLE_NAMES.includes(form.role)
-      await authApi.createUser({
-        email: form.email,
-        name: form.name,
-        role: isCustomRole ? 'standard' : form.role,
-        password: form.password,
+      const r = await authApi.createUser({
+        email,
+        name: form.name.trim(),
+        role: isCustomRole ? 'standard' : role,
+        ...(invite ? { send_invite: true } : { password: form.password }),
         otp_required: form.otp_required,
+        ...(canSetDepartment && form.department_id ? { department_id: form.department_id } : {}),
       })
-      if (isCustomRole) await rbacApi.assignUserRole(form.email, form.role)
-      showToast('User created')
+      created = true
+      if (isCustomRole) await rbacApi.assignUserRole(email, role)
+      const invited = typeof r.data?.invited === 'boolean' ? r.data.invited : invite
+      if (!invited) showToast('User created')
+      else if (r.data?.email_sent === true) showToast(`User created, invitation sent to ${email}`)
+      else showToast(CREATED_NOT_EMAILED, 7000, true)
       setModal(null); load()
     } catch (e: unknown) {
-      showToast(errorMessage(e, 'Failed to create user'))
+      if (created) {
+        showToast(
+          `User created, but the role was not assigned. ${errorMessage(e, 'The role could not be assigned.')}`,
+          6000,
+        )
+        setModal(null); load()
+      } else {
+        showToast(errorMessage(e, 'Failed to create user'))
+      }
     }
     setSaving(false)
   }
 
   async function handleEdit() {
-    if (!selected) return
+    if (!selected || !form.name.trim()) return
     setSaving(true)
+    const email = selected.email.trim().toLowerCase()
+    const self = isSelf(selected)
+    let profileSaved = false
     try {
-      await authApi.updateUser(selected.email, {
-        name: form.name,
-        is_active: form.is_active,
+      const departmentChanged = canSetDepartment && (form.department_id || null) !== (selected.department_id ?? null)
+      await authApi.updateUser(email, {
+        name: form.name.trim(),
+        ...(self ? {} : { is_active: form.is_active }),
         otp_required: form.otp_required,
+        ...(departmentChanged ? { department_id: form.department_id || null } : {}),
       })
-      if (form.role !== selected.role) {
-        await rbacApi.assignUserRole(selected.email, form.role)
+      profileSaved = true
+      if (isSuperAdmin && !self && form.role !== selected.role) {
+        await rbacApi.assignUserRole(email, form.role)
       }
       showToast('User updated')
       setModal(null); load()
     } catch (e: unknown) {
-      showToast(errorMessage(e, 'Failed to update user'))
+      if (profileSaved) {
+        showToast(
+          `Changes saved, but the role was not changed. ${errorMessage(e, 'The role could not be changed.')}`,
+          6000,
+        )
+        setModal(null); load()
+      } else {
+        showToast(errorMessage(e, 'Failed to update user'))
+      }
     }
     setSaving(false)
   }
@@ -439,7 +595,7 @@ export default function UsersRolesPage() {
     if (!newPassword.trim()) return
     setSaving(true)
     try {
-      await authApi.resetPassword({ email: resetEmail, new_password: newPassword })
+      await authApi.adminResetPassword({ email: resetEmail, new_password: newPassword })
       showToast('Password reset successfully')
       setModal(null)
     } catch (e: unknown) {
@@ -448,6 +604,31 @@ export default function UsersRolesPage() {
     setSaving(false)
   }
 
+  async function handleResetTotp(u: User) {
+    if (!confirm(`Reset the authenticator for ${u.email}? They will have to set it up again.`)) return
+    setResettingTotp(u.email)
+    try {
+      await authApi.resetUserTotp(u.email)
+      setUsers(prev => prev.map(x => (x.email === u.email ? { ...x, totp_enabled: false } : x)))
+      showToast(`Authenticator reset for ${u.email}`)
+    } catch (e: unknown) {
+      showToast(errorMessage(e, 'Failed to reset the authenticator'))
+    }
+    setResettingTotp(null)
+  }
+
+  async function handleInvite(u: User) {
+    setInviting(u.email)
+    try {
+      const r = await authApi.inviteUser(u.email)
+      if (r.data?.email_sent !== true) showToast('The invitation email could not be sent', 7000, true)
+      else showToast(r.data.purpose === 'reset' ? `Password link sent to ${u.email}` : `Invitation sent to ${u.email}`)
+    } catch (e: unknown) {
+      const tooMany = (e as { response?: { status?: number } })?.response?.status === 429
+      showToast(errorMessage(e, tooMany ? 'Too many invitations for this user. Try again later.' : 'Failed to send the invitation'))
+    }
+    setInviting(null)
+  }
 
   function openCreateRole() {
     setRoleForm({ name: '', description: '' })
@@ -480,16 +661,35 @@ export default function UsersRolesPage() {
     setSaving(false)
   }
 
-  async function deleteRole(r: CustomRole) {
+  function openDeleteRole(r: CustomRole) {
     if (!isSuperAdmin) return
-    if (!confirm(`Delete custom role "${r.role_name}"? Users with this role will need to be reassigned.`)) return
+    setRoleToDelete(r)
+    setDeleteHolders(r.user_count ?? 0)
+    setReassignTo('')
+    setDeleteError('')
+  }
+
+  async function confirmDeleteRole() {
+    if (!roleToDelete || !isSuperAdmin) return
+    setSaving(true)
+    setDeleteError('')
     try {
-      await rbacApi.deleteRole(r.role_name)
-      showToast('Role deleted')
+      const r = await rbacApi.deleteRole(roleToDelete.role_name, deleteHolders > 0 ? reassignTo : undefined)
+      const moved = Number((r.data as { reassigned?: number } | undefined)?.reassigned ?? 0)
+      showToast(moved > 0 ? `Role deleted, ${moved} user${moved === 1 ? '' : 's'} moved` : 'Role deleted')
+      setRoleToDelete(null)
       load()
     } catch (e: unknown) {
-      showToast(errorMessage(e, 'Failed to delete role'))
+      const res = (e as { response?: { status?: number; data?: { users_holding?: unknown } } })?.response
+      const holding = res?.data?.users_holding
+      if (res?.status === 409 && typeof holding === 'number' && holding > 0) {
+        setDeleteHolders(holding)
+        setReassignTo('')
+      } else {
+        setDeleteError(errorMessage(e, 'Failed to delete role'))
+      }
     }
+    setSaving(false)
   }
 
   async function togglePermission(role: CustomRole, permission: string) {
@@ -510,18 +710,29 @@ export default function UsersRolesPage() {
     setPendingCell(null)
   }
 
+  const createReady = !!form.email.trim() && !!form.name.trim()
 
-  const stats = {
-    total: users.length,
-    superadmin: users.filter(u => u.role === 'superadmin').length,
-    admin: users.filter(u => u.role === 'admin').length,
-    active: users.filter(u => u.is_active).length,
-  }
+  const formRole = modal === 'create' ? (isSuperAdmin ? form.role : 'standard') : (selected?.role ?? 'standard')
+  const canSetDepartment = isSuperAdmin || formRole === 'standard'
+  const departmentName = (id?: string | null) => departments.find(d => d.department_id === id)?.name
 
-  const q = search.trim().toLowerCase()
-  const filtered = q
-    ? users.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q))
-    : users
+  const recruiterOnly = !isSuperAdmin && users.every(u => u.role === 'standard')
+  const activeCount = users.filter(u => u.is_active).length
+  const statCards: { key: string; label: string; count: number; tone: string }[] = isSuperAdmin
+    ? [
+        { key: 'total', label: 'Total Users', count: total, tone: 'total' },
+        { key: 'superadmin', label: 'Super Admins', count: users.filter(u => u.role === 'superadmin').length, tone: 'purple' },
+        { key: 'admin', label: 'HR Admins', count: users.filter(u => u.role === 'admin').length, tone: 'blue' },
+        { key: 'active', label: 'Active', count: activeCount, tone: 'green' },
+      ]
+    : [
+        { key: 'total', label: recruiterOnly ? 'Recruiters' : 'Users', count: total, tone: 'total' },
+        { key: 'active', label: 'Active', count: activeCount, tone: 'green' },
+        { key: 'inactive', label: 'Inactive', count: users.length - activeCount, tone: 'blue' },
+      ]
+  const userNoun = recruiterOnly ? 'recruiter' : 'user'
+
+  const hasMore = !exhausted && total > users.length
 
   const grouped = useMemo(() => {
     const map = new Map<string, string[]>()
@@ -548,15 +759,23 @@ export default function UsersRolesPage() {
 
   return (
     <div className="um-page ur-page">
-      {toast && <div className="um-toast">{toast}</div>}
+      {toast && <div className={`um-toast${toastWarn ? ' um-toast-warn' : ''}`} role={toastWarn ? 'alert' : undefined}>{toast}</div>}
 
       <div className="page-header">
         <div>
           <div className="page-title">Users &amp; Roles</div>
-          <div className="page-sub">{TAB_SUBTITLES[tab]}</div>
         </div>
         {tab === 'users' && <button className="btn btn-primary" onClick={openCreate}>+ Add User</button>}
-        {tab === 'roles' && <button className="btn btn-primary" onClick={openCreateRole}>+ New Role</button>}
+        {tab === 'roles' && (
+          <button
+            className="btn btn-primary"
+            onClick={openCreateRole}
+            disabled={!isSuperAdmin}
+            title={isSuperAdmin ? undefined : SUPER_ADMIN_ONLY}
+          >
+            + New Role
+          </button>
+        )}
         {tab === 'audit' && (
           <button className="btn btn-ghost" onClick={loadAudit} disabled={auditLoading}>
             {auditLoading ? 'Refreshing…' : '↻ Refresh'}
@@ -572,7 +791,7 @@ export default function UsersRolesPage() {
           onClick={() => setTab('users')}
         >
           Users
-          {!loading && !listBlocked && <span className="adm-tab-count">{users.length}</span>}
+          {!loading && !usersError && <span className="adm-tab-count">{total}</span>}
         </button>
         <button
           role="tab"
@@ -596,44 +815,17 @@ export default function UsersRolesPage() {
 
       {tab === 'users' && (
         <>
-          <div className="um-stats">
-            <div className="um-stat-card um-stat-total">
-              <div className="um-stat-icon">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 10-6 0" />
-                </svg>
-              </div>
-              <span className="um-stat-num">{stats.total}</span>
-              <span className="um-stat-label">Total Users</span>
+          {!usersError && (
+            <div className={`um-stats${statCards.length === 3 ? ' um-stats-3' : ''}`}>
+              {statCards.map(card => (
+                <div key={card.key} className={`um-stat-card um-stat-${card.tone}`}>
+                  <div className="um-stat-icon"><StatIcon tone={card.tone} /></div>
+                  <span className="um-stat-num">{card.count}</span>
+                  <span className="um-stat-label">{card.label}</span>
+                </div>
+              ))}
             </div>
-            <div className="um-stat-card um-stat-purple">
-              <div className="um-stat-icon">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <span className="um-stat-num">{stats.superadmin}</span>
-              <span className="um-stat-label">Super Admins</span>
-            </div>
-            <div className="um-stat-card um-stat-blue">
-              <div className="um-stat-icon">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <span className="um-stat-num">{stats.admin}</span>
-              <span className="um-stat-label">HR Admins</span>
-            </div>
-            <div className="um-stat-card um-stat-green">
-              <div className="um-stat-icon">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <span className="um-stat-num">{stats.active}</span>
-              <span className="um-stat-label">Active</span>
-            </div>
-          </div>
+          )}
 
           <div className="um-toolbar">
             <div className="um-search-wrap">
@@ -641,24 +833,25 @@ export default function UsersRolesPage() {
               <input
                 className="um-search"
                 type="text"
-                placeholder="Search by name, email or role…"
+                placeholder="Search by name or email…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
-            {!loading && !listBlocked && (
+            {!loading && !usersError && (
               <span className="um-count">
-                {filtered.length} of {users.length} user{users.length !== 1 ? 's' : ''}
+                {users.length} of {total} {userNoun}{total !== 1 ? 's' : ''}
               </span>
             )}
           </div>
 
-          <div className="um-table-wrap card">
+          <div className="um-table-wrap card" aria-busy={searching || undefined}>
             {loading ? (
               <div className="um-loading">Loading users…</div>
-            ) : listBlocked ? (
-              <div className="um-notice">
-                Listing all users requires Super Admin access. Use the <strong>+ Add User</strong> button above to create new users.
+            ) : usersError ? (
+              <div className="um-notice um-notice-error" role="alert">
+                <span>{usersError}</span>
+                <button className="btn btn-ghost btn-sm" onClick={load}>Retry</button>
               </div>
             ) : (
               <table className="data-table">
@@ -666,6 +859,7 @@ export default function UsersRolesPage() {
                   <tr>
                     <th>User</th>
                     <th>Role</th>
+                    <th>Department</th>
                     <th>Status</th>
                     <th>OTP</th>
                     <th>Last Login</th>
@@ -673,13 +867,13 @@ export default function UsersRolesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 ? (
+                  {users.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="um-empty">
-                        {search ? `No users match "${search}"` : 'No users found.'}
+                      <td colSpan={7} className="um-empty">
+                        {query ? `No users match "${query}"` : 'No users found.'}
                       </td>
                     </tr>
-                  ) : filtered.map(u => (
+                  ) : users.map(u => (
                     <tr key={u.email}>
                       <td data-label="User">
                         <div className="um-user-cell">
@@ -693,32 +887,70 @@ export default function UsersRolesPage() {
                       <td data-label="Role">
                         <span className={roleBadgeClass(u.role)}>{roleLabel(u.role, overridable)}</span>
                       </td>
+                      <td className="um-department" data-label="Department">{departmentName(u.department_id) || '-'}</td>
                       <td data-label="Status">
                         <span className={`badge ${u.is_active ? 'badge-green' : 'badge-red'}`}>
                           {u.is_active ? 'Active' : 'Inactive'}
                         </span>
+                        {u.invite_pending && <span className="badge badge-blue um-invited">Invited</span>}
                       </td>
                       <td data-label="OTP">
                         <span className={`badge ${u.otp_required ? 'badge-blue' : 'badge-gray'}`}>
                           {u.otp_required ? 'On' : 'Off'}
                         </span>
+                        {u.totp_enabled && <span className="badge badge-green um-2fa">2FA</span>}
                       </td>
                       <td className="um-last-login" data-label="Last Login">
                         {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('en-GB') : '-'}
                       </td>
                       <td data-label="Actions">
                         <div className="um-actions">
-                          <button className="um-action-btn um-action-edit" onClick={() => openEdit(u)}>
+                          <button
+                            className="um-action-btn um-action-edit"
+                            onClick={() => openEdit(u)}
+                            disabled={!canManageAccount(u)}
+                            title={canManageAccount(u) ? undefined : SUPER_ADMIN_ONLY}
+                          >
                             <PencilIcon /> Edit
                           </button>
-                          <button className="um-action-btn um-action-reset" onClick={() => openReset(u)}>
+                          <button
+                            className="um-action-btn um-action-reset"
+                            onClick={() => openReset(u)}
+                            disabled={!canManageAccount(u)}
+                            title={canManageAccount(u) ? undefined : SUPER_ADMIN_ONLY}
+                          >
                             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a4 4 0 010 5.657M9 12H3m0 0l3-3m-3 3l3 3" />
                             </svg>
                             Reset PW
                           </button>
+                          {u.totp_enabled && (
+                            <button
+                              className="um-action-btn um-action-totp"
+                              onClick={() => handleResetTotp(u)}
+                              disabled={!canManageAccount(u) || resettingTotp === u.email}
+                              title={canManageAccount(u) ? undefined : SUPER_ADMIN_ONLY}
+                            >
+                              Reset authenticator
+                            </button>
+                          )}
+                          {u.invite_pending && (
+                            <button
+                              className="um-action-btn um-action-invite"
+                              onClick={() => handleInvite(u)}
+                              disabled={!canManageAccount(u) || isSelf(u) || inviting === u.email}
+                              title={canManageAccount(u) ? undefined : SUPER_ADMIN_ONLY}
+                            >
+                              <MailIcon /> Resend invitation
+                            </button>
+                          )}
                           {isSuperAdmin && (
-                            <button className="um-action-btn um-action-delete" onClick={() => handleDelete(u.email)}>
+                            <button
+                              className="um-action-btn um-action-delete"
+                              onClick={() => handleDelete(u.email)}
+                              disabled={isSelf(u)}
+                              title={isSelf(u) ? 'You cannot delete your own account' : undefined}
+                            >
                               <TrashIcon /> Delete
                             </button>
                           )}
@@ -728,6 +960,13 @@ export default function UsersRolesPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+            {!loading && !usersError && hasMore && (
+              <div className="um-more">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={loadMore} disabled={moreBusy}>
+                  {moreBusy ? 'Loading…' : 'Load more'}
+                </button>
+              </div>
             )}
           </div>
         </>
@@ -757,12 +996,6 @@ export default function UsersRolesPage() {
               </label>
             )}
           </div>
-          <div className="rp-hint-bar">
-            Built-in role columns are fixed and read-only. Toggle a custom role&rsquo;s checkboxes to save instantly.
-            To change which role a person has, edit them on the <button className="adm-link" onClick={() => setTab('users')}>Users</button> tab.
-            Every change made here is recorded on the <button className="adm-link" onClick={() => setTab('audit')}>Audit Log</button> tab.
-          </div>
-
           {loading ? (
             <MatrixSkeleton />
           ) : permissions.length === 0 ? (
@@ -782,23 +1015,33 @@ export default function UsersRolesPage() {
                       <th key={name} className="rp-matrix-rolecol rp-matrix-builtin">
                         <div className="rp-matrix-role-head">
                           <span className="rp-matrix-role-name">{BUILTIN_LABELS[name]}</span>
-                          <span className="rp-lock-icon" title="Built-in role - permissions are fixed"><LockIcon /></span>
+                          <span className="rp-lock-icon" title="Built-in role, permissions are fixed"><LockIcon /></span>
                         </div>
                       </th>
                     ))}
                     {overridable.length > 0 ? overridable.map(r => (
                       <th key={r.role_name} className="rp-matrix-rolecol">
                         <div className="rp-matrix-role-head">
-                          <span className="rp-matrix-role-name" title={r.description ? `${r.role_name} - ${r.description}` : r.role_name}>{r.role_name}</span>
+                          <span className="rp-matrix-role-name" title={r.description ? `${r.role_name}, ${r.description}` : r.role_name}>{r.role_name}</span>
+                          {typeof r.user_count === 'number' && (
+                            <span className="rp-role-count">{r.user_count} user{r.user_count === 1 ? '' : 's'}</span>
+                          )}
                           <div className="rp-matrix-role-actions">
-                            <button className="rp-icon-btn" title="Edit description" aria-label={`Edit ${r.role_name}`} onClick={() => openEditRole(r)}><PencilIcon /></button>
-                            <button className="rp-icon-btn rp-icon-btn-danger" title="Delete role" aria-label={`Delete ${r.role_name}`} onClick={() => deleteRole(r)}><TrashIcon /></button>
+                            <button className="rp-icon-btn" title={isSuperAdmin ? 'Edit description' : SUPER_ADMIN_ONLY} aria-label={`Edit ${r.role_name}`} disabled={!isSuperAdmin} onClick={() => openEditRole(r)}><PencilIcon /></button>
+                            <button className="rp-icon-btn rp-icon-btn-danger" title={isSuperAdmin ? 'Delete role' : SUPER_ADMIN_ONLY} aria-label={`Delete ${r.role_name}`} disabled={!isSuperAdmin} onClick={() => openDeleteRole(r)}><TrashIcon /></button>
                           </div>
                         </div>
                       </th>
                     )) : (
                       <th className="rp-matrix-rolecol rp-matrix-empty-col">
-                        <button className="rp-empty-role-cta" onClick={openCreateRole}>+ Add a custom role</button>
+                        <button
+                          className="rp-empty-role-cta"
+                          onClick={openCreateRole}
+                          disabled={!isSuperAdmin}
+                          title={isSuperAdmin ? undefined : SUPER_ADMIN_ONLY}
+                        >
+                          + Add a custom role
+                        </button>
                       </th>
                     )}
                   </tr>
@@ -820,7 +1063,7 @@ export default function UsersRolesPage() {
                               <PermCheckbox
                                 checked={builtinPermsFor(name).includes(key)}
                                 disabled
-                                label={`${key} - ${BUILTIN_LABELS[name]} (built-in, read-only)`}
+                                label={`${key}, ${BUILTIN_LABELS[name]} (built-in, read-only)`}
                               />
                             </td>
                           ))}
@@ -830,7 +1073,7 @@ export default function UsersRolesPage() {
                               <td key={r.role_name} className="rp-matrix-cell">
                                 <PermCheckbox
                                   checked={r.permissions.includes(key)}
-                                  disabled={pendingCell === cellId}
+                                  disabled={!isSuperAdmin || pendingCell === cellId}
                                   onChange={() => togglePermission(r, key)}
                                   label={`${key} for ${r.role_name}`}
                                 />
@@ -892,6 +1135,15 @@ export default function UsersRolesPage() {
                   <option value={auditDraft.resource_type}>{auditDraft.resource_type}</option>
                 )}
               </select>
+            </label>
+            <label className="al-field">
+              <span className="form-label">Resource ID</span>
+              <input
+                className="form-input"
+                value={auditDraft.resource_id}
+                onChange={e => setAuditDraft(f => ({ ...f, resource_id: e.target.value }))}
+                placeholder="Exact ID"
+              />
             </label>
             <label className="al-field">
               <span className="form-label">From</span>
@@ -962,7 +1214,7 @@ export default function UsersRolesPage() {
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal-box um-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{modal === 'create' ? 'Create New User' : `Edit - ${selected?.name}`}</h2>
+              <h2>{modal === 'create' ? 'Create New User' : `Edit, ${selected?.name}`}</h2>
               <button className="modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="um-form">
@@ -980,34 +1232,60 @@ export default function UsersRolesPage() {
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Jane Smith" />
               </label>
-              <label className="um-field">
-                <span className="form-label">Role</span>
-                <select className="form-input" value={form.role}
-                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                  {allRoleOptions
-                    .filter(o => o.value !== 'superadmin' || isSuperAdmin)
-                    .map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <span className="adm-field-hint">
-                  This is the only place a user&rsquo;s role is assigned.
-                  {' '}Permissions for each role are set on the{' '}
-                  <button type="button" className="adm-link" onClick={() => { setModal(null); setTab('roles') }}>
-                    Roles &amp; Permissions
-                  </button>{' '}tab.
-                </span>
-              </label>
-              {modal === 'create' && (
+              {isSuperAdmin ? (
                 <label className="um-field">
-                  <span className="form-label">Password *</span>
-                  <input className="form-input" type="password" value={form.password}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    placeholder="Min 8 characters" />
+                  <span className="form-label">Role</span>
+                  <select className="form-input" value={form.role}
+                    disabled={modal === 'edit' && !!selected && isSelf(selected)}
+                    onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                    {allRoleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <span className="adm-field-hint">
+                    This is the only place a user&rsquo;s role is assigned.
+                    {' '}Permissions for each role are set on the{' '}
+                    <button type="button" className="adm-link" onClick={() => { setModal(null); setTab('roles') }}>
+                      Roles &amp; Permissions
+                    </button>{' '}tab.
+                  </span>
                 </label>
+              ) : modal === 'create' && (
+                <div className="um-field">
+                  <span className="form-label">Role</span>
+                  <span className={roleBadgeClass('standard')}>{BUILTIN_LABELS.standard}</span>
+                </div>
+              )}
+              <label className="um-field">
+                <span className="form-label">Department</span>
+                <select className="form-input" value={form.department_id}
+                  disabled={!canSetDepartment}
+                  title={canSetDepartment ? undefined : SUPER_ADMIN_ONLY}
+                  onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}>
+                  <option value="">No department</option>
+                  {departments.map(d => <option key={d.department_id} value={d.department_id}>{d.name}</option>)}
+                </select>
+              </label>
+              {modal === 'create' && !form.send_invite && (
+                <div className="um-field">
+                  <label className="form-label" htmlFor="um-create-password">Password</label>
+                  <input id="um-create-password" className="form-input" type="password" value={form.password}
+                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                    aria-describedby={passwordHint ? 'um-create-password-hint' : undefined}
+                    placeholder="Leave blank to send an invitation" />
+                  {passwordHint && <span className="adm-field-hint" id="um-create-password-hint">{passwordHint}</span>}
+                </div>
               )}
               <div className="um-toggles">
+                {modal === 'create' && (
+                  <label className="um-toggle">
+                    <input type="checkbox" checked={form.send_invite}
+                      onChange={e => setForm(f => ({ ...f, send_invite: e.target.checked }))} />
+                    <span>Send an invitation email instead</span>
+                  </label>
+                )}
                 {modal === 'edit' && (
                   <label className="um-toggle">
                     <input type="checkbox" checked={form.is_active}
+                      disabled={!!selected && isSelf(selected)}
                       onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
                     <span>Active account</span>
                   </label>
@@ -1021,7 +1299,11 @@ export default function UsersRolesPage() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={modal === 'create' ? handleCreate : handleEdit} disabled={saving}>
+              <button
+                className="btn btn-primary"
+                onClick={modal === 'create' ? handleCreate : handleEdit}
+                disabled={saving || (modal === 'create' ? !createReady : !form.name.trim())}
+              >
                 {saving ? 'Saving…' : modal === 'create' ? 'Create User' : 'Save Changes'}
               </button>
             </div>
@@ -1033,16 +1315,18 @@ export default function UsersRolesPage() {
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal-box um-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Reset Password - {selected?.name}</h2>
+              <h2>Reset Password, {selected?.name}</h2>
               <button className="modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="um-form">
-              <label className="um-field">
-                <span className="form-label">New Password</span>
-                <input className="form-input" type="password" value={newPassword}
+              <div className="um-field">
+                <label className="form-label" htmlFor="um-reset-password">New Password</label>
+                <input id="um-reset-password" className="form-input" type="password" value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
+                  aria-describedby={passwordHint ? 'um-reset-password-hint' : undefined}
                   placeholder="Enter new password" autoFocus />
-              </label>
+                {passwordHint && <span className="adm-field-hint" id="um-reset-password-hint">{passwordHint}</span>}
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
@@ -1058,7 +1342,7 @@ export default function UsersRolesPage() {
         <div className="modal-overlay" onClick={() => setRoleModal(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{roleModal === 'create' ? 'New Role' : `Edit - ${roleSelected?.role_name ?? ''}`}</h2>
+              <h2>{roleModal === 'create' ? 'New Role' : `Edit, ${roleSelected?.role_name ?? ''}`}</h2>
               <button className="modal-close" onClick={() => setRoleModal(null)}>✕</button>
             </div>
             <div className="rp-form">
@@ -1086,6 +1370,44 @@ export default function UsersRolesPage() {
               <button className="btn btn-ghost" onClick={() => setRoleModal(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={saveRole} disabled={saving || !roleForm.name.trim()}>
                 {saving ? 'Saving…' : roleModal === 'create' ? 'Create' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {roleToDelete && (
+        <div className="modal-overlay" onClick={() => setRoleToDelete(null)}>
+          <div className="modal-box" role="dialog" aria-label={`Delete ${roleToDelete.role_name}`} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Delete, {roleToDelete.role_name}</h2>
+              <button className="modal-close" onClick={() => setRoleToDelete(null)}>✕</button>
+            </div>
+            <div className="rp-form">
+              <p className="rp-delete-sentence">Delete the role &ldquo;{roleToDelete.role_name}&rdquo;? This cannot be undone.</p>
+              {deleteHolders > 0 && (
+                <label className="rp-field">
+                  <span className="form-label">
+                    {deleteHolders} user{deleteHolders === 1 ? '' : 's'} hold{deleteHolders === 1 ? 's' : ''} this role. Move them to *
+                  </span>
+                  <select className="form-input" value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+                    <option value="">Select a role</option>
+                    {allRoleOptions
+                      .filter(o => o.value !== roleToDelete.role_name)
+                      .map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </label>
+              )}
+              {deleteError && <div className="rp-delete-error" role="alert">{deleteError}</div>}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setRoleToDelete(null)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={confirmDeleteRole}
+                disabled={saving || (deleteHolders > 0 && !reassignTo)}
+              >
+                {saving ? 'Deleting…' : 'Delete Role'}
               </button>
             </div>
           </div>

@@ -19,7 +19,7 @@ async def test_login_success(client):
 
 async def test_login_normalization_success(client):
     payload = {
-        "email": "  Superadmin@Hirely.ai  ",
+        "email": "  Superadmin@HRBot.com  ",
         "password": "change-me-in-production"
     }
     response = await client.post("/api/v1/auth/login", json=payload)
@@ -53,7 +53,7 @@ async def test_oauth2_token_success(client):
 
 async def test_oauth2_token_normalization_success(client):
     payload = {
-        "username": "  Superadmin@Hirely.ai  ",
+        "username": "  Superadmin@HRBot.com  ",
         "password": "change-me-in-production"
     }
     response = await client.post("/api/v1/auth/token", data=payload)
@@ -91,7 +91,7 @@ async def test_me_valid_token(client):
     }
     login_resp = await client.post("/api/v1/auth/login", json=payload)
     token = login_resp.json()["access_token"]
-    
+
     headers = {"Authorization": f"Bearer {token}"}
     response = await client.get("/api/v1/auth/me", headers=headers)
     assert response.status_code == 200

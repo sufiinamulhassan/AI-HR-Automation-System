@@ -256,7 +256,7 @@
   overflow: hidden;
   border-block: 1px solid var(--line);
   background: var(--paper);
-  padding-block: clamp(3rem, 2rem + 4vw, 5rem) clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+  padding-block: calc(6rem - 73px) 1.5rem;
 }
 .xv-grid-overlay {
   position: absolute;
@@ -308,6 +308,7 @@
   color: var(--ink);
 }
 .xv-hero-title-mobile { font-size: clamp(2.25rem, 9vw, 3.25rem); display: block; }
+.xv-hero-title-mobile span { display: block; }
 .xv-hero-word { display: none; }
 .xv-hero-img { display: none; }
 
@@ -319,7 +320,7 @@
   font-family: Urbanist, system-ui, sans-serif;
   font-size: 0.875rem;
   font-weight: 500;
-  line-height: 1.7;
+  line-height: 1.625;
   color: var(--muted);
 }
 .xv-hero-lead br { display: none; }
@@ -782,6 +783,7 @@
   transition: color 0.2s ease;
 }
 .xv-foot-cta:hover { color: var(--accent); }
+.xv-foot-careers { margin-top: 1.5rem; }
 
 .xv-foot-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2.5rem 1.25rem; }
 .xv-foot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.875rem; }
@@ -830,7 +832,6 @@
   text-align: center;
 }
 
-
 @media (min-width: 640px) {
   .xv-cta-actions { flex-direction: row; }
   .xv-foot-bottom-inner { flex-direction: row; justify-content: space-between; text-align: left; }
@@ -840,7 +841,7 @@
   :root { }
   .xv-card-section, .xv-marquee-band { margin-inline: 1.5rem; }
 
-  .xv-hero { padding-block: clamp(4rem, 3rem + 4vw, 6rem) clamp(2rem, 1.5rem + 2vw, 3rem); }
+  .xv-hero { padding-block: calc(7rem - 73px) 2rem; }
   .xv-hero-inner { padding-block: 3rem; }
   .xv-checker-tl { width: 11rem; top: 0; }
   .xv-checker-br { width: 11rem; }
@@ -857,9 +858,9 @@
     padding-block: 2.5rem;
     transform: translateY(0.625rem);
   }
-  .xv-hero-word span { position: relative; z-index: 20; white-space: nowrap; font-size: clamp(2.05rem, 3.7vw, 3.95rem); transform: scale(1.5); }
-  .xv-hero-word-left { padding-right: 3.5rem; }
-  .xv-hero-word-right { padding-left: 3.5rem; }
+  .xv-hero-word span { position: relative; z-index: 20; white-space: nowrap; font-size: clamp(2.5rem, 5.5vw, 5.5rem); transform: scale(1.5); }
+  .xv-hero-word-left { padding-right: 1rem; }
+  .xv-hero-word-right { padding-left: 1rem; }
   .xv-hero-img {
     position: relative;
     z-index: 10;
@@ -872,7 +873,7 @@
     transform: translateY(0.625rem) scale(1.25);
     box-shadow: var(--shadow-lift);
   }
-  .xv-hero-lead { margin-top: 3.5rem; transform: translateY(1.25rem); font-size: 1rem; }
+  .xv-hero-lead { margin-top: 3.5rem; transform: translateY(1.25rem); font-size: 1rem; line-height: 1.5; }
   .xv-hero-lead br { display: inline; }
   .xv-hero-cta { margin-top: 2rem; transform: translateY(1.25rem); gap: 1rem; }
 
@@ -936,7 +937,13 @@
   .xv-droplines { height: 10rem; }
   .xv-checker-tl { width: 13rem; }
   .xv-checker-br { width: 14rem; }
-  .xv-hero-img { height: 9rem; width: 9rem; margin-inline: 4rem; transform: translateY(0.75rem) scale(1.25); }
+  .xv-hero { padding-block: calc(8rem - 73px) 2.5rem; }
+  .xv-hero-inner { padding-block: 3.5rem; }
+  .xv-hero-title { transform: translateY(1.75rem); }
+  .xv-hero-word { padding-block: 3rem; }
+  .xv-hero-word-left { padding-right: 1.5rem; }
+  .xv-hero-word-right { padding-left: 1.5rem; }
+  .xv-hero-img { height: 10rem; width: 10rem; margin-inline: 6rem; transform: translateY(0.75rem) scale(1.25); }
   .xv-nodes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .xv-why-shape { width: 18rem; }
 }
@@ -944,8 +951,12 @@
 @media (min-width: 1280px) {
   .xv-ghost-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .xv-ghost-inner { min-height: 32rem; }
-  .xv-hero-img { height: 10.5rem; width: 10.5rem; margin-inline: 6rem; }
+  .xv-hero-img { height: 12rem; width: 12rem; margin-inline: 7rem; transform: translateY(0.875rem) scale(1.25); }
   .xv-why-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1565px) {
+  .xv-hero-word span { white-space: normal; width: min-content; }
 }
 
 @media (max-width: 767px) {
@@ -985,3 +996,5 @@
   .xv-btn:hover, .xv-why-card:hover { transform: none; }
   .xv-process-card:hover .xv-process-media img { transform: none; }
 }
+
+.xv-section-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; margin-top: clamp(1.5rem, 1rem + 2vw, 2.5rem); }

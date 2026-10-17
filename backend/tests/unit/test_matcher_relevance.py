@@ -1,4 +1,3 @@
-"""Tests for domain-aware relevance gating in the matcher — hr_module."""
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,7 +15,6 @@ def test_passes_relevance_rules():
 
 
 async def test_cross_domain_low_similarity_excluded():
-    """A Marketing JD must not pull an ML resume that sits at ~0.47."""
     from services.hr_module import matcher
     db = MagicMock()
     db.jobs.find_one = AsyncMock(return_value={"deadline_at": None})
@@ -37,6 +35,7 @@ async def test_same_domain_match_included():
     db = MagicMock()
     db.jobs.find_one = AsyncMock(return_value={"deadline_at": None})
     db.jobs.update_one = AsyncMock()
+    db.resumes.find.return_value.to_list = AsyncMock(return_value=[{"resume_id": "res-mktg"}])
     pc = MagicMock()
     pc.query.return_value = MagicMock(matches=[
         {"id": "res-mktg", "score": 0.40, "metadata": {"job_domain": "marketing"}},

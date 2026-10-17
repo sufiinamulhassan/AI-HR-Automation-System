@@ -1,24 +1,3 @@
-"""AI Coding Assessment — hr_module (MVP2 §2.10).
-
-SECURITY-CRITICAL: this backend NEVER executes candidate-submitted source code
-itself (no subprocess/exec/eval/importlib on candidate code, ever). All code
-execution is delegated over HTTP to a purpose-built sandboxed execution
-service, selected by CODE_SANDBOX_PROVIDER:
-
-  judge0 — Judge0 CE (https://judge0.com), self-hosted or RapidAPI-hosted.
-  piston — engineer-man/piston (https://github.com/engineer-man/piston),
-           open source and self-hostable, with no API key of its own.
-
-If the selected engine's URL is blank the feature reports "not configured" —
-it never falls back to running anything locally. Nor is an LLM ever used to
-*predict* a program's output in place of running it: `score` must always come
-from real stdout captured by a sandbox. `evaluate_output_correctness` below is
-a second opinion ON that real output, never a substitute for it.
-
-Both engines are normalised to Judge0's response shape (`run_on_piston`
-translates), so everything downstream of `run_in_sandbox` — scoring,
-telemetry, compile-error short-circuiting — is provider-agnostic.
-"""
 import json
 import logging
 import random
@@ -27,7 +6,7 @@ from datetime import datetime, timezone
 import httpx
 
 from config.database import get_db
-from config.llm import ask_llm
+from config.llm import ask_llm, model_for
 from config.settings import (
     sandbox_not_configured_message,
     sandbox_provider,
@@ -35,6 +14,7 @@ from config.settings import (
     settings,
 )
 from services.hr_module.prompt_config_service import get_prompt_override
+from services.hr_module.prompt_guard import fence, with_guard
 
 logger = logging.getLogger(__name__)
 
@@ -122,24 +102,17 @@ PISTON_LANGUAGES: dict[str, str] = {
 
 
 def supported_language(language: str) -> bool:
-    """Whether the ACTIVE engine can run this language — the two engines cover
-    the same set today, but callers must not assume that stays true."""
     return language in (PISTON_LANGUAGES if sandbox_provider() == "piston" else LANGUAGE_IDS)
 
 
 def supported_languages() -> list[str]:
-    """Every language the ACTIVE engine can run right now, sorted — lets the
-    candidate-facing editor offer a language even when the question's own
-    `language_templates` never authored a starter for it (demo feedback: the
-    candidate should be able to pick any supported language, not only the
-    2-4 an admin/AI happened to template)."""
     return sorted(PISTON_LANGUAGES if sandbox_provider() == "piston" else LANGUAGE_IDS)
 
 
 _GENERATE_SYSTEM = (
     "You are a senior technical interviewer designing a coding assessment question "
     "for a job-role screening platform. Return ONLY valid JSON matching the requested "
-    "schema — no markdown fences, no commentary, no extra keys."
+    "schema: no markdown fences, no commentary, no extra keys."
 )
 
 _GENERATE_PROMPT = """Design one coding assessment question for a "{job_domain}" role at "{difficulty}" difficulty.
@@ -149,8 +122,8 @@ Return JSON in exactly this shape:
   "title": "<short question title>",
   "description": "<full problem description, including the input format and the expected output format>",
   "language_templates": {{
-    "python": "<starter code for Python — read from stdin, print to stdout>",
-    "javascript": "<starter code for JavaScript (Node.js) — read from stdin, print to stdout>"
+    "python": "<starter code for Python: read from stdin, print to stdout>",
+    "javascript": "<starter code for JavaScript (Node.js): read from stdin, print to stdout>"
   }},
   "test_cases": [
     {{"input": "<stdin for this case>", "expected_output": "<expected stdout>", "is_hidden": false, "is_edge_case": false}},
@@ -163,7 +136,7 @@ Rules:
   you may optionally add more from: java, c, cpp, typescript, go, ruby.
 - "test_cases" must contain 3 to 5 entries total, with at least one visible ("is_hidden": false)
   and at least one hidden ("is_hidden": true) case.
-- At least one test case must be a boundary/edge case ("is_edge_case": true) — e.g. empty input,
+- At least one test case must be a boundary/edge case ("is_edge_case": true): e.g. empty input,
   minimum/maximum size, duplicate values, or another input the naive approach is likely to mishandle.
 - Every test case must be solvable purely via stdin/stdout, consistent with the starter templates.
 - Keep the problem self-contained and unambiguous; do not reference external files or libraries
@@ -182,24 +155,11 @@ async def generate_question_with_ai(
     topic_hint: str | None = None,
     model: str | None = None,
 ) -> dict:
-    """Ask the LLM (via config.llm.ask_llm — never a provider SDK directly) to
-    draft a full coding question, then strictly validate the parsed JSON before
-    handing it back to the caller.
-
-    Returns a dict with keys: title, description, language_templates,
-    test_cases (list of {input, expected_output, is_hidden, is_edge_case}),
-    job_domain, difficulty — the same shape routes/coding.py's insert helper expects.
-
-    Raises RuntimeError (never lets a malformed LLM response propagate as an
-    unhandled crash) when the response isn't valid JSON, isn't a JSON object,
-    or is missing/short on any required field. The route layer maps this to
-    HTTPException(502, ...).
-    """
     topic_line = f'Focus the question on this specific topic: "{topic_hint}".\n' if topic_hint else ""
     raw = await ask_llm(
         prompt=_GENERATE_PROMPT.format(job_domain=job_domain, difficulty=difficulty, topic_line=topic_line),
         system=_GENERATE_SYSTEM,
-        model=model,
+        model=model_for("coding_generation", model),
         max_tokens=1800,
         temperature=0.4,
         json_mode=True,
@@ -209,7 +169,7 @@ async def generate_question_with_ai(
         parsed = json.loads(raw)
     except (json.JSONDecodeError, TypeError) as e:
         logger.warning("generate_question_with_ai: malformed JSON from LLM (job_domain=%s): %s", job_domain, e)
-        raise RuntimeError("AI question generation returned malformed output — please retry")
+        raise RuntimeError("AI question generation returned malformed output: please retry")
 
     if not isinstance(parsed, dict):
         raise RuntimeError("AI question generation returned an unexpected response shape")
@@ -263,18 +223,6 @@ async def generate_question_with_ai(
 async def auto_assign_coding_question(
     db, job_domain: str | None, difficulty: str | None = None,
 ) -> dict | None:
-    """Randomly pick one matching coding question instead of an admin having to
-    hand-pick the same `question_id` for every candidate on a role (demo
-    feedback: avoid handing every candidate on the same role an identical
-    question). Same domain-match-then-fallback shape as
-    scenario_service.pick_scenario_for_job.
-
-    Purely additive — the existing manual `PATCH /coding/assign/{candidate_id}`
-    path in routes/coding.py is untouched; this is a standalone helper a caller
-    can invoke instead of (never automatically instead of) that endpoint.
-
-    Returns the matching question doc, or None if nothing matches.
-    """
     query: dict = {}
     if difficulty:
         query["difficulty"] = difficulty
@@ -289,17 +237,14 @@ async def auto_assign_coding_question(
     return random.choice(matches) if matches else None
 
 
-async def run_on_judge0(source_code: str, language_id: int, stdin: str) -> dict:
-    """Submit one (source, stdin) pair to Judge0 and return its parsed JSON
-    response (stdout/stderr/status/etc — see Judge0 submissions API docs).
+_JUDGE0_CPU_TIME_LIMIT_SECONDS = 5
+_JUDGE0_WALL_TIME_LIMIT_SECONDS = 10
+_JUDGE0_MEMORY_LIMIT_KB = 256000
 
-    Raises RuntimeError if Judge0 is not configured (blank JUDGE0_API_URL) —
-    routes/coding.py translates that into HTTPException(503, ...). Never
-    executes the source code itself; this is purely an HTTP call to the
-    external sandboxed execution service.
-    """
+
+async def run_on_judge0(source_code: str, language_id: int, stdin: str) -> dict:
     if not settings.JUDGE0_API_URL:
-        raise RuntimeError("Judge0 is not configured — set JUDGE0_API_URL in settings")
+        raise RuntimeError("Judge0 is not configured: set JUDGE0_API_URL in settings")
 
     headers = {"Content-Type": "application/json"}
     if settings.JUDGE0_API_HOST:
@@ -312,6 +257,9 @@ async def run_on_judge0(source_code: str, language_id: int, stdin: str) -> dict:
         "source_code": source_code,
         "language_id": language_id,
         "stdin": stdin,
+        "cpu_time_limit": _JUDGE0_CPU_TIME_LIMIT_SECONDS,
+        "wall_time_limit": _JUDGE0_WALL_TIME_LIMIT_SECONDS,
+        "memory_limit": _JUDGE0_MEMORY_LIMIT_KB,
     }
 
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -336,14 +284,6 @@ _PISTON_TIMEOUT_SIGNALS = {"SIGKILL", "SIGXCPU", "SIGTERM"}
 
 
 def _piston_status(compile_failed: bool, run_stage: dict) -> dict:
-    """Synthesise a Judge0-style `status` from Piston's stage results.
-
-    Judge0 reports a single status id per submission; Piston reports two
-    process stages and leaves the interpretation to the caller. This is that
-    interpretation — and it matters beyond cosmetics: `_run_test_cases`
-    short-circuits the remaining cases on id 6, and the run summary keys
-    `timed_out` off id 5.
-    """
     if compile_failed:
         return {"id": _STATUS_COMPILATION_ERROR, "description": "Compilation Error"}
     if run_stage.get("signal") in _PISTON_TIMEOUT_SIGNALS:
@@ -357,21 +297,8 @@ def _piston_status(compile_failed: bool, run_stage: dict) -> dict:
 
 
 async def run_on_piston(source_code: str, language: str, stdin: str) -> dict:
-    """Execute one (source, stdin) pair on Piston and return it in JUDGE0'S
-    response shape, so `_telemetry` and every downstream consumer stay
-    provider-agnostic.
-
-    Raises RuntimeError if Piston is not configured (blank PISTON_API_URL) —
-    routes/coding.py translates that into HTTPException(503, ...), the same
-    path the Judge0 branch takes. Never executes the source code itself; this
-    is purely an HTTP call to the external sandboxed execution service.
-
-    Two facts Judge0 reports and Piston does not: wall time and peak memory.
-    They come back as None rather than 0 — `_telemetry` already treats None as
-    "not measured", and a fabricated 0 ms would read as a real measurement.
-    """
     if not settings.PISTON_API_URL:
-        raise RuntimeError("Piston is not configured — set PISTON_API_URL in settings")
+        raise RuntimeError("Piston is not configured: set PISTON_API_URL in settings")
 
     piston_language = PISTON_LANGUAGES.get(language)
     if not piston_language:
@@ -414,16 +341,6 @@ async def run_on_piston(source_code: str, language: str, stdin: str) -> dict:
 
 
 async def run_in_sandbox(source_code: str, language: str, stdin: str) -> dict:
-    """Execute one (source, stdin) pair on whichever engine is configured.
-
-    The single entry point every caller should use — it takes a language NAME
-    rather than a Judge0 numeric id, because that id is a Judge0 implementation
-    detail no caller should have to know. Returns Judge0's response shape from
-    both branches.
-
-    Raises ValueError for a language the active engine cannot run (routes map
-    that to 400) and RuntimeError when the engine is unconfigured (503).
-    """
     if sandbox_provider() == "piston":
         return await run_on_piston(source_code, language, stdin)
 
@@ -434,7 +351,6 @@ async def run_in_sandbox(source_code: str, language: str, stdin: str) -> dict:
 
 
 def _clip(text) -> str | None:
-    """Bound a sandbox-provided string before it is persisted."""
     if not text:
         return None
     text = str(text)
@@ -443,13 +359,6 @@ def _clip(text) -> str | None:
 
 
 def _telemetry(resp: dict) -> dict:
-    """Pull the execution facts out of a sandbox response.
-
-    All of this was already on the wire and was being thrown away — only
-    `stdout` was read. Without it a compile error is indistinguishable from a
-    wrong answer, which is how a Java or Go submission that never built ends up
-    looking exactly like a candidate who cannot code.
-    """
     status = resp.get("status")
     status = status if isinstance(status, dict) else {}
 
@@ -474,8 +383,6 @@ def _telemetry(resp: dict) -> dict:
 
 
 def _blank_row(tc: dict, idx: int) -> dict:
-    """Every result row carries the same keys whether it ran, was skipped, or
-    errored — so consumers never have to branch on key presence."""
     return {
         "test_case_index": idx,
         "is_hidden": bool(tc.get("is_hidden", False)),
@@ -496,12 +403,6 @@ def _blank_row(tc: dict, idx: int) -> dict:
 
 
 async def _execute_case(code: str, language: str, tc: dict, idx: int) -> dict:
-    """Run one test case. Never raises.
-
-    An infrastructure failure is recorded as `execution_error` rather than a
-    silent wrong answer, so the caller can tell "our sandbox broke" apart from
-    "their code was wrong" — the two must never score the same.
-    """
     row = _blank_row(tc, idx)
     try:
         resp = await run_in_sandbox(code, language, tc.get("input", ""))
@@ -521,13 +422,6 @@ async def _execute_case(code: str, language: str, tc: dict, idx: int) -> dict:
 async def _run_test_cases(
     code: str, language: str, test_cases: list[dict],
 ) -> tuple[list[dict], dict]:
-    """Execute every test case, short-circuiting on a compile error.
-
-    If the code did not compile, every remaining case fails identically for the
-    same reason — so they are marked skipped rather than burning one sandbox
-    call each to re-learn the same fact. Previously a non-compiling Java
-    submission spent N calls to report N blank failures.
-    """
     results: list[dict] = []
     compile_message: str | None = None
 
@@ -540,7 +434,7 @@ async def _run_test_cases(
             for skip_idx, skip_tc in enumerate(test_cases[idx + 1:], start=idx + 1):
                 skipped = _blank_row(skip_tc, skip_idx)
                 skipped["skipped"] = True
-                skipped["status"] = "Skipped — compilation failed"
+                skipped["status"] = "Skipped: compilation failed"
                 results.append(skipped)
             break
 
@@ -559,14 +453,6 @@ async def _run_test_cases(
 
 
 def _score_results(results: list[dict]) -> tuple[int, float | None]:
-    """Return (passed_count, score). Score is None when nothing executed.
-
-    A total sandbox outage must not be recorded as 0/N. That number would flow
-    into the candidate's hiring report via _attach_coding_scores and read as
-    "wrote code that fails every test" — a fabricated fact about a person.
-    None is absent, and every consumer already renders an absent dimension as
-    "—" rather than zero.
-    """
     total = len(results)
     passed = sum(1 for r in results if r["passed"])
     if total and all(r["execution_error"] for r in results):
@@ -576,7 +462,7 @@ def _score_results(results: list[dict]) -> tuple[int, float | None]:
 
 _QUALITY_SYSTEM = (
     "You are a senior engineer reviewing a candidate's coding-assessment submission. "
-    "Judge the code as written — readability, structure, and approach — not merely "
+    "Judge the code as written: readability, structure, and approach: not merely "
     "whether it passes tests. Be specific and evidence-based; cite the code."
 )
 
@@ -593,13 +479,13 @@ Candidate's submission:
 
 Automated test results: {passed}/{total} test cases passed.
 
-Assess the submission. Test correctness is already measured above — your job is
+Assess the submission. Test correctness is already measured above: your job is
 everything that pass/fail cannot see: how readable the code is, how well it is
 structured, whether the algorithmic approach is sound and appropriately
 efficient, and whether it uses the language idiomatically.
 
 Also estimate the submission's asymptotic time and space complexity (e.g.
-"O(n)", "O(n log n)", "O(1)") as the candidate's actual algorithm would run —
+"O(n)", "O(n log n)", "O(1)") as the candidate's actual algorithm would run -
 not a static-shape metric, an honest Big-O read of what the code does.
 
 Write `feedback_for_recruiter` for a non-author reviewer deciding on this
@@ -642,21 +528,14 @@ async def evaluate_code_quality(
     total: int,
     model: str | None = None,
 ) -> dict | None:
-    """AI review of code quality, approach and feedback — the axis Judge0 cannot see.
-
-    Judge0 answers "does it pass?"; two submissions with identical pass rates can
-    differ enormously in quality, and the pass-rate score alone treats them as
-    equal. Returns None when unavailable (no key, provider error, unparseable
-    output) so a submission is never blocked by the reviewer being down.
-    """
     from config.llm import provider_for_model
 
-    chosen_model = model or settings.CODE_EVAL_MODEL
+    chosen_model = model_for("code_quality", model)
     provider = provider_for_model(chosen_model)
     required_key = settings.ANTHROPIC_API_KEY if provider == "anthropic" else settings.OPENAI_API_KEY
     if not required_key:
         logger.info(
-            "Skipping AI code-quality review — no API key for provider=%s (model=%s)",
+            "Skipping AI code-quality review: no API key for provider=%s (model=%s)",
             provider, chosen_model,
         )
         return None
@@ -665,7 +544,7 @@ async def evaluate_code_quality(
         question_title=question.get("title", ""),
         question_description=(question.get("description") or "")[:3000],
         language=language,
-        code=code[:12000],
+        code=fence("CANDIDATE CODE", code[:12000]),
         passed=passed,
         total=total,
     )
@@ -677,7 +556,7 @@ async def evaluate_code_quality(
         try:
             prompt = override["user_prompt_template"].format(**format_kwargs)
             system = override["system_prompt"]
-        except (KeyError, IndexError) as exc:
+        except (KeyError, IndexError, ValueError) as exc:
             logger.warning(
                 "code_evaluation prompt override has a placeholder mismatch, "
                 "falling back to default: %s", exc,
@@ -685,8 +564,8 @@ async def evaluate_code_quality(
 
     raw = await ask_llm(
         prompt=prompt,
-        system=system,
-        model=model or settings.CODE_EVAL_MODEL,
+        system=with_guard(system),
+        model=chosen_model,
         max_tokens=4000,
         json_mode=True,
         json_schema=_QUALITY_SCHEMA,
@@ -720,8 +599,8 @@ Candidate's submission:
 {code}
 ```
 
-Pose ONE small, concrete modification to THIS EXACT solution — e.g. handle a new edge
-case, change a constraint, or support a slightly different input — that the candidate
+Pose ONE small, concrete modification to THIS EXACT solution: e.g. handle a new edge
+case, change a constraint, or support a slightly different input: that the candidate
 should implement live to prove they understand their own code. Keep the ask small
 enough to attempt in a few minutes and require understanding the existing approach
 rather than a rewrite from scratch.
@@ -740,20 +619,14 @@ async def generate_live_modification_probe(
     code: str,
     model: str | None = None,
 ) -> dict | None:
-    """AI-assistance mitigation, styled on `evaluate_code_quality`'s LLM call: ask the
-    candidate to make a small, concrete live modification to their already-submitted
-    solution. Returns None when unavailable (no key, provider error, unparseable
-    output) — never blocks anything else on this being down, same posture as
-    `evaluate_code_quality`.
-    """
     from config.llm import provider_for_model
 
-    chosen_model = model or settings.CODE_EVAL_MODEL
+    chosen_model = model_for("code_quality", model)
     provider = provider_for_model(chosen_model)
     required_key = settings.ANTHROPIC_API_KEY if provider == "anthropic" else settings.OPENAI_API_KEY
     if not required_key:
         logger.info(
-            "Skipping live-modification probe — no API key for provider=%s (model=%s)",
+            "Skipping live-modification probe: no API key for provider=%s (model=%s)",
             provider, chosen_model,
         )
         return None
@@ -763,9 +636,9 @@ async def generate_live_modification_probe(
             question_title=question.get("title", ""),
             question_description=(question.get("description") or "")[:3000],
             language=language,
-            code=code[:12000],
+            code=fence("CANDIDATE CODE", code[:12000]),
         ),
-        system=_MODIFY_PROBE_SYSTEM,
+        system=with_guard(_MODIFY_PROBE_SYSTEM),
         model=chosen_model,
         max_tokens=500,
         json_mode=True,
@@ -831,18 +704,8 @@ async def evaluate_output_correctness(
     results: list[dict],
     model: str | None = None,
 ) -> dict | None:
-    """OpenAI second opinion on whether the code's actual Judge0 output correctly
-    solves the problem — complementary to `_compare_output`'s exact-string match,
-    which cannot distinguish "correct but differently formatted" from "wrong", nor
-    "genuinely solved" from "hardcoded to pass the visible cases".
-
-    Deliberately pinned to settings.CODE_CORRECTNESS_MODEL (OpenAI), a separate
-    axis from CODE_EVAL_MODEL's Claude-based quality review. Returns None when
-    unavailable (no key, provider error, unparseable output) so a submission is
-    never blocked by this check being down.
-    """
     if not settings.OPENAI_API_KEY:
-        logger.info("Skipping AI output-correctness review — OPENAI_API_KEY not set")
+        logger.info("Skipping AI output-correctness review: OPENAI_API_KEY not set")
         return None
 
     case_lines = "\n".join(
@@ -856,13 +719,13 @@ async def evaluate_output_correctness(
             question_title=question.get("title", ""),
             question_description=(question.get("description") or "")[:3000],
             language=language,
-            code=code[:12000],
+            code=fence("CANDIDATE CODE", code[:12000]),
             passed=sum(1 for r in results if r.get("passed")),
             total=len(results),
-            case_lines=case_lines,
+            case_lines=fence("PROGRAM OUTPUT", case_lines),
         ),
-        system=_CORRECTNESS_SYSTEM,
-        model=model or settings.CODE_CORRECTNESS_MODEL,
+        system=with_guard(_CORRECTNESS_SYSTEM),
+        model=model_for("code_correctness", model),
         max_tokens=600,
         json_mode=True,
     )
@@ -887,20 +750,6 @@ async def evaluate_submission(
     code: str,
     keystrokes: int | None = None,
 ) -> dict:
-    """Run `code` against every test case of `question_id` in the configured
-    sandbox, score it, persist a coding_submissions doc, and return it.
-
-    The stored document keeps FULL results — including actual/expected output
-    for hidden test cases — so the admin-facing submission view can show
-    complete detail. Redaction of hidden-test content for candidate-facing
-    responses is the CALLER's responsibility (routes/coding.py strips
-    actual_output/expected_output from is_hidden=true entries before returning
-    anything to the candidate); it must never happen at storage time.
-
-    `keystrokes` (self-reported by the editor) is optional: older clients that
-    never send it simply skip the typing-ratio check rather than being flagged
-    on a false signal.
-    """
     import uuid
 
     if not sandbox_url():
@@ -925,20 +774,24 @@ async def evaluate_submission(
     total = len(test_cases)
     now = datetime.now(timezone.utc).isoformat()
 
+    from config.llm import track_llm_cost
+
     quality = None
     try:
-        quality = await evaluate_code_quality(
-            question=question, language=language, code=code,
-            passed=passed_count, total=total,
-        )
+        async with track_llm_cost("coding_quality_review"):
+            quality = await evaluate_code_quality(
+                question=question, language=language, code=code,
+                passed=passed_count, total=total,
+            )
     except Exception as exc:
         logger.warning("AI code-quality review failed for question=%s: %s", question_id, exc)
 
     correctness = None
     try:
-        correctness = await evaluate_output_correctness(
-            question=question, language=language, code=code, results=results,
-        )
+        async with track_llm_cost("coding_correctness_review"):
+            correctness = await evaluate_output_correctness(
+                question=question, language=language, code=code, results=results,
+            )
     except Exception as exc:
         logger.warning("AI output-correctness review failed for question=%s: %s", question_id, exc)
 
@@ -991,4 +844,13 @@ async def evaluate_submission(
     }
     await db.coding_submissions.insert_one(doc)
     doc.pop("_id", None)
+
+    if score is None and total:
+        from services.hr_module.notification_settings_service import notify
+        await notify("coding_submission_execution_failed", {
+            "candidate_id": candidate_id, "question_id": question_id,
+            "question_title": question.get("title"),
+            "detail": "No test case could be run in the code sandbox.",
+            "reference": f"{candidate_id}:{question_id}",
+        })
     return doc

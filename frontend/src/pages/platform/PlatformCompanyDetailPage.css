@@ -1,0 +1,5 @@
+.pco-people { list-style: none; display: flex; flex-direction: column; gap: .55rem; }
+.pco-person { display: flex; flex-direction: column; gap: .1rem; min-width: 0; overflow-wrap: anywhere; }
+.pco-person .pco-cell-meta { margin-top: 0; }
+
+.pco-domains { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }

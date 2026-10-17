@@ -1,64 +1,27 @@
-"""
-Video-meeting connectors — hr_module Integrations (MVP2 §2.19).
-
-Creates a real Zoom or Microsoft Teams meeting for a scheduled interview slot
-and hands back a join URL, closing the "no Zoom/Teams connector" half of
-§2.19's remaining gap.
-
-Both providers use a server-to-server credential (no per-user OAuth consent,
-no refresh-token storage), which is what makes them buildable here at all:
-
-  Zoom   Server-to-Server OAuth app — account_id + client_id + client_secret,
-         exchanged for a short-lived token per call.
-         https://developers.zoom.us/docs/internal-apps/s2s-oauth/
-  Teams  Microsoft Graph client-credentials flow — tenant_id + client_id +
-         client_secret, plus MS_TEAMS_ORGANIZER_USER_ID (Graph's
-         /users/{id}/onlineMeetings needs an organiser; application permissions
-         cannot infer "me").
-         https://learn.microsoft.com/graph/api/application-post-onlinemeetings
-
-Both are OFF unless configured, exactly like Judge0 and the keyed job sources:
-`is_configured()` reports availability and every call raises
-MeetingServiceError rather than half-succeeding. Nothing in the interview flow
-depends on a meeting existing — scheduling continues to work, and the .ics
-download remains the zero-config path.
-
-Deliberately NOT built here: Google/Outlook *calendar* write. That needs
-per-admin OAuth consent, refresh-token storage and a refresh path — a
-different shape of problem from these two, and the existing .ics download
-already covers "get this slot into my calendar".
-"""
 import logging
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
 import httpx
 
 from config.settings import settings
+from services.hr_module import integrations_settings_service
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 15.0
 
+_TRANSPORT = None
+
 PROVIDERS = ("zoom", "teams")
 
 
 class MeetingServiceError(RuntimeError):
-    """Raised for any provider failure. Route layer maps this to HTTP 502/503."""
+    pass
 
 
 def configured_providers() -> list[str]:
-    """Which providers have complete credentials right now."""
-    out = []
-    if settings.ZOOM_ACCOUNT_ID and settings.ZOOM_CLIENT_ID and settings.ZOOM_CLIENT_SECRET:
-        out.append("zoom")
-    if (
-        settings.MS_TEAMS_TENANT_ID
-        and settings.MS_TEAMS_CLIENT_ID
-        and settings.MS_TEAMS_CLIENT_SECRET
-        and settings.MS_TEAMS_ORGANIZER_USER_ID
-    ):
-        out.append("teams")
-    return out
+    return [name for name in PROVIDERS if integrations_settings_service.environment_config(name)]
 
 
 def is_configured(provider: str | None = None) -> bool:
@@ -66,12 +29,22 @@ def is_configured(provider: str | None = None) -> bool:
     return bool(available) if provider is None else provider in available
 
 
-def _parse_start(start_iso: str) -> datetime:
-    """Parse the stored `scheduled_start_at` into an aware UTC datetime.
+async def available_providers() -> list[str]:
+    out = []
+    for name in PROVIDERS:
+        if await integrations_settings_service.runtime_config(name):
+            out.append(name)
+    for name in configured_providers():
+        if name not in out:
+            out.append(name)
+    return [name for name in PROVIDERS if name in out]
 
-    Naive values are treated as UTC — that is what routes/interview.py's own
-    schedule check already assumes, so the meeting and the session gate agree.
-    """
+
+def default_provider() -> str:
+    return settings.MEETING_PROVIDER if integrations_settings_service.is_default_company() else ""
+
+
+def _parse_start(start_iso: str) -> datetime:
     try:
         dt = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
     except (AttributeError, TypeError, ValueError) as exc:
@@ -79,11 +52,11 @@ def _parse_start(start_iso: str) -> datetime:
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
-async def _zoom_token(client: httpx.AsyncClient) -> str:
+async def _zoom_token(client: httpx.AsyncClient, creds: dict) -> str:
     resp = await client.post(
         "https://zoom.us/oauth/token",
-        params={"grant_type": "account_credentials", "account_id": settings.ZOOM_ACCOUNT_ID},
-        auth=(settings.ZOOM_CLIENT_ID, settings.ZOOM_CLIENT_SECRET),
+        params={"grant_type": "account_credentials", "account_id": creds["account_id"]},
+        auth=(creds["client_id"], creds["client_secret"]),
     )
     resp.raise_for_status()
     token = resp.json().get("access_token")
@@ -92,9 +65,11 @@ async def _zoom_token(client: httpx.AsyncClient) -> str:
     return token
 
 
-async def _create_zoom_meeting(*, topic: str, start: datetime, duration_minutes: int, agenda: str) -> dict:
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        token = await _zoom_token(client)
+async def _create_zoom_meeting(
+    *, creds: dict, topic: str, start: datetime, duration_minutes: int, agenda: str,
+) -> dict:
+    async with httpx.AsyncClient(timeout=_TIMEOUT, transport=_TRANSPORT) as client:
+        token = await _zoom_token(client, creds)
         resp = await client.post(
             "https://api.zoom.us/v2/users/me/meetings",
             headers={"Authorization": f"Bearer {token}"},
@@ -124,13 +99,13 @@ async def _create_zoom_meeting(*, topic: str, start: datetime, duration_minutes:
     }
 
 
-async def _teams_token(client: httpx.AsyncClient) -> str:
+async def _teams_token(client: httpx.AsyncClient, creds: dict) -> str:
     resp = await client.post(
-        f"https://login.microsoftonline.com/{settings.MS_TEAMS_TENANT_ID}/oauth2/v2.0/token",
+        f"https://login.microsoftonline.com/{quote(creds['tenant_id'], safe='')}/oauth2/v2.0/token",
         data={
             "grant_type": "client_credentials",
-            "client_id": settings.MS_TEAMS_CLIENT_ID,
-            "client_secret": settings.MS_TEAMS_CLIENT_SECRET,
+            "client_id": creds["client_id"],
+            "client_secret": creds["client_secret"],
             "scope": "https://graph.microsoft.com/.default",
         },
     )
@@ -141,12 +116,12 @@ async def _teams_token(client: httpx.AsyncClient) -> str:
     return token
 
 
-async def _create_teams_meeting(*, topic: str, start: datetime, duration_minutes: int) -> dict:
+async def _create_teams_meeting(*, creds: dict, topic: str, start: datetime, duration_minutes: int) -> dict:
     end = start + timedelta(minutes=duration_minutes)
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        token = await _teams_token(client)
+    async with httpx.AsyncClient(timeout=_TIMEOUT, transport=_TRANSPORT) as client:
+        token = await _teams_token(client, creds)
         resp = await client.post(
-            f"https://graph.microsoft.com/v1.0/users/{settings.MS_TEAMS_ORGANIZER_USER_ID}/onlineMeetings",
+            f"https://graph.microsoft.com/v1.0/users/{quote(creds['organizer'], safe='@')}/onlineMeetings",
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "subject": topic[:250],
@@ -175,24 +150,17 @@ async def create_meeting(
     agenda: str = "",
     provider: str | None = None,
 ) -> dict:
-    """Create a meeting and return {provider, meeting_id, join_url, host_url, password}.
-
-    `provider` defaults to MEETING_PROVIDER, then to whichever single provider
-    is configured. Raises MeetingServiceError when nothing is configured, the
-    requested provider isn't, or the provider call fails — callers decide
-    whether that is fatal (it isn't, for interview scheduling).
-    """
-    available = configured_providers()
+    available = await available_providers()
     if not available:
         raise MeetingServiceError(
-            "No video-meeting provider is configured — set the ZOOM_* or MS_TEAMS_* settings"
+            "No video-meeting provider is configured: add your Zoom or Teams account in Company Settings, Integrations"
         )
 
-    chosen = provider or settings.MEETING_PROVIDER or (available[0] if len(available) == 1 else None)
+    chosen = provider or default_provider() or (available[0] if len(available) == 1 else None)
     if not chosen:
         raise MeetingServiceError(
-            f"Several providers are configured ({', '.join(available)}) — set MEETING_PROVIDER "
-            "or pass one explicitly"
+            f"Several providers are configured ({', '.join(available)}): choose one explicitly "
+            "(or set MEETING_PROVIDER)"
         )
     if chosen not in PROVIDERS:
         raise MeetingServiceError(f"Unknown meeting provider: {chosen}")
@@ -201,13 +169,16 @@ async def create_meeting(
 
     start = _parse_start(start_iso)
     duration = duration_minutes or settings.INTERVIEW_DURATION_MINUTES
+    creds = await integrations_settings_service.runtime_config(chosen)
+    if not creds:
+        raise MeetingServiceError(f"Meeting provider '{chosen}' is not configured")
 
     try:
         if chosen == "zoom":
             return await _create_zoom_meeting(
-                topic=topic, start=start, duration_minutes=duration, agenda=agenda,
+                creds=creds, topic=topic, start=start, duration_minutes=duration, agenda=agenda,
             )
-        return await _create_teams_meeting(topic=topic, start=start, duration_minutes=duration)
+        return await _create_teams_meeting(creds=creds, topic=topic, start=start, duration_minutes=duration)
     except MeetingServiceError:
         raise
     except httpx.HTTPStatusError as exc:
@@ -219,4 +190,7 @@ async def create_meeting(
         raise MeetingServiceError(f"Could not reach {chosen}: {exc}")
 
 
-__all__ = ["create_meeting", "configured_providers", "is_configured", "MeetingServiceError", "PROVIDERS"]
+__all__ = [
+    "create_meeting", "configured_providers", "available_providers", "default_provider", "is_configured",
+    "MeetingServiceError", "PROVIDERS",
+]

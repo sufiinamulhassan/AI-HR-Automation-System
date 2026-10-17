@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Hirely.ai v3.0 \u2014 API Reference",
+    "title": "Hirely.ai v3.0, API Reference",
     "base_url": "/api/v1 (same origin as the site)",
     "version": "3.0",
     "modules": [
@@ -15,7 +15,7 @@
         "id": "health",
         "method": "GET",
         "path": "/health",
-        "description": "Health check \u2014 returns platform status and active modules",
+        "description": "Health check, returns platform status and active modules",
         "auth_required": false,
         "payload": null,
         "response": {
@@ -77,7 +77,7 @@
         "id": "auth_token",
         "method": "POST",
         "path": "/api/v1/auth/token",
-        "description": "OAuth2 password flow \u2014 form-encoded credentials. Used by Swagger UI.",
+        "description": "OAuth2 password flow, form-encoded credentials. Used by Swagger UI.",
         "auth_required": false,
         "payload_form_encoded": {
           "username": "admin@acme.com",
@@ -277,7 +277,7 @@
           "default_model": "claude-3-5-sonnet-20241022"
         },
         "response": {
-          "message": "Default model \u2192 claude-3-5-sonnet-20241022"
+          "message": "Default model → claude-3-5-sonnet-20241022"
         }
       }
     ],
@@ -302,7 +302,8 @@
           "salary_max": 250000,
           "is_remote": true,
           "company_name": "Acme Corp",
-          "model_override": null
+          "model_override": null,
+          "is_public": true
         },
         "response": {
           "doc_type": "job",
@@ -516,14 +517,14 @@
         "id": "resumes_upload",
         "method": "POST",
         "path": "/api/v1/resumes/upload",
-        "description": "Upload a single resume (PDF/DOCX). Triggers async ResumeAgent pipeline: extract \u2192 classify \u2192 embed \u2192 match_jds \u2192 store \u2192 auto_invite. Admin only.",
+        "description": "Upload a single resume (PDF, DOCX, DOC or TXT). Triggers async ResumeAgent pipeline: extract → classify → embed → match_jds → store → auto_invite. Admin only.",
         "auth_required": true,
         "roles_required": [
           "admin",
           "superadmin"
         ],
         "payload_multipart_form": {
-          "file": "<binary PDF/DOCX>",
+          "file": "<binary PDF, DOCX, DOC or TXT>",
           "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
           "model_override": null
         },
@@ -536,14 +537,30 @@
         "id": "resumes_list",
         "method": "GET",
         "path": "/api/v1/resumes/",
-        "description": "List all resumes with pagination, full-text search, domain, and seniority filters.",
+        "description": "List resumes with pagination. Every filter is optional and they combine with AND. A comma separates search terms; a recognised skill in the search box must be on the resume's skill list (Java never matches JavaScript) and every other word must start a word in the name, email, file name, headline, location, role, job title or company. The skill filter takes one skill or several comma separated skills, all of which must match. business_domain is a slug from /filters/options (other means no listed domain) and an unknown slug matches nothing. domain is the job family. Newest first; with a search or skill filter the order is relevance, then years of experience, then newest. limit is capped at 500.",
         "auth_required": true,
         "query_params": {
           "page": 1,
           "limit": 20,
-          "search": "sara",
-          "domain": "Software Engineering",
-          "seniority": "senior"
+          "search": "python developer, berlin",
+          "skill": "Python,Java",
+          "business_domain": "it_software",
+          "domain": "software_engineering",
+          "seniority": "senior",
+          "status": "processed",
+          "experience_min": 3,
+          "experience_max": 10,
+          "department": "Backend Engineer",
+          "education_level": "master",
+          "certification": "pmp",
+          "industry": "fintech",
+          "salary_expectation_min": 50000,
+          "salary_expectation_max": 150000,
+          "worked_at_company": "google",
+          "location": "berlin",
+          "notice_period": "30",
+          "min_match_score": 0.5,
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789"
         },
         "payload": null,
         "response": {
@@ -578,6 +595,123 @@
           "total": 1,
           "page": 1,
           "limit": 20
+        }
+      },
+      {
+        "id": "resumes_filter_options",
+        "method": "GET",
+        "path": "/api/v1/resumes/filters/options",
+        "description": "Values for the resume filter controls with how many resumes carry each, over every resume the company has. Only values with a count above zero are listed. business_domains are busiest first with other last; statuses and industries are alphabetical by value; roles are the department or, when none is set, the job family label (the same rule as the folder roles), the 100 most common listed alphabetically, and choosing one as the department filter returns exactly its count; skills are busiest first (top 400, case variants merged); seniorities and education_levels follow rank order.",
+        "auth_required": true,
+        "query_params": {},
+        "payload": null,
+        "response": {
+          "business_domains": [
+            {
+              "value": "it_software",
+              "label": "IT & Software",
+              "count": 14
+            }
+          ],
+          "skills": [
+            {
+              "value": "Python",
+              "count": 12
+            }
+          ],
+          "seniorities": [
+            {
+              "value": "senior",
+              "label": "Senior",
+              "count": 6
+            }
+          ],
+          "statuses": [
+            {
+              "value": "processed",
+              "count": 20
+            }
+          ],
+          "education_levels": [
+            {
+              "value": "master",
+              "label": "Master",
+              "count": 5
+            }
+          ],
+          "industries": [
+            {
+              "value": "fintech",
+              "label": "Fintech",
+              "count": 7
+            }
+          ],
+          "roles": [
+            {
+              "value": "Backend Engineer",
+              "count": 5
+            }
+          ],
+          "total": 20
+        }
+      },
+      {
+        "id": "resumes_domains",
+        "method": "GET",
+        "path": "/api/v1/resumes/domains",
+        "description": "Business domain folders for the resumes that match the filters. Accepts the same filters as the list; business_domain, domain and department are ignored here so every folder stays visible. A folder's count is exactly the total the list returns for business_domain=<value> with the same filters. Busiest first, other last; empty folders are left out. roles are the five most common roles in the folder (a resume with no department counts under its job family).",
+        "auth_required": true,
+        "query_params": {
+          "search": "python",
+          "skill": "Java",
+          "seniority": "senior"
+        },
+        "payload": null,
+        "response": {
+          "folders": [
+            {
+              "value": "it_software",
+              "label": "IT & Software",
+              "count": 14,
+              "roles": [
+                {
+                  "value": "Backend Engineer",
+                  "count": 5
+                },
+                {
+                  "value": "Software Engineering",
+                  "count": 4
+                }
+              ]
+            }
+          ],
+          "total": 14
+        }
+      },
+      {
+        "id": "resumes_semantic_search",
+        "method": "GET",
+        "path": "/api/v1/resumes/search/semantic",
+        "description": "Search resumes by meaning. The query is embedded and matched against the company's resume vectors, then the same filters as the list are applied. Results keep the similarity order and carry match_score from 0 to 1. Counts against the hourly AI-action allowance and its cost is recorded as resume_semantic_search. Returns 503 when semantic search is not configured or the embedding fails.",
+        "auth_required": true,
+        "query_params": {
+          "q": "backend engineer who has scaled payment systems",
+          "limit": 20,
+          "skill": "Python",
+          "business_domain": "it_software"
+        },
+        "payload": null,
+        "response": {
+          "resumes": [
+            {
+              "resume_id": "a1b2c3d4-0000-1111-2222-333344445555",
+              "candidate_name": "Sara Khan",
+              "processing_status": "processed",
+              "match_score": 0.8123
+            }
+          ],
+          "total": 1,
+          "query": "backend engineer who has scaled payment systems"
         }
       },
       {
@@ -668,7 +802,7 @@
         "response": {
           "candidate_id": "d5e6f7a8-aaaa-bbbb-cccc-dddd11112222",
           "secure_token": "tok_3f8e9a1b2c4d",
-          "interview_url": "https://hirely.acme.com/interview/tok_3f8e9a1b2c4d",
+          "interview_url": "https://hrbot.acme.com/interview/tok_3f8e9a1b2c4d",
           "invite_type": "manual"
         }
       },
@@ -816,7 +950,7 @@
         },
         "response": {
           "secure_token": "tok_9z8y7x6w5v4u",
-          "interview_url": "https://hirely.acme.com/interview/tok_9z8y7x6w5v4u",
+          "interview_url": "https://hrbot.acme.com/interview/tok_9z8y7x6w5v4u",
           "email_resent": true
         }
       },
@@ -848,7 +982,7 @@
         "id": "interview_session_start",
         "method": "GET",
         "path": "/api/v1/interview/session/{secure_token}",
-        "description": "Start a live interview session. The secure_token in the path is the only credential. Returns the full question list; the client drives the turn-by-turn flow and enforces the timer. There is no WebSocket \u2014 the backend runs on a Lambda Function URL, which is HTTP request/response only.",
+        "description": "Start a live interview session. The secure_token in the path is the only credential. Returns the full question list; the client drives the turn-by-turn flow and enforces the timer. There is no WebSocket. The backend runs on a Lambda Function URL, which is HTTP request/response only.",
         "auth_required": false,
         "path_params": {
           "secure_token": "tok_3f8e9a1b2c4d"
@@ -871,7 +1005,7 @@
         "id": "interview_speak",
         "method": "POST",
         "path": "/api/v1/interview/session/{secure_token}/speak",
-        "description": "Synthesize a question to speech so the AI can read it aloud to the candidate. Returns raw audio/mpeg bytes, not a URL \u2014 the audio is ephemeral and candidate-specific.",
+        "description": "Synthesize a question to speech so the AI can read it aloud to the candidate. Returns raw audio/mpeg bytes, not a URL. The audio is ephemeral and candidate-specific.",
         "auth_required": false,
         "path_params": {
           "secure_token": "tok_3f8e9a1b2c4d"
@@ -909,7 +1043,7 @@
         "id": "interview_followup",
         "method": "POST",
         "path": "/api/v1/interview/session/{secure_token}/followup",
-        "description": "Ask whether the just-answered Q&A pair warrants an adaptive probing follow-up. Best-effort \u2014 a null followup means move on to the next scripted question.",
+        "description": "Ask whether the just-answered Q&A pair warrants an adaptive probing follow-up. Best-effort. A null followup means move on to the next scripted question.",
         "auth_required": false,
         "path_params": {
           "secure_token": "tok_3f8e9a1b2c4d"
@@ -1037,7 +1171,7 @@
         "response": {
           "content_type": "application/pdf",
           "content_disposition": "attachment; filename=report_tok_3f8e.pdf",
-          "note": "Binary PDF stream \u2014 download directly"
+          "note": "Binary PDF stream, download directly"
         }
       }
     ],
@@ -1119,6 +1253,192 @@
             "interviewed": 92,
             "hired": 19
           }
+        }
+      }
+    ],
+    "careers": [
+      {
+        "id": "careers_list",
+        "method": "GET",
+        "path": "/api/v1/careers/jobs",
+        "description": "Public. Every open job that its company shows on the careers page, across all active companies, newest first. Filter with q, company (slug), location, type, remote. Paged with page and limit (at most 50).",
+        "auth_required": false,
+        "query_params": {
+          "q": "backend",
+          "company": "acme",
+          "location": "Lahore",
+          "type": "full-time",
+          "remote": false,
+          "page": 1,
+          "limit": 12
+        },
+        "response": {
+          "jobs": [
+            {
+              "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+              "title": "Senior Backend Engineer",
+              "summary": "Design scalable APIs and mentor junior developers.",
+              "location": "Lahore, Pakistan",
+              "employment_type": "full-time",
+              "is_remote": true,
+              "skills": [
+                "Python",
+                "FastAPI",
+                "MongoDB"
+              ],
+              "posted_at": "2026-10-01T09:00:00+00:00",
+              "deadline_at": "2026-11-01T09:00:00+00:00",
+              "company": {
+                "slug": "acme",
+                "name": "Acme Corp",
+                "logo_url": "/api/v1/branding/logo/cmp_acme?v=1a2b3c"
+              }
+            }
+          ],
+          "total": 1,
+          "page": 1,
+          "limit": 12,
+          "pages": 1
+        }
+      },
+      {
+        "id": "careers_filters",
+        "method": "GET",
+        "path": "/api/v1/careers/filters",
+        "description": "Public. The companies, locations and employment types that currently have open public jobs, with counts, for the careers page filters.",
+        "auth_required": false,
+        "response": {
+          "companies": [
+            {
+              "slug": "acme",
+              "name": "Acme Corp",
+              "logo_url": null,
+              "open_jobs": 4
+            }
+          ],
+          "locations": [
+            "Lahore",
+            "Remote"
+          ],
+          "employment_types": [
+            "full-time",
+            "contract"
+          ],
+          "remote_jobs": 1,
+          "total_open": 4
+        }
+      },
+      {
+        "id": "careers_job",
+        "method": "GET",
+        "path": "/api/v1/careers/jobs/{job_id}",
+        "description": "Public. One open public job with its full description and its company's public details. 404 when the job is closed, hidden or unknown.",
+        "auth_required": false,
+        "response": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "title": "Senior Backend Engineer",
+          "summary": "Design scalable APIs and mentor junior developers.",
+          "location": "Lahore, Pakistan",
+          "employment_type": "full-time",
+          "is_remote": true,
+          "skills": [
+            "Python",
+            "FastAPI",
+            "MongoDB"
+          ],
+          "posted_at": "2026-10-01T09:00:00+00:00",
+          "deadline_at": "2026-11-01T09:00:00+00:00",
+          "company": {
+            "slug": "acme",
+            "name": "Acme Corp",
+            "logo_url": "/api/v1/branding/logo/cmp_acme?v=1a2b3c",
+            "website": "https://acme.test",
+            "industry": "Software",
+            "privacy_url": "https://acme.test/privacy",
+            "terms_url": "https://acme.test/terms"
+          },
+          "description": "We are looking for a Senior Backend Engineer...",
+          "job_grade": null,
+          "experience_level": "senior",
+          "industry": "software",
+          "accepting": true
+        }
+      },
+      {
+        "id": "careers_apply",
+        "method": "POST",
+        "path": "/api/v1/careers/jobs/{job_id}/apply",
+        "description": "Public. A candidate applies by uploading a resume (PDF, DOCX, DOC or TXT, up to 4 MB). The application is stored in the company that owns the job and the candidate joins that job's pipeline. 409 when the same email already applied to this job.",
+        "auth_required": false,
+        "payload_multipart_form": {
+          "name": "Sara Khan",
+          "email": "sara@example.com",
+          "phone": "+92 300 1234567",
+          "cover_note": "Optional note, up to 2000 characters.",
+          "consent": "true",
+          "website": "Leave empty (spam trap).",
+          "resume": "(file)"
+        },
+        "response": {
+          "status": "received",
+          "application_id": "9a8b7c6d-1234-5678-abcd-ef0123456789",
+          "reference": "9A8B7C6D",
+          "job_title": "Senior Backend Engineer",
+          "company_name": "Acme Corp"
+        }
+      }
+    ],
+    "site": [
+      {
+        "id": "site_plans",
+        "method": "GET",
+        "path": "/api/v1/site/plans",
+        "description": "Public. The plans a customer can buy, read from the plan catalogue, for the pricing page. Each plan has its monthly price, limits and a flag per feature. Cached for five minutes.",
+        "auth_required": false,
+        "response": {
+          "plans": [
+            {
+              "tier": "starter",
+              "label": "Starter",
+              "price_monthly_usd": 49.0,
+              "max_companies": 1,
+              "max_users_per_company": 5,
+              "monthly_ai_budget_usd": 25.0,
+              "max_storage_mb": 1024,
+              "features": [
+                {
+                  "key": "coding",
+                  "label": "Coding assessments",
+                  "included": false
+                },
+                {
+                  "key": "performance",
+                  "label": "Performance reviews",
+                  "included": false
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "site_contact",
+        "method": "POST",
+        "path": "/api/v1/site/contact",
+        "description": "Public. A message from the contact page: a demo request, a pricing question, support, a privacy request or a security report. Stored for the platform team. Limited to five messages an hour per address. The same message sent twice within ten minutes is stored once. 400 with a plain message when a field is invalid.",
+        "auth_required": false,
+        "payload": {
+          "name": "Sara Khan",
+          "email": "sara@example.com",
+          "company": "Acme Corp (optional)",
+          "topic": "demo | sales | support | privacy | security | other",
+          "message": "Between 10 and 4000 characters.",
+          "consent": true,
+          "website": "Leave empty (spam trap)."
+        },
+        "response": {
+          "status": "received",
+          "reference": "9A8B7C6D"
         }
       }
     ]

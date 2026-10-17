@@ -1,19 +1,3 @@
-"""
-Integrations — MVP2 §2.19 (Zoom/Teams meetings + HRMS/Payroll connector).
-
-Neither connector can be exercised against a live third party here, and
-pretending otherwise would be worse than not testing it. What IS tested is
-everything that does not need the vendor:
-
-  * the configured/not-configured gate, which is what decides whether the
-    feature appears in the UI at all;
-  * that an unconfigured connector reports that plainly instead of erroring,
-    half-succeeding, or claiming success — the failure mode this codebase has
-    been bitten by before (email "delivered=True" with no EMAIL_HOST);
-  * the normalised employee record's shape and stability, which is the actual
-    contract an HRMS consumes;
-  * that a meeting failure never breaks interview scheduling.
-"""
 import uuid
 
 import pytest
@@ -46,8 +30,6 @@ async def test_zoom_counts_as_configured_only_with_a_complete_credential_set():
 
 
 async def test_teams_requires_an_organizer_user_id():
-    """Graph's /users/{id}/onlineMeetings has no "me" under client credentials,
-    so an organiser is genuinely mandatory — not an optional extra."""
     original = (settings.MS_TEAMS_TENANT_ID, settings.MS_TEAMS_CLIENT_ID,
                 settings.MS_TEAMS_CLIENT_SECRET, settings.MS_TEAMS_ORGANIZER_USER_ID)
     try:
@@ -84,8 +66,6 @@ async def test_create_meeting_rejects_an_unconfigured_named_provider():
 
 
 async def test_ambiguous_provider_choice_is_an_explicit_error(monkeypatch):
-    """Two configured providers and no default must fail loudly rather than
-    silently picking one — a meeting on the wrong platform is a no-show."""
     monkeypatch.setattr(meeting_service, "configured_providers", lambda: ["zoom", "teams"])
     monkeypatch.setattr(settings, "MEETING_PROVIDER", "")
     with pytest.raises(meeting_service.MeetingServiceError) as exc:
@@ -103,8 +83,6 @@ async def test_unparsable_start_time_is_rejected(monkeypatch):
 
 
 async def test_scheduling_still_succeeds_when_meeting_creation_fails(client, admin_headers, setup_test_db):
-    """The important guarantee: an unavailable meeting provider must not stop a
-    recruiter scheduling an interview."""
     db = setup_test_db
     candidate_id = str(uuid.uuid4())
     await db.candidates.insert_one({
@@ -130,7 +108,6 @@ async def test_scheduling_still_succeeds_when_meeting_creation_fails(client, adm
 
 
 async def test_clearing_a_schedule_clears_the_meeting(client, admin_headers, setup_test_db):
-    """A stale join URL for a slot that no longer exists is worse than none."""
     db = setup_test_db
     candidate_id = str(uuid.uuid4())
     await db.candidates.insert_one({
@@ -166,7 +143,6 @@ async def test_push_endpoint_returns_503_when_unconfigured(client, admin_headers
 
 
 async def test_push_blocks_an_ssrf_unsafe_endpoint():
-    """Settings are still operator input, and this path runs in the background."""
     original = settings.HRMS_WEBHOOK_URL
     settings.HRMS_WEBHOOK_URL = "http://169.254.169.254/latest/meta-data/"
     try:
@@ -203,8 +179,6 @@ async def hired_candidate(setup_test_db):
 
 
 async def test_employee_record_has_a_complete_stable_shape(hired_candidate):
-    """Every key present even when empty — an HRMS import that has to
-    distinguish "absent" from "unknown" is a support ticket."""
     _, candidate_id, job_id = hired_candidate
     record = await hrms_service.build_employee_record(candidate_id)
     assert record is not None
@@ -231,8 +205,6 @@ async def test_unknown_candidate_yields_no_record():
 
 
 async def test_export_returns_hired_candidates(client, admin_headers, hired_candidate):
-    """Export needs no HRMS configuration at all — it's the path for systems
-    that can only import a file."""
     _, candidate_id, job_id = hired_candidate
     r = await client.get("/api/v1/integrations/hrms/export",
                          params={"job_id": job_id}, headers=admin_headers)

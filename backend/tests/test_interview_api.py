@@ -83,7 +83,6 @@ async def test_session_reports_coding_assigned(client):
 
 
 async def test_session_still_returns_original_fields(client):
-    """The flag is additive — nothing the existing client reads may move."""
     token = await _insert_session_candidate()
 
     body = (await client.get(f"/api/v1/interview/session/{token}")).json()
@@ -175,8 +174,15 @@ def test_compute_integrity_score_gaze_and_termination():
     assert compute_integrity_score(["terminated_tab_switches@t1"]) == 60
 
 
+def test_compute_integrity_score_phone_detected():
+    assert compute_integrity_score(["phone_detected@t1"]) == 85
+
+
+def test_compute_integrity_score_identity_mismatch():
+    assert compute_integrity_score(["identity_mismatch@t1"]) == 80
+
+
 async def _insert_candidate(**overrides) -> str:
-    """Insert a bare candidate doc and return its interview token."""
     from config.database import get_db
     import uuid
 
@@ -304,12 +310,6 @@ def test_safe_audio_filename_rejects_unknown_extensions():
 
 
 async def test_submit_preserves_flags_recorded_during_session(client):
-    """/submit must append to integrity_flags, never overwrite them.
-
-    A $set here would discard every flag POSTed to /flag during the interview
-    and hand the recruiter a clean 100/100 integrity score for a candidate who
-    tab-switched throughout.
-    """
     from config.database import get_db
 
     token = await _insert_candidate()
@@ -334,3 +334,253 @@ async def test_submit_preserves_flags_recorded_during_session(client):
     assert "no_face_detected" in events
     assert "terminated_tab_switches" in events
     assert cand["termination_reason"] == "max_tab_switches"
+
+
+async def test_submit_awaits_evaluation_before_responding(client, monkeypatch):
+    import json
+    from config.database import get_db
+    import services.hr_module.interview_engine as interview_engine
+
+    token = await _insert_candidate()
+
+    eval_response = json.dumps({
+        "overall_score": 88,
+        "technical_score": 80, "communication_score": 85,
+        "problem_solving_score": 82, "cultural_fit_score": 90, "confidence_score": 75,
+        "strengths": ["Clear communicator"], "areas_for_improvement": [],
+        "recommendation": "hire", "summary": "Solid candidate.",
+        "integrity_assessment": "No flags.",
+    })
+
+    async def fake_ask_llm(*args, **kwargs):
+        return eval_response
+
+    monkeypatch.setattr(interview_engine, "ask_llm", fake_ask_llm)
+
+    response = await client.post(
+        f"/api/v1/interview/session/{token}/submit",
+        json={
+            "transcript": [
+                {"question": "Tell me about yourself.",
+                 "answer": "I'm a backend engineer with five years of experience."},
+            ],
+            "flags": [],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "submitted"
+
+    cand = await get_db().candidates.find_one({"secure_token": token})
+    assert cand["report_status"] == "ready"
+    assert cand["report_error"] is None
+    assert cand["report"]["overall_score"] == 88
+    assert cand["final_score"] is not None
+    assert cand["report"]["score_breakdown"]["final_score"] == cand["final_score"]
+
+
+async def test_submit_stays_ready_when_eval_llm_call_times_out(client, monkeypatch):
+    import httpx
+    import openai
+    from config.database import get_db
+    import config.llm as llm_module
+
+    token = await _insert_candidate()
+
+    class _RaisingCompletions:
+        async def create(self, **kwargs):
+            request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+            raise openai.APITimeoutError(request=request)
+
+    class _RaisingChat:
+        completions = _RaisingCompletions()
+
+    class _RaisingOpenAIClient:
+        chat = _RaisingChat()
+
+    import anthropic
+
+    class _RaisingMessages:
+        async def create(self, **kwargs):
+            request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+            raise anthropic.APITimeoutError(request=request)
+
+    class _RaisingAnthropicClient:
+        messages = _RaisingMessages()
+
+    monkeypatch.setattr(llm_module, "get_openai_client", lambda: _RaisingOpenAIClient())
+    monkeypatch.setattr(llm_module, "get_anthropic_client", lambda: _RaisingAnthropicClient())
+
+    response = await client.post(
+        f"/api/v1/interview/session/{token}/submit",
+        json={
+            "transcript": [
+                {"question": "Tell me about yourself.",
+                 "answer": "I'm a backend engineer with five years of experience."},
+            ],
+            "flags": [],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "submitted"
+
+    cand = await get_db().candidates.find_one({"secure_token": token})
+    assert cand["report_status"] == "ready"
+    assert cand["report_error"] is None
+    assert cand["report"]["overall_score"] == 50
+    assert cand["report"]["technical_rationale"] == ""
+    assert cand["final_score"] is not None
+
+
+async def test_submit_responds_200_even_if_evaluation_raises(client, monkeypatch):
+    import routes.interview as interview_route
+
+    token = await _insert_candidate()
+
+    async def boom(secure_token):
+        raise RuntimeError("simulated total evaluation crash")
+
+    monkeypatch.setattr(interview_route, "_evaluate", boom)
+
+    response = await client.post(
+        f"/api/v1/interview/session/{token}/submit",
+        json={"transcript": [{"question": "Q", "answer": "A"}], "flags": []},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "submitted"
+
+
+async def _insert_demo_candidate(**overrides) -> tuple[str, str]:
+    import uuid as _uuid
+
+    candidate_id = overrides.pop("candidate_id", None) or str(_uuid.uuid4())
+    token = await _insert_candidate(candidate_id=candidate_id, **overrides)
+    return token, candidate_id
+
+
+async def test_demographics_not_found(client):
+    response = await client.post(
+        "/api/v1/interview/tok_nonexistent/demographics",
+        json={"gender": "woman", "location": "Lagos"},
+    )
+    assert response.status_code == 404
+
+
+async def test_demographics_valid_submit_is_recorded_separately_from_candidate(client):
+    from config.database import get_db
+
+    token, candidate_id = await _insert_demo_candidate()
+
+    response = await client.post(
+        f"/api/v1/interview/{token}/demographics",
+        json={"gender": "woman", "location": "Lagos, Nigeria"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"recorded": True}
+
+    db = get_db()
+    record = await db.candidate_demographics.find_one({"candidate_id": candidate_id}, {"_id": 0})
+    assert record["gender"] == "woman"
+    assert record["location"] == "Lagos, Nigeria"
+    assert "submitted_at" in record
+
+    cand = await db.candidates.find_one({"candidate_id": candidate_id})
+    assert "gender" not in cand
+    assert "location" not in cand
+
+    await db.candidate_demographics.delete_one({"candidate_id": candidate_id})
+
+
+async def test_demographics_partial_submit_leaves_the_other_field_null(client):
+    from config.database import get_db
+
+    token, candidate_id = await _insert_demo_candidate()
+
+    response = await client.post(
+        f"/api/v1/interview/{token}/demographics",
+        json={"gender": "man"},
+    )
+    assert response.status_code == 200
+
+    record = await get_db().candidate_demographics.find_one({"candidate_id": candidate_id}, {"_id": 0})
+    assert record["gender"] == "man"
+    assert record["location"] is None
+
+    await get_db().candidate_demographics.delete_one({"candidate_id": candidate_id})
+
+
+async def test_demographics_all_null_payload_still_records_that_it_was_submitted(client):
+    from config.database import get_db
+
+    token, candidate_id = await _insert_demo_candidate()
+
+    response = await client.post(f"/api/v1/interview/{token}/demographics", json={})
+    assert response.status_code == 200
+
+    record = await get_db().candidate_demographics.find_one({"candidate_id": candidate_id}, {"_id": 0})
+    assert record is not None
+    assert record["gender"] is None
+    assert record["location"] is None
+
+    await get_db().candidate_demographics.delete_one({"candidate_id": candidate_id})
+
+
+async def test_demographics_skip_leaves_no_record_at_all(client):
+    from config.database import get_db
+
+    _, candidate_id = await _insert_demo_candidate()
+
+    record = await get_db().candidate_demographics.find_one({"candidate_id": candidate_id})
+    assert record is None
+
+
+async def test_demographics_resubmission_overwrites_the_previous_record(client):
+    from config.database import get_db
+
+    token, candidate_id = await _insert_demo_candidate()
+
+    first = await client.post(
+        f"/api/v1/interview/{token}/demographics", json={"gender": "woman", "location": "Lagos"},
+    )
+    assert first.status_code == 200
+    second = await client.post(
+        f"/api/v1/interview/{token}/demographics", json={"gender": "non-binary", "location": "Nairobi"},
+    )
+    assert second.status_code == 200
+
+    db = get_db()
+    matching = await db.candidate_demographics.find({"candidate_id": candidate_id}).to_list(10)
+    assert len(matching) == 1
+    assert matching[0]["gender"] == "non-binary"
+    assert matching[0]["location"] == "Nairobi"
+
+    await db.candidate_demographics.delete_one({"candidate_id": candidate_id})
+
+
+async def test_demographics_still_reachable_after_interview_is_completed(client):
+    from config.database import get_db
+
+    token, candidate_id = await _insert_demo_candidate(token_status="consumed", status="completed")
+
+    response = await client.post(
+        f"/api/v1/interview/{token}/demographics",
+        json={"gender": "man", "location": "Remote"},
+    )
+    assert response.status_code == 200
+
+    record = await get_db().candidate_demographics.find_one({"candidate_id": candidate_id})
+    assert record["gender"] == "man"
+
+    await get_db().candidate_demographics.delete_one({"candidate_id": candidate_id})
+
+
+async def test_demographics_rejects_an_expired_link(client):
+    from datetime import datetime, timedelta, timezone
+
+    expired_at = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    token, _ = await _insert_demo_candidate(invite_expires_at=expired_at)
+
+    response = await client.post(
+        f"/api/v1/interview/{token}/demographics",
+        json={"gender": "woman"},
+    )
+    assert response.status_code == 410

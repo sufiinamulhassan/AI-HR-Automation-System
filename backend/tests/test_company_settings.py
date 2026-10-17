@@ -3,7 +3,7 @@ import pytest
 import main as _main_module
 from routes import company_settings as _company_settings_routes
 from config.database import get_db
-from config.settings import settings
+from config.settings import sandbox_provider, settings
 
 if not any(getattr(route, "path", "").startswith("/api/v1/company-settings") for route in _main_module.app.routes):
     _main_module.app.include_router(
@@ -17,9 +17,6 @@ pytestmark = pytest.mark.anyio
 
 @pytest.fixture(autouse=True)
 async def _clean_company_settings():
-    """company_settings is a brand-new collection owned entirely by this
-    feature — safe to clear before/after each test (no shared fixture data
-    lives here, unlike users/jobs/resumes/candidates)."""
     db = get_db()
     if db is not None:
         await db.company_settings.delete_many({})
@@ -108,7 +105,8 @@ async def test_integrations_status_never_leaks_secret_values(client, admin_heade
     assert "core" in body and "job_sources" in body
     core_by_id = {item["id"]: item for item in body["core"]}
     for expected_id in (
-        "openai", "pinecone", "judge0", "google_oauth_sso", "webhook_signing", "smtp_email",
+        "openai", "anthropic", "pinecone", "judge0", "piston", "google_oauth_sso",
+        "webhook_signing", "smtp_email",
     ):
         assert expected_id in core_by_id
         assert isinstance(core_by_id[expected_id]["configured"], bool)
@@ -121,8 +119,13 @@ async def test_integrations_status_never_leaks_secret_values(client, admin_heade
 
     assert core_by_id["openai"]["configured"] == bool(settings.OPENAI_API_KEY)
     assert core_by_id["pinecone"]["configured"] == bool(settings.PINECONE_API_KEY)
-    assert core_by_id["judge0"]["configured"] == bool(settings.JUDGE0_API_URL)
-    assert core_by_id["smtp_email"]["configured"] == bool(settings.EMAIL_HOST)
+    assert core_by_id["anthropic"]["configured"] == bool(settings.ANTHROPIC_API_KEY)
+    assert core_by_id["judge0"]["configured"] == (
+        sandbox_provider() == "judge0" and bool(settings.JUDGE0_API_URL)
+    )
+    assert core_by_id["smtp_email"]["configured"] == (
+        bool(settings.AWS_SES_ENABLED) or bool(settings.EMAIL_HOST)
+    )
 
 
 async def test_integrations_status_reuses_job_sources_list_sources(client, admin_headers):

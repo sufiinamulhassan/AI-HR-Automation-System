@@ -1,4 +1,3 @@
-
 export interface TranscriptEntry {
   role?: string
   content?: string

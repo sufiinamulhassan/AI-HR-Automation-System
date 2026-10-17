@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toTurns } from './transcript'
 
-
 const REAL = [
   {
     question: 'Tell me about your Python experience.',

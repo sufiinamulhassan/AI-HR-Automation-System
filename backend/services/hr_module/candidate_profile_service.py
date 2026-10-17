@@ -1,31 +1,3 @@
-"""Candidate master-profile service — hr_module (MVP2 §2.5).
-
-The `candidates` collection (routes/candidates.py) is deliberately a
-per-job invite record — one document per (job, person) pair. That's correct
-for the interview/invite workflow, but it means there has never been a
-single canonical "this is one person" entity to hang cross-job data off of.
-
-`candidate_profiles` is that entity: one document per resolved identity,
-keyed by normalized email (the one identifier every invite is guaranteed to
-have — phone/LinkedIn are optional soft signals, see candidate_identity.py).
-Every per-job `candidates` document that shares an email rolls up into the
-same profile via `upsert_candidate_profile`, which is called once at the end
-of every candidate-creation path (manual invite in routes/candidates.py,
-auto-match invite in services/hr_module/invite_service.py).
-
-This is intentionally NOT a replacement for the existing soft cross-job
-duplicate-signal / timeline feature (candidate_identity.py,
-get_candidate_timeline) — that machinery still does its own OR-based
-phone/LinkedIn/email matching for the "possible duplicate" warning at invite
-time. `candidate_profiles` is the harder, authoritative link: once a
-candidate document has been resolved into a profile, its candidate_id/job_id/
-resume_id are permanently recorded on that profile's arrays, regardless of
-what its phone/LinkedIn fields say later.
-
-`profile_notes` here is a NEW, person-level free-text field — deliberately
-separate from and additional to `candidates.recruiter_notes` (which stays
-per-job). Nothing in this module reads or writes `recruiter_notes`.
-"""
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -41,30 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 async def upsert_candidate_profile(candidate_doc: dict) -> str | None:
-    """Find-or-create the `candidate_profiles` document for this candidate.
-
-    `candidate_doc` is a just-inserted (or existing) per-job `candidates`
-    document — this reads its email/phone/linkedin/candidate_id/job_id/
-    resume_id fields, never queries `candidates` itself.
-
-    Returns the resolved `profile_id`, or `None` if the candidate has no
-    usable email (this collection is keyed by email; there is no identity to
-    resolve without one — in practice every real invite has one, since both
-    creation paths require it).
-
-    Best-effort by convention: this never raises `HTTPException` and doesn't
-    touch anything outside `candidate_profiles`, but a genuine DB error will
-    propagate — callers (routes/candidates.py, invite_service.py) wrap this
-    call in a try/except so a profile-bookkeeping failure can never break the
-    invite it's attached to.
-    """
     db = get_db()
     if db is None:
         return None
 
     email = (candidate_doc.get("email") or "").strip().lower()
     if not email:
-        logger.info("upsert_candidate_profile skipped — no email on candidate_id=%s", candidate_doc.get("candidate_id"))
+        logger.info("upsert_candidate_profile skipped: no email on candidate_id=%s", candidate_doc.get("candidate_id"))
         return None
 
     phone_normalized = candidate_doc.get("phone_normalized") or normalize_phone(candidate_doc.get("phone"))
@@ -123,12 +78,6 @@ async def upsert_candidate_profile(candidate_doc: dict) -> str | None:
 
 
 async def _hydrate_profile(db, profile: dict) -> dict:
-    """Attach `linked_candidates` — the hydrated per-job candidate summaries
-    for every candidate_id this profile has ever accumulated. Same summary
-    shape as `get_candidate_timeline` (routes/candidates.py) for UI
-    consistency, built via the shared `hydrate_job_titles` helper so the
-    job_id -> job_title lookup isn't duplicated between the two features.
-    """
     candidate_ids = profile.get("candidate_ids") or []
     linked_candidates: list[dict] = []
     if candidate_ids:
@@ -153,8 +102,6 @@ async def _hydrate_profile(db, profile: dict) -> dict:
 
 
 async def get_candidate_profile(profile_id: str) -> dict | None:
-    """Full profile doc (minus `_id`) plus hydrated `linked_candidates`.
-    Returns `None` if no such profile exists — callers should 404."""
     db = get_db()
     if db is None:
         return None
@@ -165,8 +112,6 @@ async def get_candidate_profile(profile_id: str) -> dict | None:
 
 
 async def get_candidate_profile_by_email(email: str) -> dict | None:
-    """Same as `get_candidate_profile` but keyed by email (lowercased/
-    stripped to match how profiles are stored). Returns `None` if unknown."""
     db = get_db()
     if db is None:
         return None
@@ -180,9 +125,6 @@ async def get_candidate_profile_by_email(email: str) -> dict | None:
 
 
 async def update_profile_notes(profile_id: str, notes: str) -> dict | None:
-    """Update the person-level `profile_notes` field. Returns
-    `{"profile_id", "profile_notes", "updated_at"}` or `None` if the profile
-    doesn't exist (caller should 404)."""
     db = get_db()
     if db is None:
         return None

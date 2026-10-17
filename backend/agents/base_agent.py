@@ -1,4 +1,3 @@
-"""Base primitives shared by all LangGraph agents."""
 from __future__ import annotations
 
 import logging
@@ -15,7 +14,6 @@ class BaseState(TypedDict, total=False):
 
 
 def log_node(name: str):
-    """Log every graph node entry/exit without mutating the graph state."""
     def decorator(fn):
         @wraps(fn)
         async def wrapper(state: dict, *args, **kwargs) -> dict:

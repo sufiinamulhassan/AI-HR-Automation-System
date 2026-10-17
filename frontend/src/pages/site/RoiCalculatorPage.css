@@ -1,0 +1,62 @@
+.roi-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+.roi-form { max-width: none; }
+.roi-result {
+  padding: clamp(1.25rem, 1rem + 1.5vw, 2rem);
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+}
+.roi-result-title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-dark);
+}
+.roi-big { display: flex; flex-direction: column; margin: 0.75rem 0 1.25rem; }
+.roi-big-num {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: clamp(3rem, 2rem + 4vw, 5rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.roi-big-label { margin-top: 0.35rem; color: var(--muted-dark); }
+.roi-list { margin: 0; display: grid; gap: 0; }
+.roi-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line-dark);
+}
+.roi-list dt { color: var(--muted-dark); font-size: 0.9375rem; }
+.roi-list dd { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 500; }
+.roi-bars { margin-top: 1.25rem; display: grid; gap: 0.75rem; }
+.roi-bar-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted-dark);
+}
+.roi-bar-row > span:last-child { text-align: right; }
+.roi-bar { display: block; height: 0.625rem; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.roi-bar-fill { display: block; height: 100%; border-radius: 999px; background: rgba(255, 255, 255, 0.55); transition: width 0.3s ease; }
+.roi-bar-fill.is-after { background: var(--accent); }
+.roi-warn { margin-top: 1rem; font-size: 0.9rem; color: #ffd37a; }
+.roi-notes h2 { margin-top: 0; }
+
+@media (min-width: 900px) {
+  .roi-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roi-bar-fill { transition: none; }
+}

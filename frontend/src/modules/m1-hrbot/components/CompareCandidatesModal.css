@@ -1,0 +1,74 @@
+.modal-box.cmp-box { max-width: 1180px; width: 94vw; display: flex; flex-direction: column; }
+.cmp-header { gap: .75rem; }
+.cmp-header h2 { min-width: 0; overflow-wrap: anywhere; }
+.cmp-box .modal-close { display: inline-flex; align-items: center; justify-content: center; }
+.cmp-box .modal-close:focus-visible,
+.cmp-link-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.cmp-toolbar {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: .75rem 1.25rem;
+  padding: .85rem 1.4rem; border-bottom: 1px solid var(--gray-200);
+}
+.cmp-filter { display: flex; flex-direction: column; gap: .25rem; min-width: 150px; }
+.cmp-check { display: inline-flex; align-items: center; gap: .45rem; padding-bottom: .5rem; font-size: .82rem; color: var(--gray-800); cursor: pointer; }
+.cmp-check input { accent-color: var(--primary); }
+.cmp-stats { display: flex; gap: 1.25rem; margin: 0 0 0 auto; padding-bottom: .15rem; }
+.cmp-stats div { display: flex; flex-direction: column; gap: .05rem; }
+.cmp-stats dt { font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--gray-500); }
+.cmp-stats dd { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight: 800; color: var(--gray-900); }
+.cmp-export { margin-bottom: .1rem; margin-left: auto; }
+.cmp-stats + .cmp-export { margin-left: 0; }
+
+.cmp-body { padding: 1rem 1.4rem; display: flex; flex-direction: column; gap: .75rem; min-height: 0; }
+.cmp-status { color: var(--gray-500); font-size: .82rem; text-align: center; padding: 1.5rem 0; }
+.cmp-empty { color: var(--gray-500); font-size: .9rem; text-align: center; padding: 1.75rem 0; }
+.cmp-error {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: .5rem .75rem; border-radius: var(--radius);
+  background: #fef2f2; border: 1px solid #fecaca; color: var(--danger);
+  font-size: .8rem; line-height: 1.45;
+}
+.cmp-link-btn { background: none; border: none; padding: 0; font-size: .8rem; font-weight: 700; color: var(--danger); text-decoration: underline; }
+
+.cmp-table-wrap { overflow-x: auto; border: 1px solid var(--gray-200); border-radius: var(--radius); }
+.cmp-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.cmp-table th {
+  position: sticky; top: 0; text-align: left; white-space: nowrap;
+  padding: 0; background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+}
+.cmp-sort {
+  display: inline-flex; align-items: center; gap: .35rem; width: 100%;
+  padding: .5rem .65rem; background: none; border: none;
+  font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--gray-500);
+  text-align: left;
+}
+.cmp-sort:hover { color: var(--gray-900); }
+.cmp-sort:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.cmp-sort-icon { flex-shrink: 0; }
+.cmp-table th[aria-sort="ascending"] .cmp-sort,
+.cmp-table th[aria-sort="descending"] .cmp-sort { color: var(--gray-900); }
+
+.cmp-table td { padding: .55rem .65rem; border-bottom: 1px solid var(--gray-100); vertical-align: middle; color: var(--gray-800); }
+.cmp-table tbody tr:last-child td { border-bottom: none; }
+.cmp-row.clickable { cursor: pointer; }
+.cmp-row.clickable:hover td { background: var(--gray-50); }
+.cmp-rank { font-weight: 800; color: var(--gray-500); }
+.cmp-name {
+  max-width: 220px; padding: 0; background: none; border: none; text-align: left;
+  font-size: .82rem; font-weight: 700; color: var(--gray-900);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cmp-name:disabled { cursor: default; }
+.cmp-row.clickable .cmp-name:hover { text-decoration: underline; }
+.cmp-name:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.cmp-score { font-variant-numeric: tabular-nums; text-align: center; }
+.cmp-table td.cmp-best { background: var(--primary-light); font-weight: 800; color: var(--secondary); }
+.cmp-row.clickable:hover td.cmp-best { background: var(--primary-light); }
+
+@media (max-width: 720px) {
+  .cmp-toolbar { padding: .75rem 1rem; }
+  .cmp-body { padding: .75rem 1rem; }
+  .cmp-stats { margin-left: 0; }
+}
+
+.cmp-name-erased { font-style: italic; color: var(--gray-500); }

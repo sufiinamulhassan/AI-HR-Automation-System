@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { analyseAnswer, buildTips } from './useCoachMetrics'
 
-
 const noPause = { live: false, longestPauseMs: 0 }
 
 describe('analyseAnswer', () => {
@@ -76,7 +75,7 @@ describe('buildTips', () => {
     expect(tips.map(t => t.id)).toContain('pause')
   })
 
-  it('only coaches delivery - it never scores the candidate', () => {
+  it('only coaches delivery, it never scores the candidate', () => {
     const everything = buildTips(analyseAnswer('um uh er I guess', 10), { live: false, longestPauseMs: 9000 })
     const words = everything.map(t => `${t.title} ${t.body}`).join(' ').toLowerCase()
     for (const forbidden of ['score', 'rating', 'rank', 'pass', 'fail', 'weak', 'poor']) {

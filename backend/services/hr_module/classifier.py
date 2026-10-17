@@ -1,10 +1,11 @@
-"""Resume domain + seniority classifier — hr_module."""
 import json
 import logging
 
-from config.llm import ask_llm
+from config.llm import ask_llm, model_for
 from config.settings import settings
 from services.hr_module.jd_intel import INDUSTRIES
+from services.hr_module.prompt_guard import fence, with_guard
+from services.hr_module.resume_profile import clean_profile
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,9 @@ DOMAINS = [
 ]
 SENIORITY = ["intern", "junior", "mid", "senior", "lead", "manager", "director", "executive"]
 
+READ_CHARS = 4500
+MAX_TOKENS = 900
+
 _SYSTEM = (
     "You are an expert HR classifier. Analyze the resume and return ONLY JSON.\n"
     "Rules:\n"
@@ -23,11 +27,18 @@ _SYSTEM = (
     "- Years: 0-1=intern, 1-3=junior, 3-6=mid, 6-10=senior, 10+=lead/manager\n"
     "- education_level: one of high_school, bachelor, master, phd, bootcamp, other\n"
     "- industry: the general business sector the candidate's experience sits in "
-    "(technology, healthcare, fintech, etc.) — distinct from job_domain, which is "
+    "(technology, healthcare, fintech, etc.): distinct from job_domain, which is "
     "their functional tech role\n"
-    "- skills: top 20 most relevant technical skills only"
+    "- skills: top 20 most relevant technical skills only\n"
+    "- headline: the candidate's current or most recent job title, copied as written\n"
+    "- location: the candidate's city and country, copied as written\n"
+    "- experience: at most 8 roles, most recent first, each with the job title and the "
+    "company exactly as written\n"
+    "- headline, location and experience come only from the resume text: "
+    "use null (or [] for the experience list) when the resume does not state them, "
+    "and never invent or guess a value"
 )
-_PROMPT = """Resume (first 3000 chars):
+_PROMPT = """Resume (first 4500 chars):
 {text}
 
 Return JSON:
@@ -38,37 +49,57 @@ Return JSON:
   "confidence": <0.0-1.0>,
   "years_experience": <integer, estimated total years of professional experience>,
   "education_level": "<one of: high_school, bachelor, master, phd, bootcamp, other>",
-  "industry": "<one of: {industries}>"
+  "industry": "<one of: {industries}>",
+  "headline": "<current or most recent job title as written, or null>",
+  "location": "<city and country as written, or null>",
+  "experience": [{{"title": "<job title as written>", "company": "<company as written>"}}, ...]
 }}"""
+
+
+def _parse(raw) -> dict:
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        logger.warning("Classifier JSON parse failed")
+        return {}
+    if not isinstance(parsed, dict):
+        logger.warning("Classifier JSON was not an object")
+        return {}
+    return parsed
+
+
+def _or_default(result: dict, key: str, default):
+    value = result.get(key)
+    return default if value is None else value
+
+
+def _classification(result: dict) -> dict:
+    skills = result.get("skills")
+    industry = _or_default(result, "industry", "other")
+    return {
+        "job_domain": _or_default(result, "job_domain", "software_engineering"),
+        "seniority_level": _or_default(result, "seniority_level", "mid"),
+        "skills": skills[:20] if isinstance(skills, list) else [],
+        "confidence": _or_default(result, "confidence", 0.5),
+        "years_experience": _or_default(result, "years_experience", 0),
+        "education_level": _or_default(result, "education_level", "other"),
+        "industry": industry if industry in INDUSTRIES else "other",
+    }
 
 
 async def classify_resume(text: str, model: str | None = None) -> dict:
     raw = await ask_llm(
         prompt=_PROMPT.format(
-            text=text[:3000],
+            text=fence("RESUME", (text or "")[:READ_CHARS]),
             domains=", ".join(DOMAINS),
             seniority=", ".join(SENIORITY),
             industries=", ".join(INDUSTRIES),
         ),
-        system=_SYSTEM,
-        model=model or settings.RESUME_CLASSIFICATION_MODEL,
-        max_tokens=450,
+        system=with_guard(_SYSTEM),
+        model=model_for("resume", model),
+        max_tokens=MAX_TOKENS,
         temperature=0.0,
         json_mode=True,
     )
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning("Classifier JSON parse failed")
-        result = {}
-    result.setdefault("job_domain", "software_engineering")
-    result.setdefault("seniority_level", "mid")
-    result.setdefault("skills", [])
-    result.setdefault("confidence", 0.5)
-    result.setdefault("years_experience", 0)
-    result.setdefault("education_level", "other")
-    result.setdefault("industry", "other")
-    if result["industry"] not in INDUSTRIES:
-        result["industry"] = "other"
-    result["skills"] = result["skills"][:20]
-    return result
+    result = _parse(raw)
+    return {**_classification(result), **clean_profile(result)}

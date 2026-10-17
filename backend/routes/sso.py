@@ -1,41 +1,24 @@
-"""
-SSO — Google OAuth2 Authorization Code flow (MVP2 §2.19, prioritized ahead of
-the calendar/Zoom/Teams/Slack/HRMS connectors per the doc's own guidance).
-
-Hand-rolled with httpx only (no new OAuth library dependency — this is a
-small enough flow to do safely by hand):
-
-    GET /sso/google/login      -> redirects to Google's consent screen
-    GET /sso/google/callback   -> exchanges code, verifies identity via
-                                   Google's userinfo endpoint, finds-or-creates
-                                   a local user, mints our own JWT, redirects
-                                   to the frontend with it in the query string
-
-Both endpoints return a clear 503 "SSO not configured" when
-GOOGLE_OAUTH_CLIENT_ID is blank, rather than attempting (and failing deep
-into) the flow.
-
-We deliberately do NOT verify the id_token's JWT signature against Google's
-JWKS ourselves — calling /oauth2/v3/userinfo with the freshly-exchanged
-access_token is simpler and equally safe for this scope, since the access
-token itself was only just obtained directly from Google over TLS.
-"""
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
-from jose import jwt
 
-from config.database import get_db
+from config.database import get_db, get_platform_db
 from config.settings import settings
+from config.tenancy import bind_company
+from services.hr_module import plan_service
+from services.hr_module.workspace_service import blocked_reason, company_for_email_domain, load_company
+from shared.rate_limit import public_token_throttle
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_sso_throttle = public_token_throttle("sso", ip_limit=60, param=None)
 
 _AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -51,26 +34,32 @@ def _sso_configured() -> bool:
     )
 
 
-def _make_token(email: str) -> str:
-    """Mirrors routes/auth.py's private _make_token — duplicated here (not
-    imported) since routes/auth.py is frozen for this task."""
-    exp = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return jwt.encode({"sub": email, "exp": exp}, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+def allowed_email_domains() -> set[str]:
+    raw = settings.SSO_ALLOWED_EMAIL_DOMAINS or ""
+    return {part.strip().lower().lstrip("@") for part in raw.split(",") if part.strip()}
 
 
-@router.get("/google/login")
+def domain_allowed(email: str) -> bool:
+    allowed = allowed_email_domains()
+    if not allowed:
+        return True
+    return email.rpartition("@")[2].lower() in allowed
+
+
+@router.get("/google/login", dependencies=[Depends(_sso_throttle)])
 async def google_login():
     if not _sso_configured():
         raise HTTPException(503, "SSO not configured")
 
-    db = get_db()
+    db = get_platform_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
 
     state = secrets.token_urlsafe(24)
     await db.sso_states.insert_one({
         "state": state,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "kind": "google",
+        "created_at": datetime.now(timezone.utc),
     })
 
     params = {
@@ -84,7 +73,7 @@ async def google_login():
     return RedirectResponse(url=f"{_AUTH_URL}?{urlencode(params)}")
 
 
-@router.get("/google/callback")
+@router.get("/google/callback", dependencies=[Depends(_sso_throttle)])
 async def google_callback(code: str | None = None, state: str | None = None):
     if not _sso_configured():
         raise HTTPException(503, "SSO not configured")
@@ -92,13 +81,13 @@ async def google_callback(code: str | None = None, state: str | None = None):
     if not code or not state:
         raise HTTPException(400, "Missing code or state")
 
-    db = get_db()
+    db = get_platform_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
 
-    state_doc = await db.sso_states.find_one_and_delete({"state": state})
+    state_doc = await db.sso_states.find_one_and_delete({"state": state, "kind": {"$ne": "oidc"}})
     if not state_doc:
-        raise HTTPException(400, "Invalid or expired state — possible CSRF, retry login")
+        raise HTTPException(400, "Invalid or expired state: possible CSRF, retry login")
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -132,12 +121,25 @@ async def google_callback(code: str | None = None, state: str | None = None):
     email = (userinfo.get("email") or "").lower().strip()
     if not email:
         raise HTTPException(502, "Google did not return an email address")
-    if userinfo.get("email_verified") is False:
+    if userinfo.get("email_verified") is not True:
         raise HTTPException(403, "Google account email is not verified")
 
-    existing = await db.users.find_one({"email": email})
+    existing = await get_platform_db().users.find_one({"email": email})
     if not existing:
-        await db.users.insert_one({
+        company = await company_for_email_domain(email, legacy_domains=allowed_email_domains())
+        if company is None:
+            logger.warning("SSO sign-up refused: no company claims the domain | email=%s", email)
+            raise HTTPException(
+                403,
+                "This email domain is not allowed to sign up with single sign-on. "
+                "Ask your administrator to create your account.",
+            )
+        bind_company(company["company_id"], company)
+        try:
+            await plan_service.ensure_seat_available()
+        except HTTPException as exc:
+            raise HTTPException(403, exc.detail)
+        await get_db().users.insert_one({
             "name": userinfo.get("name") or email,
             "email": email,
             "role": "standard",
@@ -148,6 +150,16 @@ async def google_callback(code: str | None = None, state: str | None = None):
         })
     elif not existing.get("is_active", True):
         raise HTTPException(403, "Account is deactivated")
+    else:
+        company = await load_company(existing.get("company_id"))
+        reason = blocked_reason(company)
+        if reason:
+            raise HTTPException(403, reason)
+        bind_company(company["company_id"], company)
 
-    token = _make_token(email)
+    await get_db().users.update_one({"email": email}, {"$set": {"last_login_at": datetime.now(timezone.utc)}})
+
+    from routes.auth import _make_token
+
+    token = await _make_token(email, company["company_id"])
     return RedirectResponse(url=f"{settings.FRONTEND_URL}/sso-callback?token={token}")

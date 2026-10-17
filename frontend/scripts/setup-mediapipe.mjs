@@ -1,15 +1,3 @@
-/**
- * Vendors the MediaPipe proctoring assets into public/ so the interview page
- * never depends on a third-party CDN at runtime.
- *
- * A live interview cannot tolerate a remote asset host being slow, blocked by
- * a corporate proxy, or simply down - the previous face-api implementation
- * pulled its model weights from a maintainer's GitHub Pages site on every
- * session. These assets are ~15 MB, so they are fetched/copied at build time
- * and gitignored rather than committed.
- *
- * Runs automatically via the `predev` / `prebuild` npm scripts.
- */
 import { createWriteStream } from 'node:fs'
 import { cp, mkdir, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -20,9 +8,12 @@ import { Readable } from 'node:stream'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const WASM_SRC = resolve(ROOT, 'node_modules/@mediapipe/tasks-vision/wasm')
 const WASM_DEST = resolve(ROOT, 'public/mediapipe/wasm')
-const MODEL_DEST = resolve(ROOT, 'public/models/face_landmarker.task')
-const MODEL_URL =
+const FACE_MODEL_DEST = resolve(ROOT, 'public/models/face_landmarker.task')
+const FACE_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+const OBJECT_MODEL_DEST = resolve(ROOT, 'public/models/object_detector.tflite')
+const OBJECT_MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/int8/1/efficientdet_lite2.tflite'
 
 async function exists(path) {
   try {
@@ -35,24 +26,25 @@ async function exists(path) {
 
 async function copyWasm() {
   if (!(await exists(WASM_SRC))) {
-    throw new Error(`@mediapipe/tasks-vision wasm assets not found at ${WASM_SRC} - run npm install first`)
+    throw new Error(`@mediapipe/tasks-vision wasm assets not found at ${WASM_SRC}, run npm install first`)
   }
   await mkdir(WASM_DEST, { recursive: true })
   await cp(WASM_SRC, WASM_DEST, { recursive: true })
-  console.log('[mediapipe] wasm runtime → public/mediapipe/wasm')
+  console.log('[mediapipe] wasm runtime to public/mediapipe/wasm')
 }
 
-async function fetchModel() {
-  if (await exists(MODEL_DEST)) {
-    console.log('[mediapipe] face_landmarker.task already present - skipping download')
+async function fetchAsset(dest, url, label) {
+  if (await exists(dest)) {
+    console.log(`[mediapipe] ${label} already present, skipping download`)
     return
   }
-  await mkdir(dirname(MODEL_DEST), { recursive: true })
-  const res = await fetch(MODEL_URL)
-  if (!res.ok) throw new Error(`Failed to download face landmarker model: HTTP ${res.status}`)
-  await pipeline(Readable.fromWeb(res.body), createWriteStream(MODEL_DEST))
-  console.log('[mediapipe] face_landmarker.task → public/models')
+  await mkdir(dirname(dest), { recursive: true })
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Failed to download ${label}: HTTP ${res.status}`)
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(dest))
+  console.log(`[mediapipe] ${label} to public/models`)
 }
 
 await copyWasm()
-await fetchModel()
+await fetchAsset(FACE_MODEL_DEST, FACE_MODEL_URL, 'face_landmarker.task')
+await fetchAsset(OBJECT_MODEL_DEST, OBJECT_MODEL_URL, 'object_detector.tflite')

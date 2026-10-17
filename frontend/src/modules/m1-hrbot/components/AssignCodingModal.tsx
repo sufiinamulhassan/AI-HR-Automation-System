@@ -82,7 +82,7 @@ export default function AssignCodingModal({ candidateId, candidateName, jobDomai
       loadQuestions()
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } }
-      setGenError(err?.response?.data?.detail || 'AI question generation failed - please try again')
+      setGenError(err?.response?.data?.detail || 'AI question generation failed, please try again')
     }
     setGenerating(false)
   }
@@ -95,8 +95,8 @@ export default function AssignCodingModal({ candidateId, candidateName, jobDomai
       const emailSent = !!r.data?.email_sent
       setAssignedResult({ email_sent: emailSent })
       showToast(emailSent
-        ? 'Question assigned - coding assessment invite email sent'
-        : 'Question assigned - email could not be sent (see Communication log)')
+        ? 'Question assigned, coding assessment invite email sent'
+        : 'Question assigned, email could not be sent (see Communication log)')
     } catch {
       showToast('Failed to assign coding question')
     }
@@ -107,7 +107,7 @@ export default function AssignCodingModal({ candidateId, candidateName, jobDomai
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box acm-modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Assign Coding Question{candidateName ? ` - ${candidateName}` : ''}</h2>
+          <h2>Assign Coding Question{candidateName ? `, ${candidateName}` : ''}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -134,14 +134,14 @@ export default function AssignCodingModal({ candidateId, candidateName, jobDomai
               {loadingQuestions ? (
                 <div className="acm-loading">Loading question bank…</div>
               ) : questions.length === 0 ? (
-                <div className="acm-empty">No coding questions yet - try Generate with AI, or add one from the Coding Questions admin page.</div>
+                <div className="acm-empty">No coding questions yet, try Generate with AI, or add one from the Coding Questions admin page.</div>
               ) : (
                 <select
                   className="form-input"
                   value={selectedQuestionId}
                   onChange={e => selectExisting(e.target.value)}
                 >
-                  <option value="">- Select a question -</option>
+                  <option value="">Select a question</option>
                   {questions.map(q => (
                     <option key={q.question_id} value={q.question_id}>
                       {q.title} · {q.job_domain || 'any domain'} · {q.difficulty}
@@ -205,7 +205,7 @@ export default function AssignCodingModal({ candidateId, candidateName, jobDomai
               </div>
               {mode === 'generate' && generated && (
                 <div className="acm-preview-note">
-                  Review this AI-generated question before assigning it - it will not be sent to the candidate until you click Assign below.
+                  Review this AI-generated question before assigning it. It will not be sent to the candidate until you click Assign below.
                 </div>
               )}
               <p className="acm-preview-desc">{preview.description}</p>
@@ -224,7 +224,7 @@ export default function AssignCodingModal({ candidateId, candidateName, jobDomai
               Assigned successfully.{' '}
               {assignedResult.email_sent
                 ? 'A coding assessment invite email was sent to the candidate.'
-                : 'The email could not be sent - check the Communication log.'}
+                : 'The email could not be sent. Check the Communication log.'}
             </div>
           )}
         </div>

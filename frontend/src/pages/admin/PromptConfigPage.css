@@ -136,3 +136,16 @@
 @media (max-width: 640px) {
   .pc-form { max-height: 78vh; }
 }
+
+.pc-load-error {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem;
+  margin: 1.1rem 1.25rem; padding: .6rem .8rem; border-radius: var(--radius);
+  color: var(--danger); font-size: .83rem;
+  background: color-mix(in srgb, var(--danger) 8%, var(--white));
+}
+
+.pc-save-error {
+  padding: .5rem .7rem; border-radius: var(--radius);
+  color: var(--danger); font-size: .8rem; font-weight: 600; line-height: 1.4;
+  background: color-mix(in srgb, var(--danger) 8%, var(--white));
+}

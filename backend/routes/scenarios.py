@@ -1,10 +1,9 @@
-"""Scenario route — hr_module Scenario-Based Interview management (MVP2 §2.9)."""
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from shared.auth import get_current_user, require_admin
+from shared.auth import get_current_user, require_admin, require_permission
 from config.database import get_db
 from services.hr_module.audit_service import log_audit_event
 from services.hr_module.scenario_service import (
@@ -35,7 +34,11 @@ class ScenarioUpdate(BaseModel):
 
 
 @router.post("")
-async def create_scenario_route(body: ScenarioCreate, user: dict = Depends(require_admin)):
+async def create_scenario_route(
+    body: ScenarioCreate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("scenarios:manage")),
+):
     scenario = await create_scenario(body.model_dump(), created_by=user.get("email", ""))
     asyncio.create_task(log_audit_event(
         get_db(), actor_email=user.get("email"), actor_role=user.get("role"),
@@ -67,6 +70,7 @@ async def update_scenario_route(
     scenario_id: str,
     body: ScenarioUpdate,
     user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("scenarios:manage")),
 ):
     updates = body.model_dump(exclude_unset=True)
     matched = await update_scenario(scenario_id, updates)
@@ -82,7 +86,11 @@ async def update_scenario_route(
 
 
 @router.delete("/{scenario_id}")
-async def delete_scenario_route(scenario_id: str, user: dict = Depends(require_admin)):
+async def delete_scenario_route(
+    scenario_id: str,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("scenarios:manage")),
+):
     await delete_scenario(scenario_id)
 
     asyncio.create_task(log_audit_event(

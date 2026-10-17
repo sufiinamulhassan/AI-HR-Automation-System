@@ -1,58 +1,59 @@
-"""
-HRMS / Payroll outbound connector — hr_module Integrations (MVP2 §2.19).
-
-There is no universal HRMS or payroll API, so building "a BambooHR connector"
-or "a Workday connector" would be one vendor's integration wearing a generic
-name. This does the thing that actually generalises:
-
-  build_employee_record()  normalises everything the platform knows about a
-                           hired candidate into one flat, stable, documented
-                           record — the same shape regardless of which HRMS
-                           consumes it.
-  push_to_hrms()           POSTs that record to the customer's configured
-                           endpoint with their auth header, guarded by the
-                           same SSRF check the outbound webhook system uses.
-  export_employee_records() returns the same records in bulk for HRMS/payroll
-                           systems that can only import a file.
-
-Blank HRMS_WEBHOOK_URL = "not configured": push_to_hrms() reports that plainly
-instead of failing a hire. Export works with no configuration at all.
-"""
+import asyncio
 import logging
 from datetime import datetime, timezone
-
-import httpx
+from urllib.parse import urlsplit
 
 from config.database import get_db
 from config.settings import settings
-from services.hr_module.webhook_service import is_url_ssrf_safe
+from services.hr_module import integrations_settings_service
+from shared.safe_http import UnsafeTarget, resolve_public, safe_request
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 15.0
+_MAX_RESPONSE_BYTES = 64_000
+
+_TRANSPORT = None
 
 EMPLOYEE_RECORD_VERSION = "1.0"
 
 
 def is_configured() -> bool:
-    return bool(settings.HRMS_WEBHOOK_URL)
+    return integrations_settings_service.environment_config("hrms") is not None
+
+
+async def is_configured_for_company() -> bool:
+    return await integrations_settings_service.runtime_config("hrms") is not None
+
+
+async def auto_push_enabled() -> bool:
+    return await integrations_settings_service.hrms_auto_push()
+
+
+async def _unsafe_target(url: str) -> str | None:
+    try:
+        parts = urlsplit(url)
+        port = parts.port or 443
+    except ValueError:
+        return "The HRMS address is not a valid web address."
+    if parts.scheme != "https" or not parts.hostname:
+        return "The HRMS address must start with https://."
+    if parts.username or parts.password:
+        return "The HRMS address cannot contain a user name or password."
+    try:
+        await resolve_public(parts.hostname, port)
+    except UnsafeTarget:
+        return "The HRMS address is not a public website that can be reached."
+    return None
 
 
 async def build_employee_record(candidate_id: str) -> dict | None:
-    """Assemble one normalised employee record. Returns None if unknown.
-
-    Pulls from candidates + jobs + the accepted offer + the marketplace profile
-    (which is where the enriched contact/education fields live). Every field is
-    present in the output even when empty, so a consumer never has to
-    distinguish "absent" from "not known" — an HRMS import that silently skips
-    missing keys is a support ticket nobody enjoys.
-    """
     db = get_db()
     if db is None:
         return None
 
     cand = await db.candidates.find_one({"candidate_id": candidate_id}, {"_id": 0})
-    if not cand:
+    if not cand or cand.get("erased"):
         return None
 
     job = await db.jobs.find_one({"job_id": cand.get("job_id")}, {"_id": 0}) or {}
@@ -69,7 +70,7 @@ async def build_employee_record(candidate_id: str) -> dict | None:
     return {
         "record_version": EMPLOYEE_RECORD_VERSION,
         "exported_at": datetime.now(timezone.utc).isoformat(),
-        "source": "hr-bot-platform",
+        "source": "hirely-platform",
         "candidate_id": candidate_id,
         "full_name": cand.get("name") or profile.get("name") or "",
         "email": cand.get("email") or profile.get("email") or "",
@@ -95,27 +96,15 @@ async def build_employee_record(candidate_id: str) -> dict | None:
 
 
 async def push_to_hrms(candidate_id: str) -> dict:
-    """POST one employee record to the configured HRMS endpoint.
+    config = await integrations_settings_service.runtime_config("hrms")
+    if not config:
+        return {"status": "not_configured", "detail": "The HRMS integration is not set up", "http_status": None}
 
-    Always returns a result dict rather than raising — this runs off the back
-    of a hire, and an HRMS outage must never roll back or fail the hire itself.
-
-      {"status": "not_configured" | "not_found" | "blocked" | "sent" | "failed",
-       "detail": str, "http_status": int | None}
-
-    Every attempt is recorded in `hrms_sync_log` so a failure is visible after
-    the fact instead of living only in the application log. The one status not
-    logged is `not_configured`, which is a configuration state rather than an
-    attempt — logging it would fill the collection on every hire at a site that
-    never enabled the integration.
-    """
-    if not is_configured():
-        return {"status": "not_configured", "detail": "HRMS_WEBHOOK_URL is not set", "http_status": None}
-
-    url = settings.HRMS_WEBHOOK_URL
-    if not is_url_ssrf_safe(url):
-        logger.warning("HRMS push blocked — unsafe URL")
-        result = {"status": "blocked", "detail": "HRMS_WEBHOOK_URL failed the SSRF safety check", "http_status": None}
+    url = config["url"]
+    problem = await _unsafe_target(url)
+    if problem:
+        logger.warning("HRMS push blocked: unsafe URL")
+        result = {"status": "blocked", "detail": problem, "http_status": None}
         await _log_sync(candidate_id, result)
         return result
 
@@ -126,22 +115,35 @@ async def push_to_hrms(candidate_id: str) -> dict:
         return result
 
     headers = {"Content-Type": "application/json"}
-    if settings.HRMS_AUTH_HEADER and settings.HRMS_AUTH_TOKEN:
-        headers[settings.HRMS_AUTH_HEADER] = settings.HRMS_AUTH_TOKEN
+    if config.get("auth_header") and config.get("auth_token"):
+        headers[config["auth_header"]] = config["auth_token"]
 
     result: dict
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(url, json=record, headers=headers)
+        resp = await safe_request(
+            "POST", url, json=record, headers=headers, timeout=_TIMEOUT,
+            max_bytes=_MAX_RESPONSE_BYTES, transport=_TRANSPORT,
+        )
         ok = 200 <= resp.status_code < 300
         result = {
             "status": "sent" if ok else "failed",
             "detail": "" if ok else (resp.text or "")[:300],
             "http_status": resp.status_code,
         }
+    except UnsafeTarget as exc:
+        if "larger than allowed" in str(exc):
+            result = {"status": "failed", "detail": "The HRMS answered with more data than allowed.", "http_status": None}
+        else:
+            logger.warning("HRMS push blocked at connect time")
+            result = {"status": "blocked", "detail": "The HRMS address is not a public website that can be reached.", "http_status": None}
     except Exception as exc:
-        logger.warning("HRMS push failed for candidate=%s: %s", candidate_id, exc)
-        result = {"status": "failed", "detail": str(exc)[:300], "http_status": None}
+        logger.warning("HRMS push failed for candidate=%s: %s", candidate_id, type(exc).__name__)
+        timed_out = isinstance(exc, (TimeoutError, asyncio.TimeoutError)) or "Timeout" in type(exc).__name__
+        result = {
+            "status": "failed",
+            "detail": "The HRMS did not answer in time." if timed_out else f"Could not reach the HRMS ({type(exc).__name__}).",
+            "http_status": None,
+        }
 
     await _log_sync(candidate_id, result)
     return result
@@ -168,21 +170,6 @@ async def export_employee_records(
     since: str | None = None,
     limit: int = 500,
 ) -> list[dict]:
-    """Bulk export for HRMS/payroll systems that import rather than receive.
-
-    Covers candidates who are hired, PLUS anyone holding an accepted offer —
-    the two are recorded independently (a hire sets candidates.status='hired'
-    via POST /candidates/{id}/decision; an acceptance sets offers.status=
-    'accepted' via the candidate-facing token flow) and either alone is a real
-    handover event. An earlier version matched a candidate status of
-    "offer_accepted", which nothing in this codebase ever writes.
-
-    `since` compares ISO-8601 UTC strings — safe because every timestamp here
-    is written with isoformat(). It matches against whichever of `decided_at`,
-    `updated_at` or `created_at` the record actually carries: the hire path
-    writes `decided_at`, and filtering on `updated_at` alone (which most
-    candidate writes never set) silently returned an empty list forever.
-    """
     db = get_db()
     if db is None:
         return []
@@ -232,5 +219,7 @@ __all__ = [
     "export_employee_records",
     "sync_log",
     "is_configured",
+    "is_configured_for_company",
+    "auto_push_enabled",
     "EMPLOYEE_RECORD_VERSION",
 ]

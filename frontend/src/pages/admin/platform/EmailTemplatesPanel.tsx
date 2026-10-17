@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { emailTemplatesApi } from '../../../lib/api'
+import { fillPreview } from './emailPreview'
 import '../EmailTemplatesPage.css'
 
 interface EmailTemplateInfo {
@@ -14,21 +15,38 @@ interface EmailTemplateInfo {
   text_body_template: string | null
   updated_by: string | null
   updated_at: string | null
+  sample_subject_template?: string
+  sample_html_body_template?: string
+  sample_text_body_template?: string
+  preview_values?: Record<string, string>
 }
 
 interface EditForm {
-  subject_template: string
-  html_body_template: string
-  text_body_template: string
+  subject: string
+  html: string
+  text: string
 }
 
-function emptyForm(t: EmailTemplateInfo): EditForm {
+type Field = keyof EditForm
+
+function sampleOf(t: EmailTemplateInfo): EditForm {
   return {
-    subject_template: t.subject_template || '',
-    html_body_template: t.html_body_template || '',
-    text_body_template: t.text_body_template || '',
+    subject: t.sample_subject_template ?? '',
+    html: t.sample_html_body_template ?? '',
+    text: t.sample_text_body_template ?? '',
   }
 }
+
+function startingForm(t: EmailTemplateInfo): EditForm {
+  const sample = sampleOf(t)
+  return {
+    subject: t.subject_template || sample.subject,
+    html: t.html_body_template || sample.html,
+    text: t.text_body_template || sample.text,
+  }
+}
+
+const sameForm = (a: EditForm, b: EditForm) => a.subject === b.subject && a.html === b.html && a.text === b.text
 
 export default function EmailTemplatesPanel({ showToast }: { showToast: (msg: string) => void }) {
   const [templates, setTemplates] = useState<EmailTemplateInfo[]>([])
@@ -36,22 +54,64 @@ export default function EmailTemplatesPanel({ showToast }: { showToast: (msg: st
   const [saving, setSaving] = useState(false)
 
   const [editing, setEditing] = useState<EmailTemplateInfo | null>(null)
-  const [form, setForm] = useState<EditForm>({ subject_template: '', html_body_template: '', text_body_template: '' })
+  const [form, setForm] = useState<EditForm>({ subject: '', html: '', text: '' })
+  const [start, setStart] = useState<EditForm>({ subject: '', html: '', text: '' })
+  const [view, setView] = useState<'edit' | 'preview'>('edit')
+  const [target, setTarget] = useState<Field>('html')
+  const [pending, setPending] = useState<string | null>(null)
+  const refs = {
+    subject: useRef<HTMLInputElement>(null),
+    html: useRef<HTMLTextAreaElement>(null),
+    text: useRef<HTMLTextAreaElement>(null),
+  }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    if (pending === null || view !== 'edit') return
+    setForm(f => ({ ...f, html: f.html + pending }))
+    setPending(null)
+  }, [pending, view])
 
   async function load() {
     setLoading(true)
     try {
       const r = await emailTemplatesApi.list()
       setTemplates(r.data.templates ?? [])
-    } catch {}
+    } catch { }
     setLoading(false)
   }
 
   function openEditor(t: EmailTemplateInfo) {
+    const initial = startingForm(t)
     setEditing(t)
-    setForm(emptyForm(t))
+    setForm(initial)
+    setStart(initial)
+    setView('edit')
+    setTarget('html')
+  }
+
+  const dirty = !sameForm(form, start)
+  const sample = editing ? sampleOf(editing) : null
+  const canUseSample = !!sample && !!(sample.subject || sample.html) && !sameForm(form, sample)
+
+  function insert(token: string) {
+    const element = refs[target].current
+    const text = `{{${token}}}`
+    if (!element) {
+      setView('edit')
+      setTarget('html')
+      setPending(text)
+      return
+    }
+    const at = element.selectionStart ?? form[target].length
+    const to = element.selectionEnd ?? at
+    const next = form[target].slice(0, at) + text + form[target].slice(to)
+    setForm(f => ({ ...f, [target]: next }))
+    requestAnimationFrame(() => {
+      element.focus()
+      element.setSelectionRange(at + text.length, at + text.length)
+    })
   }
 
   async function save() {
@@ -59,9 +119,9 @@ export default function EmailTemplatesPanel({ showToast }: { showToast: (msg: st
     setSaving(true)
     try {
       await emailTemplatesApi.upsert(editing.key, {
-        subject_template: form.subject_template.trim() || undefined,
-        html_body_template: form.html_body_template.trim() || undefined,
-        text_body_template: form.text_body_template.trim() || undefined,
+        subject_template: form.subject.trim() || undefined,
+        html_body_template: form.html.trim() || undefined,
+        text_body_template: form.text.trim() || undefined,
       })
       showToast('Template saved')
       setEditing(null)
@@ -85,13 +145,11 @@ export default function EmailTemplatesPanel({ showToast }: { showToast: (msg: st
     }
   }
 
+  const values = editing?.preview_values ?? {}
+  const preview = { subject: fillPreview(form.subject, values, false), html: fillPreview(form.html, values, true) }
+
   return (
     <>
-      <div className="ps-intro">
-        Customize the subject and body of system emails. Leave any field blank to keep using the
-        built-in default for that field.
-      </div>
-
       <section className="et-section ps-section card">
         <div className="card-header">
           <span className="card-title">Templates</span>
@@ -103,24 +161,17 @@ export default function EmailTemplatesPanel({ showToast }: { showToast: (msg: st
             <thead>
               <tr>
                 <th>Template</th>
-                <th>Audience</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {templates.length === 0 ? (
-                <tr><td colSpan={4} className="et-empty">No templates found.</td></tr>
+                <tr><td colSpan={3} className="et-empty">No templates found.</td></tr>
               ) : templates.map(t => (
                 <tr key={t.key}>
                   <td data-label="Template">
                     <div className="et-name">{t.label}</div>
-                    <div className="et-desc">{t.description}</div>
-                  </td>
-                  <td data-label="Audience">
-                    {t.candidate_facing
-                      ? <span className="badge badge-yellow">Candidate-facing</span>
-                      : <span className="badge badge-gray">Internal</span>}
                   </td>
                   <td data-label="Status">
                     <span className={`badge ${t.is_customized ? 'badge-blue' : 'badge-gray'}`}>
@@ -146,30 +197,29 @@ export default function EmailTemplatesPanel({ showToast }: { showToast: (msg: st
 
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <div className="modal-box et-modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal-box et-modal-box" role="dialog" aria-label={`Edit, ${editing.label}`} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Edit - {editing.label}</h2>
-              <button className="modal-close" onClick={() => setEditing(null)}>✕</button>
+              <h2>Edit, {editing.label}</h2>
+              <button className="modal-close" aria-label="Close" onClick={() => setEditing(null)}>✕</button>
             </div>
 
             <div className="et-form">
               {editing.candidate_facing && (
-                <div className="et-warning">
-                  <span className="et-warning-icon">⚠</span>
-                  <div>
-                    <strong>This email goes directly to the candidate.</strong> It must NEVER include
-                    interview scores, evaluation results, recommendations, or any report content.
-                    Candidates may only ever see a link and plain instructions - scores and reports
-                    are admin-only and are never emailed to candidates, no matter what is written here.
-                  </div>
+                <div className="et-warning" role="note">
+                  <span className="et-warning-icon" aria-hidden="true">⚠</span>
+                  <span>
+                    <strong>Goes straight to the candidate.</strong> Never include scores, evaluation results or recommendations.
+                  </span>
                 </div>
               )}
 
               <div className="et-placeholders">
-                <span className="form-label">Available placeholders for this template</span>
+                <span className="form-label">Insert a placeholder</span>
                 <div className="et-tags">
                   {editing.placeholders.map(p => (
-                    <code key={p} className="et-tag">{`{{${p}}}`}</code>
+                    <button key={p} type="button" className="et-tag" onClick={() => insert(p)} title={`Insert {{${p}}}`}>
+                      {`{{${p}}}`}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -177,44 +227,79 @@ export default function EmailTemplatesPanel({ showToast }: { showToast: (msg: st
               <label className="et-field">
                 <span className="form-label">Subject</span>
                 <input
+                  ref={refs.subject}
                   className="form-input"
-                  value={form.subject_template}
-                  onChange={e => setForm(f => ({ ...f, subject_template: e.target.value }))}
-                  placeholder="Leave blank to use the built-in default subject"
+                  value={form.subject}
+                  onFocus={() => setTarget('subject')}
+                  onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
                 />
               </label>
 
-              <label className="et-field">
-                <span className="form-label">HTML Body</span>
-                <textarea
-                  className="form-input et-textarea"
-                  rows={10}
-                  value={form.html_body_template}
-                  onChange={e => setForm(f => ({ ...f, html_body_template: e.target.value }))}
-                  placeholder="Leave blank to use the built-in default HTML body"
-                />
-              </label>
+              <div className="et-field">
+                <div className="et-field-head">
+                  <span className="form-label">Message</span>
+                  <div className="et-segment" role="tablist" aria-label="Message view">
+                    {(['edit', 'preview'] as const).map(v => (
+                      <button
+                        key={v}
+                        type="button"
+                        role="tab"
+                        aria-selected={view === v}
+                        className={`et-segment-opt${view === v ? ' et-segment-on' : ''}`}
+                        onClick={() => setView(v)}
+                      >
+                        {v === 'edit' ? 'Edit' : 'Preview'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {view === 'edit' ? (
+                  <textarea
+                    ref={refs.html}
+                    className="form-input et-textarea"
+                    rows={12}
+                    aria-label="Message"
+                    value={form.html}
+                    onFocus={() => setTarget('html')}
+                    onChange={e => setForm(f => ({ ...f, html: e.target.value }))}
+                  />
+                ) : form.html.trim() ? (
+                  <div className="et-preview">
+                    <div className="et-preview-subject">{preview.subject || '-'}</div>
+                    <iframe title="Email preview" className="et-preview-frame" sandbox="" srcDoc={preview.html} />
+                  </div>
+                ) : (
+                  <div className="et-preview-empty">Nothing to preview</div>
+                )}
+              </div>
 
-              <label className="et-field">
-                <span className="form-label">Plain-text Body</span>
+              <details className="et-details">
+                <summary>Plain-text version</summary>
                 <textarea
+                  ref={refs.text}
                   className="form-input et-textarea"
-                  rows={6}
-                  value={form.text_body_template}
-                  onChange={e => setForm(f => ({ ...f, text_body_template: e.target.value }))}
-                  placeholder="Leave blank to use the built-in default plain-text body"
+                  rows={8}
+                  aria-label="Plain-text version"
+                  value={form.text}
+                  onFocus={() => setTarget('text')}
+                  onChange={e => setForm(f => ({ ...f, text: e.target.value }))}
                 />
-              </label>
+              </details>
             </div>
 
             <div className="modal-footer">
+              {canUseSample && (
+                <button className="btn btn-ghost et-sample-btn" onClick={() => sample && setForm(sample)}>
+                  Use sample
+                </button>
+              )}
               {editing.is_customized && (
                 <button className="btn btn-ghost et-reset-footer-btn" onClick={() => resetTemplate(editing)}>
                   Reset to Default
                 </button>
               )}
               <button className="btn btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
-              <button className="btn btn-primary" disabled={saving} onClick={save}>
+              <button className="btn btn-primary" disabled={saving || !dirty} onClick={save}>
                 {saving ? 'Saving…' : 'Save Template'}
               </button>
             </div>

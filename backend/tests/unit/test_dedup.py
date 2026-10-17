@@ -1,9 +1,3 @@
-"""Tests for resume duplicate detection — hr_module.
-
-Covers check_duplicate matching on file bytes (file_hash) and normalized content
-(text_hash), exclusion of failed records, and exclusion of the record being
-processed (its own pending stub).
-"""
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 

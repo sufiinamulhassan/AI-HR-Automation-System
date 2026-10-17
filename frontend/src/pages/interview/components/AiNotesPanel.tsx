@@ -16,7 +16,7 @@ export default function AiNotesPanel({ tips, captionsSupported }: Props) {
   return (
     <div className="notes-panel">
       <div className="notes-header">
-        <span className="notes-badge">private - only you can see this</span>
+        <span className="notes-badge">private, only you can see this</span>
       </div>
 
       {tips.length === 0 ? (

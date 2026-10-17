@@ -1,4 +1,3 @@
-
 export async function enterFullscreen(): Promise<boolean> {
   const el = document.documentElement
   if (!el.requestFullscreen) return false
@@ -16,7 +15,7 @@ export function isFullscreen(): boolean {
 
 export async function exitFullscreen(): Promise<void> {
   if (document.fullscreenElement && document.exitFullscreen) {
-    try { await document.exitFullscreen() } catch {}
+    try { await document.exitFullscreen() } catch { }
   }
 }
 

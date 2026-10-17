@@ -2149,7 +2149,6 @@ input[type="button"] {
   margin-right: auto;
 }
 
-
 .services-showcase {
   display: grid;
   grid-template-columns: 1fr;
@@ -2808,7 +2807,6 @@ input[type="button"] {
   .services-combo {
     margin-left: 0;
 
-
     .contact-box {
       grid-template-columns: 1fr;
     }
@@ -2949,7 +2947,6 @@ input[type="button"] {
     border-color: rgba(255, 255, 255, 0.24);
   }
 }
-
 
 .app-shell {
   display: flex;
@@ -3654,7 +3651,6 @@ input[type="button"] {
 
 .pip-icon-btn.delete { color: #bbb; }
 .pip-icon-btn.delete:hover { background: rgba(239,68,68,0.08); color: #dc2626; border-color: rgba(239,68,68,0.3); }
-
 
 .um-stats-row {
   display: grid; grid-template-columns: repeat(4, 1fr);

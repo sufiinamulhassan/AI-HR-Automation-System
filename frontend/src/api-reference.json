@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Hirely.ai v3.0 \u2014 API Reference",
+    "title": "Hirely.ai v3.0, API Reference",
     "base_url": "/api/v1 (same origin as the site)",
     "version": "3.0",
     "modules": [
@@ -15,7 +15,7 @@
         "id": "health",
         "method": "GET",
         "path": "/health",
-        "description": "Health check \u2014 returns platform status and active modules",
+        "description": "Health check, returns platform status and active modules",
         "auth_required": false,
         "payload": null,
         "response": {
@@ -45,7 +45,13 @@
           "user": {
             "email": "admin@acme.com",
             "name": "Alice Admin",
-            "role": "admin"
+            "role": "admin",
+            "company_id": "cmp_8f3a1c",
+            "company_name": "Acme Corp",
+            "client_id": "cli_2b7d90",
+            "client_name": "Acme Holdings",
+            "workspace_kind": "workspace",
+            "is_platform_admin": false
           }
         },
         "response_with_otp": {
@@ -69,7 +75,13 @@
           "user": {
             "email": "admin@acme.com",
             "name": "Alice Admin",
-            "role": "admin"
+            "role": "admin",
+            "company_id": "cmp_8f3a1c",
+            "company_name": "Acme Corp",
+            "client_id": "cli_2b7d90",
+            "client_name": "Acme Holdings",
+            "workspace_kind": "workspace",
+            "is_platform_admin": false
           }
         }
       },
@@ -77,7 +89,7 @@
         "id": "auth_token",
         "method": "POST",
         "path": "/api/v1/auth/token",
-        "description": "OAuth2 password flow \u2014 form-encoded credentials. Used by Swagger UI.",
+        "description": "OAuth2 password flow, form-encoded credentials. Used by Swagger UI.",
         "auth_required": false,
         "payload_form_encoded": {
           "username": "admin@acme.com",
@@ -102,7 +114,13 @@
           "otp_required": false,
           "is_active": true,
           "created_at": "2026-01-15T09:00:00Z",
-          "last_login_at": "2026-06-06T14:00:00Z"
+          "last_login_at": "2026-06-06T14:00:00Z",
+          "company_id": "cmp_8f3a1c",
+          "company_name": "Acme Corp",
+          "client_id": "cli_2b7d90",
+          "client_name": "Acme Holdings",
+          "workspace_kind": "workspace",
+          "is_platform_admin": false
         }
       },
       {
@@ -276,7 +294,7 @@
           "default_model": "claude-3-5-sonnet-20241022"
         },
         "response": {
-          "message": "Default model \u2192 claude-3-5-sonnet-20241022"
+          "message": "Default model → claude-3-5-sonnet-20241022"
         }
       }
     ],
@@ -301,7 +319,8 @@
           "salary_max": 250000,
           "is_remote": true,
           "company_name": "Acme Corp",
-          "model_override": null
+          "model_override": null,
+          "is_public": true
         },
         "response": {
           "doc_type": "job",
@@ -515,14 +534,14 @@
         "id": "resumes_upload",
         "method": "POST",
         "path": "/api/v1/resumes/upload",
-        "description": "Upload a single resume (PDF/DOCX). Triggers async ResumeAgent pipeline: extract \u2192 classify \u2192 embed \u2192 match_jds \u2192 store \u2192 auto_invite. Admin only.",
+        "description": "Upload a single resume (PDF, DOCX, DOC or TXT). Triggers async ResumeAgent pipeline: extract → classify → embed → match_jds → store → auto_invite. Admin only.",
         "auth_required": true,
         "roles_required": [
           "admin",
           "superadmin"
         ],
         "payload_multipart_form": {
-          "file": "<binary PDF/DOCX>",
+          "file": "<binary PDF, DOCX, DOC or TXT>",
           "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
           "model_override": null
         },
@@ -861,7 +880,7 @@
         "id": "interview_speak",
         "method": "POST",
         "path": "/api/v1/interview/session/{secure_token}/speak",
-        "description": "Synthesise one question to speech so the AI interviewer can read it aloud. Returns raw audio/mpeg bytes, not JSON \u2014 the audio is ephemeral and per-session, so there is nothing to store or cache.",
+        "description": "Synthesise one question to speech so the AI interviewer can read it aloud. Returns raw audio/mpeg bytes, not JSON. The audio is ephemeral and per-session, so there is nothing to store or cache.",
         "auth_required": false,
         "path_params": {
           "secure_token": "tok_3f8e9a1b2c4d"
@@ -906,7 +925,7 @@
         "id": "interview_flag",
         "method": "POST",
         "path": "/api/v1/interview/session/{secure_token}/flag",
-        "description": "Record one integrity event as it happens (tab switch, window blur, fullscreen exit, gaze off screen, screen share). Appended to candidate.integrity_flags as 'event@<iso-timestamp>' \u2014 never replaced.",
+        "description": "Record one integrity event as it happens (tab switch, window blur, fullscreen exit, gaze off screen, screen share). Appended to candidate.integrity_flags as 'event@<iso-timestamp>', never replaced.",
         "auth_required": false,
         "path_params": {
           "secure_token": "tok_3f8e9a1b2c4d"
@@ -1012,7 +1031,7 @@
         "response": {
           "content_type": "application/pdf",
           "content_disposition": "attachment; filename=report_tok_3f8e.pdf",
-          "note": "Binary PDF stream \u2014 download directly"
+          "note": "Binary PDF stream, download directly"
         }
       }
     ],
@@ -1094,6 +1113,1142 @@
             "interviewed": 92,
             "hired": 19
           }
+        }
+      }
+    ],
+    "platform": [
+      {
+        "id": "platform_overview",
+        "method": "GET",
+        "path": "/api/v1/platform/overview",
+        "description": "Roll-up counts across every client, for the platform console. Counts and spend only, never candidate, resume, interview or report content.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "query_params": {
+          "window": "7 | 30 | 90 days of recent activity (default 30)",
+          "month": "YYYY-MM, one calendar month in UTC. Use this or window, not both",
+          "refresh": "Set to 1 to skip the five minute cache. The answer carries computed_at, when it was worked out"
+        },
+        "response": {
+          "window_days": 30,
+          "totals": {
+            "clients": 4,
+            "companies": 6,
+            "active_companies": 5,
+            "suspended_companies": 1,
+            "users": 63,
+            "active_users": 38,
+            "ai_calls": 1204,
+            "ai_cost_usd": 9.41
+          },
+          "features": [
+            {
+              "key": "resumes",
+              "label": "Resumes",
+              "total": 900,
+              "window": 310,
+              "top_client": {
+                "client_id": "cli_2b7d90",
+                "name": "Acme Holdings",
+                "count": 140
+              }
+            }
+          ],
+          "top_clients": [
+            {
+              "client_id": "cli_2b7d90",
+              "name": "Acme Holdings",
+              "companies": 2,
+              "users": 18,
+              "active_users": 11,
+              "activity": 186,
+              "ai_cost_usd": 3.2174
+            }
+          ],
+          "growth": [
+            {
+              "month": "2026-09",
+              "clients": 3,
+              "companies": 5
+            },
+            {
+              "month": "2026-10",
+              "clients": 4,
+              "companies": 6
+            }
+          ],
+          "recent": [
+            {
+              "at": "2026-10-08T14:02:11Z",
+              "action": "client_suspend",
+              "actor_email": "owner@hirely.ai",
+              "resource_type": "client",
+              "resource_id": "cli_2b7d90",
+              "details": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "platform_usage",
+        "method": "GET",
+        "path": "/api/v1/platform/usage",
+        "description": "The usage matrix: one row per client, one count per feature inside the window, and the feature each client uses most.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "query_params": {
+          "window": "7 | 30 | 90 days (default 30)",
+          "month": "YYYY-MM, one calendar month in UTC. Use this or window, not both",
+          "refresh": "Set to 1 to skip the five minute cache. The answer carries computed_at, when it was worked out"
+        },
+        "response": {
+          "window_days": 30,
+          "features": [
+            {
+              "key": "jobs",
+              "label": "Jobs"
+            },
+            {
+              "key": "resumes",
+              "label": "Resumes"
+            }
+          ],
+          "rows": [
+            {
+              "client_id": "cli_2b7d90",
+              "name": "Acme Holdings",
+              "status": "active",
+              "counts": {
+                "jobs": 6,
+                "resumes": 140
+              },
+              "top_feature": "resumes"
+            }
+          ]
+        }
+      },
+      {
+        "id": "platform_clients_list",
+        "method": "GET",
+        "path": "/api/v1/platform/clients",
+        "description": "List clients with their roll-up counts, newest activity first.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "query_params": {
+          "search": "optional text matched against name, slug and contact",
+          "status": "active | suspended",
+          "refresh": "Set to 1 to skip the five minute cache. The answer carries computed_at, when it was worked out"
+        },
+        "response": {
+          "clients": [
+            {
+              "client_id": "cli_2b7d90",
+              "name": "Acme Holdings",
+              "slug": "acme-holdings",
+              "status": "active",
+              "plan": {
+                "name": "growth",
+                "max_companies": 3,
+                "max_users_per_company": 50,
+                "monthly_ai_budget_usd": 100
+              },
+              "companies": 2,
+              "users": 18,
+              "active_users": 11,
+              "ai_calls": 412,
+              "ai_cost_usd": 3.2174,
+              "last_active_at": "2026-10-08T14:02:11Z",
+              "top_feature": {
+                "key": "resumes",
+                "label": "Resumes",
+                "count": 140
+              },
+              "usage": {
+                "jobs": 6,
+                "resumes": 140,
+                "candidates": 31,
+                "interviews": 9
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "platform_clients_create",
+        "method": "POST",
+        "path": "/api/v1/platform/clients",
+        "description": "Create a client, and optionally its first company with that company's first administrator.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "payload": {
+          "name": "Acme Holdings",
+          "plan": {
+            "name": "growth",
+            "max_companies": 3
+          },
+          "contact_name": "Dana Reyes",
+          "contact_email": "dana@acme.com",
+          "company": {
+            "name": "Acme Corp",
+            "admin": {
+              "name": "Sam Lee",
+              "email": "sam@acme.com",
+              "password": "S3cur3P@ssword!"
+            }
+          }
+        },
+        "response": {
+          "client": {
+            "client_id": "cli_2b7d90",
+            "name": "Acme Holdings",
+            "slug": "acme-holdings",
+            "status": "active",
+            "plan": {
+              "name": "growth",
+              "max_companies": 3,
+              "max_users_per_company": 50,
+              "monthly_ai_budget_usd": 100
+            },
+            "companies": 2,
+            "users": 18,
+            "active_users": 11,
+            "ai_calls": 412,
+            "ai_cost_usd": 3.2174,
+            "last_active_at": "2026-10-08T14:02:11Z",
+            "top_feature": {
+              "key": "resumes",
+              "label": "Resumes",
+              "count": 140
+            },
+            "usage": {
+              "jobs": 6,
+              "resumes": 140,
+              "candidates": 31,
+              "interviews": 9
+            }
+          },
+          "company": {
+            "company_id": "cmp_8f3a1c",
+            "client_id": "cli_2b7d90",
+            "name": "Acme Corp",
+            "slug": "acme-corp",
+            "status": "active"
+          }
+        }
+      },
+      {
+        "id": "platform_clients_get",
+        "method": "GET",
+        "path": "/api/v1/platform/clients/{client_id}",
+        "description": "One client with its companies, feature usage (window and total), AI cost by source and daily activity.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "cli_2b7d90"
+        },
+        "response": {
+          "client": {
+            "client_id": "cli_2b7d90",
+            "name": "Acme Holdings",
+            "slug": "acme-holdings",
+            "status": "active",
+            "plan": {
+              "name": "growth",
+              "max_companies": 3,
+              "max_users_per_company": 50,
+              "monthly_ai_budget_usd": 100
+            },
+            "companies": 2,
+            "users": 18,
+            "active_users": 11,
+            "ai_calls": 412,
+            "ai_cost_usd": 3.2174,
+            "last_active_at": "2026-10-08T14:02:11Z",
+            "top_feature": {
+              "key": "resumes",
+              "label": "Resumes",
+              "count": 140
+            },
+            "usage": {
+              "jobs": 6,
+              "resumes": 140,
+              "candidates": 31,
+              "interviews": 9
+            }
+          },
+          "companies": [
+            {
+              "company_id": "cmp_8f3a1c",
+              "name": "Acme Corp",
+              "status": "active",
+              "sso_domains": [
+                "acme.com"
+              ],
+              "admins": [
+                {
+                  "email": "sam@acme.com",
+                  "name": "Sam Lee"
+                }
+              ]
+            }
+          ],
+          "features": [
+            {
+              "key": "resumes",
+              "label": "Resumes",
+              "total": 420,
+              "window": 140
+            }
+          ],
+          "cost_by_source": [
+            {
+              "source": "resume_parse",
+              "cost_usd": 2.9,
+              "calls": 380
+            }
+          ],
+          "activity": [
+            {
+              "date": "2026-10-07",
+              "count": 12
+            },
+            {
+              "date": "2026-10-08",
+              "count": 20
+            }
+          ]
+        },
+        "query_params": {
+          "window": "7 | 30 | 90 days (default 30)",
+          "month": "YYYY-MM, one calendar month in UTC. Use this or window, not both",
+          "refresh": "Set to 1 to skip the five minute cache. The answer carries computed_at, when it was worked out"
+        }
+      },
+      {
+        "id": "platform_clients_suspend",
+        "method": "POST",
+        "path": "/api/v1/platform/clients/{client_id}/suspend",
+        "description": "Suspend a client. Every company under it stops working until the client is activated again. Nothing is deleted.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "cli_2b7d90"
+        },
+        "payload": {
+          "reason": "Unpaid invoice"
+        },
+        "response": {
+          "client": {
+            "client_id": "cli_2b7d90",
+            "name": "Acme Holdings",
+            "slug": "acme-holdings",
+            "status": "suspended",
+            "plan": {
+              "name": "growth",
+              "max_companies": 3,
+              "max_users_per_company": 50,
+              "monthly_ai_budget_usd": 100
+            },
+            "companies": 2,
+            "users": 18,
+            "active_users": 11,
+            "ai_calls": 412,
+            "ai_cost_usd": 3.2174,
+            "last_active_at": "2026-10-08T14:02:11Z",
+            "top_feature": {
+              "key": "resumes",
+              "label": "Resumes",
+              "count": 140
+            },
+            "usage": {
+              "jobs": 6,
+              "resumes": 140,
+              "candidates": 31,
+              "interviews": 9
+            }
+          }
+        }
+      },
+      {
+        "id": "platform_companies_create",
+        "method": "POST",
+        "path": "/api/v1/platform/clients/{client_id}/companies",
+        "description": "Add a company to a client, with its first administrator (created with the Super Admin role).",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "cli_2b7d90"
+        },
+        "payload": {
+          "name": "Acme Labs",
+          "admin": {
+            "name": "Priya Nair",
+            "email": "priya@acme.com",
+            "password": "S3cur3P@ssword!"
+          }
+        },
+        "response": {
+          "company": {
+            "company_id": "cmp_41c9d2",
+            "client_id": "cli_2b7d90",
+            "name": "Acme Labs",
+            "slug": "acme-labs",
+            "status": "active"
+          }
+        }
+      },
+      {
+        "id": "platform_owners_list",
+        "method": "GET",
+        "path": "/api/v1/platform/owners",
+        "description": "The platform owners: people who can open the console.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "response": {
+          "owners": [
+            {
+              "email": "owner@hirely.ai",
+              "name": "Platform Owner",
+              "is_active": true,
+              "last_login_at": "2026-10-08T09:15:00Z",
+              "company_name": "Platform"
+            }
+          ]
+        }
+      },
+      {
+        "id": "platform_companies_get",
+        "method": "GET",
+        "path": "/api/v1/platform/companies/{company_id}",
+        "description": "One company: counts, usage by feature, AI cost by source and daily activity for a period, its administrators and SSO domains. Counts only.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "company_id": "cmp_8f3a1c"
+        },
+        "query_params": {
+          "window": "7 | 30 | 90 days (default 30)",
+          "month": "YYYY-MM, one calendar month in UTC. Use this or window, not both",
+          "refresh": "Set to 1 to skip the five minute cache. The answer carries computed_at, when it was worked out"
+        },
+        "response": {
+          "period": {
+            "kind": "month",
+            "from": "2026-10-01T00:00:00+00:00",
+            "to": "2026-11-01T00:00:00+00:00"
+          },
+          "company": {
+            "company_id": "cmp_8f3a1c",
+            "client_id": "cli_2b7d90",
+            "client_name": "Acme Holdings",
+            "name": "Acme Corp",
+            "slug": "acme-corp",
+            "status": "suspended",
+            "suspended_reason": "Contract ended",
+            "sso_domains": [
+              "acme.test"
+            ],
+            "admins": [
+              {
+                "email": "sam@acme.test",
+                "name": "Sam Lee"
+              }
+            ]
+          },
+          "features": [
+            {
+              "key": "resumes",
+              "label": "Resumes",
+              "total": 100,
+              "window": 40
+            }
+          ],
+          "cost_by_source": [
+            {
+              "source": "resume_parse",
+              "cost_usd": 2.2,
+              "calls": 250
+            }
+          ],
+          "activity": [
+            {
+              "date": "2026-10-08",
+              "count": 12
+            }
+          ]
+        }
+      },
+      {
+        "id": "platform_companies_delete",
+        "method": "DELETE",
+        "path": "/api/v1/platform/companies/{company_id}",
+        "description": "Offboard a suspended company for good: its vectors, every row it owns, then the company itself. The call stops at a time budget, so repeat it while complete is false.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "company_id": "cmp_8f3a1c"
+        },
+        "payload": {
+          "confirm_slug": "acme-corp"
+        },
+        "response": {
+          "complete": false,
+          "deleted": {
+            "resumes": 400,
+            "candidates": 120
+          },
+          "remaining": 2300
+        }
+      },
+      {
+        "id": "platform_clients_delete",
+        "method": "DELETE",
+        "path": "/api/v1/platform/clients/{client_id}",
+        "description": "Delete a client that has no companies left. 409 while it still has any.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "cli_2b7d90"
+        },
+        "payload": {
+          "confirm_slug": "acme-holdings"
+        }
+      },
+      {
+        "id": "platform_health",
+        "method": "GET",
+        "path": "/api/v1/platform/health",
+        "description": "MongoDB, the email transport and Pinecone, the scheduled jobs and the last 24 hours of failed email by company.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "response": {
+          "mongo": {
+            "ok": true,
+            "latency_ms": 12.4
+          },
+          "email": {
+            "configured": true,
+            "provider": "smtp"
+          },
+          "pinecone": {
+            "configured": true
+          },
+          "cron": [
+            {
+              "key": "daily_digest",
+              "last_run_at": "2026-10-11T06:00:00Z",
+              "status": "ok",
+              "detail": "Sent 12 digests",
+              "companies_total": 6,
+              "companies_served": 5,
+              "companies_failed": 1
+            }
+          ],
+          "failed_emails_24h": [
+            {
+              "company_id": "cmp_8f3a1c",
+              "company_name": "Acme Corp",
+              "client_name": "Acme Holdings",
+              "failed": 4
+            }
+          ]
+        }
+      },
+      {
+        "id": "platform_audit",
+        "method": "GET",
+        "path": "/api/v1/platform/audit",
+        "description": "Every write made in the console, newest first. Pass next_before as before to read the next older page.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "query_params": {
+          "limit": "Entries per page (default 50)",
+          "before": "ISO time; only entries older than this"
+        },
+        "response": {
+          "entries": [
+            {
+              "at": "2026-10-08T14:02:11Z",
+              "action": "client_suspend",
+              "actor_email": "owner@hirely.ai",
+              "resource_type": "client",
+              "resource_id": "cli_2b7d90",
+              "details": {
+                "name": "Acme Holdings"
+              }
+            }
+          ],
+          "next_before": "2026-10-08T14:02:11Z"
+        }
+      },
+      {
+        "id": "platform_plans",
+        "method": "GET",
+        "path": "/api/v1/platform/plans",
+        "description": "The plan tiers an owner can apply to a client, and the feature switches a plan carries. A null limit is unlimited and a missing switch is on.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "response": {
+          "default_tier": "standard",
+          "tiers": [
+            {
+              "tier": "growth",
+              "label": "Growth",
+              "plan": {
+                "name": "growth",
+                "max_companies": 3,
+                "max_users_per_company": 25,
+                "monthly_ai_budget_usd": 50,
+                "max_storage_mb": 5000,
+                "price_monthly_usd": 99,
+                "trial_ends_at": null,
+                "features": {
+                  "coding": true,
+                  "performance": true,
+                  "webhooks": true,
+                  "workflows": true,
+                  "custom_smtp": true,
+                  "oidc_sso": false,
+                  "custom_domain": false,
+                  "integrations": true
+                }
+              }
+            }
+          ],
+          "features": [
+            {
+              "key": "coding",
+              "label": "Coding assessments"
+            },
+            {
+              "key": "oidc_sso",
+              "label": "OIDC single sign-on"
+            }
+          ]
+        }
+      },
+      {
+        "id": "platform_clients_update",
+        "method": "PATCH",
+        "path": "/api/v1/platform/clients/{client_id}",
+        "description": "Change a client. The plan takes a tier, limits, a price, a trial end and feature switches; a blank limit sent as null is unlimited.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "The client to change"
+        },
+        "payload": {
+          "name": "Acme Group",
+          "plan": {
+            "tier": "standard | starter | growth | enterprise. Applied first; the other fields override it",
+            "name": "growth",
+            "max_companies": 3,
+            "max_users_per_company": 25,
+            "monthly_ai_budget_usd": 50,
+            "max_storage_mb": 5000,
+            "price_monthly_usd": 99,
+            "trial_ends_at": "2026-11-30 (a bare date means the end of that day, UTC)",
+            "features": {
+              "coding": true,
+              "oidc_sso": false
+            }
+          },
+          "contact_name": "Dana Reyes",
+          "contact_email": "dana@acme.com",
+          "notes": "Pilot"
+        },
+        "response": {
+          "client": {
+            "client_id": "cli_2b7d90",
+            "name": "Acme Group",
+            "plan": {
+              "tier": "standard | starter | growth | enterprise. Applied first; the other fields override it",
+              "name": "growth",
+              "max_companies": 3,
+              "max_users_per_company": 25,
+              "monthly_ai_budget_usd": 50,
+              "max_storage_mb": 5000,
+              "price_monthly_usd": 99,
+              "trial_ends_at": "2026-11-30 (a bare date means the end of that day, UTC)",
+              "features": {
+                "coding": true,
+                "oidc_sso": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "platform_clients_subscription",
+        "method": "PATCH",
+        "path": "/api/v1/platform/clients/{client_id}/subscription",
+        "description": "Mark a client trialing, active, past due or canceled by hand (manual billing). A workspace is blocked once its trial has ended or its subscription is canceled.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "The client to change"
+        },
+        "payload": {
+          "status": "none | trialing | active | past_due | canceled",
+          "trial_ends_at": "2026-11-30",
+          "provider": "manual | stripe"
+        },
+        "response": {
+          "client": {
+            "client_id": "cli_2b7d90",
+            "subscription": {
+              "status": "trialing",
+              "provider": "manual",
+              "customer_id": null,
+              "subscription_id": null,
+              "current_period_end": null,
+              "cancel_at_period_end": false
+            }
+          }
+        }
+      },
+      {
+        "id": "platform_clients_billing_checkout",
+        "method": "POST",
+        "path": "/api/v1/platform/clients/{client_id}/billing/checkout",
+        "description": "Start a Stripe Checkout session for a client. Answers 503 \"Stripe is not configured.\" until the Stripe keys are set, and 422 when the tier has no price.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "The client to bill"
+        },
+        "payload": {
+          "tier": "growth (optional)"
+        },
+        "response": {
+          "url": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3"
+        }
+      },
+      {
+        "id": "platform_clients_billing_portal",
+        "method": "POST",
+        "path": "/api/v1/platform/clients/{client_id}/billing/portal",
+        "description": "Open the Stripe billing portal for a client. Answers 409 before any checkout, and 503 \"Stripe is not configured.\" until the Stripe keys are set.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "client_id": "The client whose portal to open"
+        },
+        "response": {
+          "url": "https://billing.stripe.com/p/session/bps_a1b2c3"
+        }
+      },
+      {
+        "id": "platform_billing_statement",
+        "method": "GET",
+        "path": "/api/v1/platform/billing/statement",
+        "description": "The billing statement of one calendar month (UTC), per company: seats at month end, AI cost, emails sent and storage, with totals per client and overall. format=csv answers a file, statement-YYYY-MM.csv.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "query_params": {
+          "month": "YYYY-MM",
+          "client_id": "optional, one client only",
+          "format": "json (default) | csv"
+        },
+        "response": {
+          "month": "2026-10",
+          "period": {
+            "kind": "month",
+            "from": "2026-10-01T00:00:00Z",
+            "to": "2026-11-01T00:00:00Z"
+          },
+          "generated_at": "2026-11-02T08:00:00Z",
+          "clients": [
+            {
+              "client_id": "cli_2b7d90",
+              "client_name": "Acme Holdings",
+              "plan": {
+                "name": "growth",
+                "price_monthly_usd": 99
+              },
+              "subscription_status": "active",
+              "lines": [
+                {
+                  "company_id": "cmp_8f3a1c",
+                  "company_name": "Acme Corp",
+                  "status": "active",
+                  "seats": 12,
+                  "ai_cost_usd": 2.5,
+                  "ai_calls": 300,
+                  "emails_sent": 50,
+                  "storage_mb": 120.5
+                }
+              ],
+              "totals": {
+                "companies": 1,
+                "seats": 12,
+                "ai_cost_usd": 2.5,
+                "ai_calls": 300,
+                "emails_sent": 50,
+                "storage_mb": 120.5
+              }
+            }
+          ],
+          "totals": {
+            "companies": 1,
+            "seats": 12,
+            "ai_cost_usd": 2.5,
+            "ai_calls": 300,
+            "emails_sent": 50,
+            "storage_mb": 120.5,
+            "price_monthly_usd": 99
+          }
+        }
+      },
+      {
+        "id": "platform_companies_domains_get",
+        "method": "GET",
+        "path": "/api/v1/platform/companies/{company_id}/domains",
+        "description": "The custom domains of a company. plan_allows is false when its plan does not include custom domains.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "company_id": "The company to read"
+        },
+        "response": {
+          "company_id": "cmp_8f3a1c",
+          "domains": [
+            "careers.acme.com"
+          ],
+          "plan_allows": true
+        }
+      },
+      {
+        "id": "platform_companies_domains_put",
+        "method": "PUT",
+        "path": "/api/v1/platform/companies/{company_id}/domains",
+        "description": "Replace the custom domains of a company, up to five lower-case hostnames. Answers 402 when the plan has no custom domains, 409 when a hostname belongs to another company and 400 for one that is not a hostname.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "company_id": "The company to change"
+        },
+        "payload": {
+          "domains": [
+            "careers.acme.com"
+          ]
+        },
+        "response": {
+          "company_id": "cmp_8f3a1c",
+          "domains": [
+            "careers.acme.com"
+          ]
+        }
+      },
+      {
+        "id": "platform_contact_requests_list",
+        "method": "GET",
+        "path": "/api/v1/platform/contact-requests",
+        "description": "Messages sent from the public contact page, newest first, with a count per status. Filter by status, topic or a search term over name, email, company and message. Paged with page and limit (at most 100).",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "query_params": {
+          "status": "new | in_progress | done | spam",
+          "topic": "demo | sales | support | privacy | security | other",
+          "q": "text to search for",
+          "page": 1,
+          "limit": 20
+        },
+        "response": {
+          "items": [
+            {
+              "request_id": "9a8b7c6d-1234-5678-abcd-ef0123456789",
+              "name": "Sara Khan",
+              "email": "sara@example.com",
+              "company": "Acme Corp",
+              "topic": "demo",
+              "message": "We would like to see the platform with our recruiting team.",
+              "status": "new",
+              "note": "",
+              "source": "website",
+              "created_at": "2026-10-15T09:00:00+00:00",
+              "updated_at": "2026-10-15T09:00:00+00:00",
+              "handled_by": null
+            }
+          ],
+          "total": 1,
+          "page": 1,
+          "limit": 20,
+          "pages": 1,
+          "counts": {
+            "new": 1,
+            "in_progress": 0,
+            "done": 0,
+            "spam": 0
+          }
+        }
+      },
+      {
+        "id": "platform_contact_requests_update",
+        "method": "PATCH",
+        "path": "/api/v1/platform/contact-requests/{request_id}",
+        "description": "Triage a contact message: set its status, add an internal note, or both. Recorded in the platform audit log.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "request_id": "9a8b7c6d-1234-5678-abcd-ef0123456789"
+        },
+        "payload": {
+          "status": "in_progress",
+          "note": "Called on Monday (at most 1000 characters)."
+        },
+        "response": {
+          "request_id": "9a8b7c6d-1234-5678-abcd-ef0123456789",
+          "status": "in_progress",
+          "handled_by": "owner@hirely.ai"
+        }
+      },
+      {
+        "id": "platform_contact_requests_delete",
+        "method": "DELETE",
+        "path": "/api/v1/platform/contact-requests/{request_id}",
+        "description": "Delete a contact message, for example to honour a privacy request. Recorded in the platform audit log.",
+        "auth_required": true,
+        "roles_required": [
+          "platform owner"
+        ],
+        "path_params": {
+          "request_id": "9a8b7c6d-1234-5678-abcd-ef0123456789"
+        },
+        "response": {
+          "status": "deleted"
+        }
+      }
+    ],
+    "careers": [
+      {
+        "id": "careers_list",
+        "method": "GET",
+        "path": "/api/v1/careers/jobs",
+        "description": "Public. Every open job that its company shows on the careers page, across all active companies, newest first. Filter with q, company (slug), location, type, remote. Paged with page and limit (at most 50).",
+        "auth_required": false,
+        "query_params": {
+          "q": "backend",
+          "company": "acme",
+          "location": "Lahore",
+          "type": "full-time",
+          "remote": false,
+          "page": 1,
+          "limit": 12
+        },
+        "response": {
+          "jobs": [
+            {
+              "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+              "title": "Senior Backend Engineer",
+              "summary": "Design scalable APIs and mentor junior developers.",
+              "location": "Lahore, Pakistan",
+              "employment_type": "full-time",
+              "is_remote": true,
+              "skills": [
+                "Python",
+                "FastAPI",
+                "MongoDB"
+              ],
+              "posted_at": "2026-10-01T09:00:00+00:00",
+              "deadline_at": "2026-11-01T09:00:00+00:00",
+              "company": {
+                "slug": "acme",
+                "name": "Acme Corp",
+                "logo_url": "/api/v1/branding/logo/cmp_acme?v=1a2b3c"
+              }
+            }
+          ],
+          "total": 1,
+          "page": 1,
+          "limit": 12,
+          "pages": 1
+        }
+      },
+      {
+        "id": "careers_filters",
+        "method": "GET",
+        "path": "/api/v1/careers/filters",
+        "description": "Public. The companies, locations and employment types that currently have open public jobs, with counts, for the careers page filters.",
+        "auth_required": false,
+        "response": {
+          "companies": [
+            {
+              "slug": "acme",
+              "name": "Acme Corp",
+              "logo_url": null,
+              "open_jobs": 4
+            }
+          ],
+          "locations": [
+            "Lahore",
+            "Remote"
+          ],
+          "employment_types": [
+            "full-time",
+            "contract"
+          ],
+          "remote_jobs": 1,
+          "total_open": 4
+        }
+      },
+      {
+        "id": "careers_job",
+        "method": "GET",
+        "path": "/api/v1/careers/jobs/{job_id}",
+        "description": "Public. One open public job with its full description and its company's public details. 404 when the job is closed, hidden or unknown.",
+        "auth_required": false,
+        "response": {
+          "job_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+          "title": "Senior Backend Engineer",
+          "summary": "Design scalable APIs and mentor junior developers.",
+          "location": "Lahore, Pakistan",
+          "employment_type": "full-time",
+          "is_remote": true,
+          "skills": [
+            "Python",
+            "FastAPI",
+            "MongoDB"
+          ],
+          "posted_at": "2026-10-01T09:00:00+00:00",
+          "deadline_at": "2026-11-01T09:00:00+00:00",
+          "company": {
+            "slug": "acme",
+            "name": "Acme Corp",
+            "logo_url": "/api/v1/branding/logo/cmp_acme?v=1a2b3c",
+            "website": "https://acme.test",
+            "industry": "Software",
+            "privacy_url": "https://acme.test/privacy",
+            "terms_url": "https://acme.test/terms"
+          },
+          "description": "We are looking for a Senior Backend Engineer...",
+          "job_grade": null,
+          "experience_level": "senior",
+          "industry": "software",
+          "accepting": true
+        }
+      },
+      {
+        "id": "careers_apply",
+        "method": "POST",
+        "path": "/api/v1/careers/jobs/{job_id}/apply",
+        "description": "Public. A candidate applies by uploading a resume (PDF, DOCX, DOC or TXT, up to 4 MB). The application is stored in the company that owns the job and the candidate joins that job's pipeline. 409 when the same email already applied to this job.",
+        "auth_required": false,
+        "payload_multipart_form": {
+          "name": "Sara Khan",
+          "email": "sara@example.com",
+          "phone": "+92 300 1234567",
+          "cover_note": "Optional note, up to 2000 characters.",
+          "consent": "true",
+          "website": "Leave empty (spam trap).",
+          "resume": "(file)"
+        },
+        "response": {
+          "status": "received",
+          "application_id": "9a8b7c6d-1234-5678-abcd-ef0123456789",
+          "reference": "9A8B7C6D",
+          "job_title": "Senior Backend Engineer",
+          "company_name": "Acme Corp"
+        }
+      }
+    ],
+    "site": [
+      {
+        "id": "site_plans",
+        "method": "GET",
+        "path": "/api/v1/site/plans",
+        "description": "Public. The plans a customer can buy, read from the plan catalogue, for the pricing page. Each plan has its monthly price, limits and a flag per feature. Cached for five minutes.",
+        "auth_required": false,
+        "response": {
+          "plans": [
+            {
+              "tier": "starter",
+              "label": "Starter",
+              "price_monthly_usd": 49.0,
+              "max_companies": 1,
+              "max_users_per_company": 5,
+              "monthly_ai_budget_usd": 25.0,
+              "max_storage_mb": 1024,
+              "features": [
+                {
+                  "key": "coding",
+                  "label": "Coding assessments",
+                  "included": false
+                },
+                {
+                  "key": "performance",
+                  "label": "Performance reviews",
+                  "included": false
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "site_contact",
+        "method": "POST",
+        "path": "/api/v1/site/contact",
+        "description": "Public. A message from the contact page: a demo request, a pricing question, support, a privacy request or a security report. Stored for the platform team. Limited to five messages an hour per address. The same message sent twice within ten minutes is stored once. 400 with a plain message when a field is invalid.",
+        "auth_required": false,
+        "payload": {
+          "name": "Sara Khan",
+          "email": "sara@example.com",
+          "company": "Acme Corp (optional)",
+          "topic": "demo | sales | support | privacy | security | other",
+          "message": "Between 10 and 4000 characters.",
+          "consent": true,
+          "website": "Leave empty (spam trap)."
+        },
+        "response": {
+          "status": "received",
+          "reference": "9A8B7C6D"
         }
       }
     ]

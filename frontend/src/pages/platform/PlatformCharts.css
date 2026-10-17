@@ -1,0 +1,61 @@
+.pco-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; font-size: .72rem; font-weight: 700; color: var(--gray-600); }
+.pco-legend-item { display: inline-flex; align-items: center; gap: .4rem; }
+.pco-swatch { display: inline-block; width: 18px; height: 8px; border-radius: 2px; }
+.pco-swatch-window { background: var(--primary); }
+.pco-swatch-total {
+  background: repeating-linear-gradient(135deg, var(--gray-300) 0 3px, transparent 3px 6px);
+  border: 1px solid var(--gray-300);
+}
+.pco-swatch-line-clients {
+  height: 0; border-top: 3px dashed var(--secondary); border-radius: 0;
+}
+.pco-swatch-line-companies {
+  height: 0; border-top: 3px solid var(--primary); border-radius: 0;
+}
+
+.pco-fbar-list { list-style: none; display: flex; flex-direction: column; gap: .55rem; }
+.pco-fbar {
+  display: grid; grid-template-columns: 9rem minmax(0, 1fr) 7rem; align-items: center; gap: .75rem;
+}
+.pco-fbar-top-col { grid-template-columns: 9rem minmax(0, 1fr) 7rem minmax(0, 11rem); }
+.pco-fbar-label { font-size: .8rem; font-weight: 600; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pco-fbar-bars { position: relative; height: 14px; }
+.pco-fbar-total, .pco-fbar-window { position: absolute; left: 0; border-radius: 4px; }
+.pco-fbar-total {
+  top: 0; height: 14px;
+  background: repeating-linear-gradient(135deg, var(--gray-300) 0 3px, transparent 3px 6px);
+  border: 1px solid var(--gray-300);
+}
+.pco-fbar-window { top: 3px; height: 8px; background: var(--primary); }
+.pco-fbar-nums { font-size: .78rem; color: var(--gray-500); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pco-fbar-nums b { color: var(--gray-900); }
+.pco-fbar-client { font-size: .76rem; display: flex; align-items: baseline; gap: .4rem; min-width: 0; color: var(--gray-500); }
+.pco-fbar-client a { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pco-fbar-client-count { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--gray-600); }
+
+.pco-chart { margin: 0; }
+.pco-chart-svg { display: block; width: 100%; height: auto; }
+.pco-axis-text { font-size: 11px; fill: var(--gray-500); font-family: var(--font); }
+.pco-grid-line { stroke: var(--gray-200); stroke-width: 1; }
+.pco-line { stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.pco-line-clients { stroke: var(--secondary); stroke-dasharray: 7 5; }
+.pco-line-companies { stroke: var(--primary); }
+.pco-dot-companies { fill: var(--white); stroke: var(--primary); stroke-width: 2.5; }
+.pco-dot-clients { fill: var(--secondary); }
+.pco-day-bar { fill: var(--primary); }
+.pco-day-bar:hover { fill: var(--secondary); }
+
+.pco-cost-list { list-style: none; display: flex; flex-direction: column; gap: .55rem; }
+.pco-cost-row { display: grid; grid-template-columns: 9rem minmax(0, 1fr) 8rem; align-items: center; gap: .75rem; }
+.pco-cost-source { font-size: .8rem; font-weight: 600; color: var(--gray-700); text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pco-cost-track { height: 9px; background: var(--gray-50); border-radius: 6px; overflow: hidden; border: 1px solid var(--gray-200); }
+.pco-cost-fill { height: 100%; background: var(--primary-dark); border-radius: 6px; }
+.pco-cost-nums { display: flex; flex-direction: column; align-items: flex-end; font-size: .78rem; font-variant-numeric: tabular-nums; }
+.pco-cost-nums b { color: var(--gray-900); }
+.pco-cost-calls { font-size: .68rem; color: var(--gray-500); }
+
+@media (max-width: 760px) {
+  .pco-fbar, .pco-fbar-top-col { grid-template-columns: 7rem minmax(0, 1fr) 5.5rem; }
+  .pco-fbar-client { grid-column: 1 / -1; padding-left: 7.75rem; }
+  .pco-cost-row { grid-template-columns: 6rem minmax(0, 1fr) 6.5rem; }
+}

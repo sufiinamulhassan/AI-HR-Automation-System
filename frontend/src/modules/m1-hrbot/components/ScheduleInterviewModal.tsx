@@ -9,7 +9,6 @@ interface Props {
   onClose: () => void
 }
 
-
 function toIsoFromLocalInput(value: string): string {
   return value.length === 16 ? `${value}:00` : value
 }
@@ -86,7 +85,7 @@ export default function ScheduleInterviewModal({ candidateId, candidateName, onC
       if (meeting?.join_url) setJoinUrl(meeting.join_url)
       if (err) {
         setMeetingError(err)
-        showToast('Schedule saved - the meeting could not be created')
+        showToast('Schedule saved. The meeting could not be created')
       } else {
         showToast(meeting ? 'Schedule saved and meeting created' : 'Interview schedule saved')
       }
@@ -137,7 +136,7 @@ export default function ScheduleInterviewModal({ candidateId, candidateName, onC
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box sim-modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Schedule Interview{candidateName ? ` - ${candidateName}` : ''}</h2>
+          <h2>Schedule Interview{candidateName ? `, ${candidateName}` : ''}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -227,7 +226,7 @@ export default function ScheduleInterviewModal({ candidateId, candidateName, onC
                     {icsLoading ? 'Preparing…' : '⬇ Download Calendar Invite (.ics)'}
                   </button>
                   <p className="sim-hint">
-                    Imports directly into Google Calendar, Outlook, or Apple Calendar -
+                    Imports directly into Google Calendar, Outlook, or Apple Calendar,
                     no account connection required.
                   </p>
                 </div>

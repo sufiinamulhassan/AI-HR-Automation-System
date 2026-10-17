@@ -1,19 +1,3 @@
-"""Candidate identity resolution — hr_module (MVP2 §2.5).
-
-Pure normalization helpers plus a soft cross-job duplicate-signal lookup.
-
-This is deliberately NOT a hard dedup rule: a real person legitimately can,
-and often should, apply to more than one job. The existing exact
-`(job_id, email)` 409 check in `routes/candidates.py::create_candidate`
-remains the only hard block. Everything here is presented to the recruiter
-as a non-blocking warning (`possible_duplicates`) plus a read-only cross-job
-`timeline` view — never a rejection.
-
-No new dependencies: normalization is intentionally naive regex/string work
-(no `phonenumbers`/`libphonenumber`), matching the project's no-new-pip-deps
-rule. This trades some recall (e.g. "07911 000111" won't match
-"+44 7911 000111") for zero new dependencies.
-"""
 import re
 from urllib.parse import parse_qsl, urlencode, urlparse
 
@@ -25,11 +9,6 @@ _LINKEDIN_TRACKING_PARAMS = {
 
 
 def normalize_phone(phone: str | None) -> str | None:
-    """Strip everything but digits. `None`/empty/whitespace-only -> `None`.
-
-    Deliberately naive — this is a soft duplicate SIGNAL, not a validated
-    phone-number parser. No country-code canonicalization.
-    """
     if not phone:
         return None
     digits = re.sub(r"\D", "", phone)
@@ -37,13 +16,6 @@ def normalize_phone(phone: str | None) -> str | None:
 
 
 def normalize_linkedin(url: str | None) -> str | None:
-    """Lowercase, drop the scheme/`www.`, strip tracking query params, and
-    strip a trailing slash.
-
-    ``"https://www.LinkedIn.com/in/jane-doe/?utm_source=share"`` and
-    ``"linkedin.com/in/jane-doe"`` normalize to the same value
-    (``"linkedin.com/in/jane-doe"``).
-    """
     if not url:
         return None
     url = url.strip()
@@ -70,14 +42,6 @@ def normalize_linkedin(url: str | None) -> str | None:
 
 
 async def hydrate_job_titles(db, job_ids: list[str]) -> dict:
-    """Resolve a list of job_ids to their titles in a single query.
-
-    Shared by `routes/candidates.py`'s `get_candidate_timeline` and
-    `services/hr_module/candidate_profile_service.py`'s profile hydration so
-    both cross-job views build their `job_id -> job_title` lookup the same
-    way instead of each re-implementing it. Never raises: an empty/None
-    `job_ids` list short-circuits to `{}` without touching the DB.
-    """
     jobs_by_id: dict = {}
     if not job_ids:
         return jobs_by_id
@@ -95,17 +59,6 @@ async def find_possible_duplicates(
     *,
     exclude_job_id: str | None = None,
 ) -> list[dict]:
-    """Soft-duplicate lookup across *other* jobs.
-
-    Exact same-job-plus-email duplicates are already a hard 409 in
-    `create_candidate` — this looks for any OTHER candidate document (a
-    different `job_id`) whose email matches, or whose normalized phone or
-    normalized LinkedIn URL matches. Never raises, never blocks.
-
-    Returns lightweight match summaries:
-    ``{"candidate_id", "job_id", "name", "matched_on"}`` where `matched_on`
-    is a list of one or more of ``"email"``, ``"phone"``, ``"linkedin"``.
-    """
     if db is None:
         return []
 

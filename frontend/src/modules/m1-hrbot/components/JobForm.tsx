@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { jobsApi } from '../../../lib/api'
-import { useModelStore } from '../../../store/model.store'
+import { useEffect, useState } from 'react'
+import { jobGradesApi, jobsApi } from '../../../lib/api'
+import { isJobPublic } from './careersVisibility'
 import './JobForm.css'
 
 interface Props {
@@ -10,21 +10,38 @@ interface Props {
 }
 
 export default function JobForm({ job, onSave, onClose }: Props) {
-  const activeModel = useModelStore(s => s.activeModel)
   const [form, setForm] = useState({
     title: (job?.title as string) || '',
     description: (job?.description as string) || '',
     difficulty: (job?.difficulty as string) || 'mid',
     employment_type: (job?.employment_type as string) || 'full-time',
     location: (job?.location as string) || '',
+    job_grade: (job?.job_grade as string) || '',
     company_name: (job?.company_name as string) || '',
     salary_min: (job?.salary_min as number) || '',
     salary_max: (job?.salary_max as number) || '',
     is_remote: (job?.is_remote as boolean) || false,
     deadline_days: (job?.deadline_days as number) ?? 30,
+    is_public: job ? isJobPublic(job) : true,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [gradeOptions, setGradeOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    jobGradesApi.list()
+      .then(r => {
+        if (cancelled) return
+        const raw = (r.data?.job_grades ?? r.data?.grades ?? []) as unknown[]
+        const names = raw
+          .map(g => (typeof g === 'string' ? g : (g as { name?: string } | null)?.name))
+          .filter((n): n is string => Boolean(n))
+        setGradeOptions(names)
+      })
+      .catch(() => { })
+    return () => { cancelled = true }
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -35,7 +52,6 @@ export default function JobForm({ job, onSave, onClose }: Props) {
         salary_min: form.salary_min === '' ? null : form.salary_min,
         salary_max: form.salary_max === '' ? null : form.salary_max,
         deadline_days: form.deadline_days === ('' as unknown) ? null : Number(form.deadline_days),
-        model_override: activeModel
       }
       if (job?.job_id) await jobsApi.update(job.job_id as string, payload)
       else await jobsApi.create(payload)
@@ -86,6 +102,19 @@ export default function JobForm({ job, onSave, onClose }: Props) {
             <label>Location
               <input value={form.location} onChange={e => set('location', e.target.value)} placeholder="London, UK" />
             </label>
+            <label>Job Grade
+              {gradeOptions.length > 0 ? (
+                <select value={form.job_grade} onChange={e => set('job_grade', e.target.value)}>
+                  <option value="">None</option>
+                  {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
+                  {form.job_grade && !gradeOptions.includes(form.job_grade) && (
+                    <option value={form.job_grade}>{form.job_grade} (custom)</option>
+                  )}
+                </select>
+              ) : (
+                <input value={form.job_grade} onChange={e => set('job_grade', e.target.value)} placeholder="e.g. Grade 5, AVP, VP" />
+              )}
+            </label>
           </div>
 
           <div className="form-row">
@@ -108,6 +137,14 @@ export default function JobForm({ job, onSave, onClose }: Props) {
                 placeholder="30" />
               <small className="form-hint">Application window in days. After it ends, no new candidates are matched. 0 = no deadline.</small>
             </label>
+          </div>
+
+          <div className="careers-visibility">
+            <label className="checkbox-label">
+              <input type="checkbox" checked={form.is_public} onChange={e => set('is_public', e.target.checked)} />
+              Show on the careers page
+            </label>
+            <small className="form-hint">Anyone can see this job on the public careers page and apply with a résumé. Turn it off to keep the job internal.</small>
           </div>
 
           <div className="form-footer">

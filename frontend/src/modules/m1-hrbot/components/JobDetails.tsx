@@ -1,60 +1,19 @@
+import { useEffect, useRef, useState } from 'react'
+import { parseDescription } from '../../../lib/jobDescription'
 import DeadlineBar from './DeadlineBar'
+import { careersJobUrl, isJobPublic } from './careersVisibility'
 import './JobDetails.css'
 
 interface Props {
   job: Record<string, unknown>
 }
 
-const BULLET_RE = /^\s*[---•*·]\s+/
-
 const SOURCE_LABELS: Record<string, string> = {
-  manual: 'Manual', linkedin: 'LinkedIn', naukri: 'Naukri',
+  manual: 'Manual', linkedin: 'LinkedIn',
   remotive: 'Remotive', arbeitnow: 'Arbeitnow',
   remoteok: 'RemoteOK', themuse: 'The Muse', jobicy: 'Jobicy',
 }
 function sourceLabel(s: string) { return SOURCE_LABELS[s] || s.charAt(0).toUpperCase() + s.slice(1) }
-
-type Block =
-  | { type: 'heading'; text: string }
-  | { type: 'list'; items: string[] }
-  | { type: 'para'; text: string }
-
-function parseDescription(raw: string): Block[] {
-  const lines = raw.split(/\r?\n/)
-  const blocks: Block[] = []
-  let list: string[] | null = null
-
-  const flushList = () => {
-    if (list && list.length) blocks.push({ type: 'list', items: list })
-    list = null
-  }
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim()
-    if (!line) { flushList(); continue }
-
-    if (line.startsWith('## ')) {
-      flushList()
-      blocks.push({ type: 'heading', text: line.slice(3).trim() })
-      continue
-    }
-
-    if (BULLET_RE.test(line)) {
-      const item = line.replace(BULLET_RE, '').trim()
-      if (item) (list ??= []).push(item)
-      continue
-    }
-
-    flushList()
-
-    const noColon = line.replace(/:$/, '')
-    const isColonHead = /:$/.test(line) && line.length <= 70 && !/[.!?]/.test(noColon)
-    const isCapsHead = line.length <= 60 && /[A-Za-z]/.test(line) && /^[A-Z0-9][A-Z0-9 &/'’()-]+$/.test(line)
-    blocks.push(isColonHead || isCapsHead ? { type: 'heading', text: noColon } : { type: 'para', text: line })
-  }
-  flushList()
-  return blocks
-}
 
 function FormattedDescription({ text }: { text: string }) {
   const blocks = parseDescription(text)
@@ -70,6 +29,65 @@ function FormattedDescription({ text }: { text: string }) {
           )
         return <p key={i} className="jd-desc-para">{b.text}</p>
       })}
+    </div>
+  )
+}
+
+type CopyState = 'idle' | 'copied' | 'failed'
+
+function CareersBlock({ job }: Props) {
+  const isPublic = isJobPublic(job)
+  const url = careersJobUrl(String(job.job_id ?? ''))
+  const [copy, setCopy] = useState<CopyState>('idle')
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (copy === 'idle') return
+    const id = window.setTimeout(() => setCopy('idle'), 2000)
+    return () => window.clearTimeout(id)
+  }, [copy])
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopy('copied')
+    } catch {
+      inputRef.current?.select()
+      setCopy('failed')
+    }
+  }
+
+  return (
+    <div className="jd-section">
+      <h4 className="jd-section-title">Careers Page</h4>
+      <div className="jd-careers-status">
+        <span className={`jd-careers-pill ${isPublic ? 'is-public' : 'is-private'}`}>
+          {isPublic ? 'Public' : 'Not public'}
+        </span>
+        <span className="jd-careers-note">
+          {isPublic
+            ? 'Visible on the careers page. Candidates can apply with a résumé.'
+            : 'Hidden from the careers page. Edit the job and turn on Show on the careers page to publish it.'}
+        </span>
+      </div>
+      {isPublic && (
+        <div className="jd-careers-link">
+          <input
+            ref={inputRef}
+            className="jd-careers-url"
+            type="text"
+            readOnly
+            value={url}
+            aria-label="Public job link"
+            onFocus={e => e.currentTarget.select()}
+          />
+          <button type="button" className="jd-careers-btn" onClick={copyLink}>Copy</button>
+          <a className="jd-careers-btn jd-careers-open" href={url} target="_blank" rel="noreferrer">Open page</a>
+          <span className="jd-careers-copied" role="status">
+            {copy === 'copied' ? 'Copied' : copy === 'failed' ? 'Press Ctrl+C to copy' : ''}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -99,13 +117,14 @@ export default function JobDetails({ job }: Props) {
           {!!job.company_name && <span className="jd-badge">{job.company_name as string}</span>}
           {!!job.employment_type && <span className="jd-badge">{(job.employment_type as string).replace('-', '‑')}</span>}
           {!!job.difficulty && <span className="jd-badge jd-badge-accent">{job.difficulty as string}</span>}
+          {!!job.job_grade && <span className="jd-badge">{job.job_grade as string}</span>}
           {!!job.is_remote && <span className="jd-badge jd-badge-green">Remote</span>}
         </div>
         <div className="jd-meta">
           {!!job.location && (
             <span className="jd-meta-item">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="none"/>
               </svg>
               {job.location as string}
             </span>
@@ -117,7 +136,7 @@ export default function JobDetails({ job }: Props) {
                 <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
               </svg>
               {job.salary_min ? (job.salary_min as number).toLocaleString() : '-'}
-              {' - '}
+              {' – '}
               {job.salary_max ? (job.salary_max as number).toLocaleString() : '-'}
             </span>
           )}
@@ -129,6 +148,8 @@ export default function JobDetails({ job }: Props) {
           <h4 className="jd-section-title">Application Deadline</h4>
           <DeadlineBar createdAt={job.created_at as string} deadlineAt={(job.deadline_at as string) ?? null} />
         </div>
+
+        <CareersBlock job={job} />
 
         <div className="jd-section">
           <h4 className="jd-section-title">Description</h4>
@@ -190,7 +211,7 @@ export default function JobDetails({ job }: Props) {
               </div>
             </>
           ) : (
-            <p className="jd-pending">AI is parsing criteria - check back shortly after creating the job.</p>
+            <p className="jd-pending">AI is parsing criteria. Check back shortly after creating the job.</p>
           )}
         </div>
 

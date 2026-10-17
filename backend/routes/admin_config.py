@@ -1,22 +1,3 @@
-"""Admin configuration route — Departments and Designations CRUD.
-
-The first slice of MVP2's Admin Configuration area (company/department/
-designation entities) — kept intentionally minimal (name + description,
-no company/branch scoping) so it doesn't overreach into the RBAC/multi-tenant
-work that's scoped separately.
-
-REFERENTIAL INTEGRITY: a department is pointed at from three places, and by two
-different keys — designations store the department NAME, while jobs and users
-store the department_id. Both a delete and a rename used to be silent
-data corruption: deleting left designations naming a department that no longer
-existed and, worse, left scoped users pointing at a dangling department_id,
-which services.hr_module.permissions.get_department_scope turns into "sees
-almost nothing" rather than an error anyone would notice. So:
-  - GET /departments reports a `usage` breakdown per department;
-  - DELETE refuses with 409 while a department is referenced (?force=true
-    overrides, detaching designations as it goes);
-  - PATCH cascades a rename to the designations that referenced the old name.
-"""
 import asyncio
 import uuid
 from datetime import datetime, timezone
@@ -24,8 +5,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pymongo.errors import DuplicateKeyError
 
-from shared.auth import get_current_user, require_admin
-from shared.schemas import DepartmentCreate, DepartmentUpdate, DesignationCreate, DesignationUpdate
+from shared.auth import get_current_user, require_admin, require_permission
+from shared.schemas import (
+    DepartmentCreate, DepartmentUpdate, DesignationCreate, DesignationUpdate,
+    JobGradeCreate, JobGradeUpdate,
+)
 from config.database import get_db
 from services.hr_module.audit_service import log_audit_event
 
@@ -39,7 +23,6 @@ _ID_REFERENCES = (
 
 
 async def _count_by(db, collection: str, field: str) -> dict[str, int]:
-    """{field value: count} for every non-null value of `field`."""
     cursor = db[collection].aggregate([
         {"$match": {field: {"$ne": None}}},
         {"$group": {"_id": f"${field}", "n": {"$sum": 1}}},
@@ -48,12 +31,6 @@ async def _count_by(db, collection: str, field: str) -> dict[str, int]:
 
 
 async def _usage_index(db) -> tuple[dict[str, int], dict[str, dict[str, int]]]:
-    """Reference counts for ALL departments in a fixed number of queries.
-
-    Returns (by_name, by_id) — by_name counts designations, by_id counts the
-    department_id-keyed collections. Four aggregations regardless of how many
-    departments exist, rather than a per-department fan-out.
-    """
     by_name = await _count_by(db, "designations", "department")
     by_id: dict[str, dict[str, int]] = {}
     for key, collection, field in _ID_REFERENCES:
@@ -78,14 +55,6 @@ def _usage_summary(usage: dict[str, int]) -> str:
 
 @router.get("/departments")
 async def list_departments(user: dict = Depends(get_current_user)):
-    """For an admin, each department carries a `usage` breakdown so the caller
-    can see what a delete would break before attempting one (additive field —
-    callers that only read name/description are unaffected).
-
-    Usage is admin-only. This endpoint stays readable by any authenticated user
-    (job/candidate forms populate their department picker from it), and headcount
-    per department is not something every user needs to be handed.
-    """
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -98,7 +67,11 @@ async def list_departments(user: dict = Depends(get_current_user)):
 
 
 @router.post("/departments")
-async def create_department(body: DepartmentCreate, user: dict = Depends(require_admin)):
+async def create_department(
+    body: DepartmentCreate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("departments:manage")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -124,7 +97,12 @@ async def create_department(body: DepartmentCreate, user: dict = Depends(require
 
 
 @router.patch("/departments/{department_id}")
-async def update_department(department_id: str, body: DepartmentUpdate, user: dict = Depends(require_admin)):
+async def update_department(
+    department_id: str,
+    body: DepartmentUpdate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("departments:manage")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -163,14 +141,8 @@ async def delete_department(
     department_id: str,
     force: bool = False,
     user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("departments:manage")),
 ):
-    """Refuses (409) while anything still references the department.
-
-    `force=true` deletes anyway and detaches the designations that named it —
-    the id-keyed references (jobs, users) are left as they are, since
-    rewriting them is a data decision this endpoint should not make silently.
-    The 409 detail names the counts so the caller can decide.
-    """
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -214,7 +186,11 @@ async def list_designations(_: dict = Depends(get_current_user)):
 
 
 @router.post("/designations")
-async def create_designation(body: DesignationCreate, user: dict = Depends(require_admin)):
+async def create_designation(
+    body: DesignationCreate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("designations:manage")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -241,7 +217,12 @@ async def create_designation(body: DesignationCreate, user: dict = Depends(requi
 
 
 @router.patch("/designations/{designation_id}")
-async def update_designation(designation_id: str, body: DesignationUpdate, user: dict = Depends(require_admin)):
+async def update_designation(
+    designation_id: str,
+    body: DesignationUpdate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("designations:manage")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -264,7 +245,11 @@ async def update_designation(designation_id: str, body: DesignationUpdate, user:
 
 
 @router.delete("/designations/{designation_id}")
-async def delete_designation(designation_id: str, user: dict = Depends(require_admin)):
+async def delete_designation(
+    designation_id: str,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("designations:manage")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -275,6 +260,93 @@ async def delete_designation(designation_id: str, user: dict = Depends(require_a
     asyncio.create_task(log_audit_event(
         db, actor_email=user["email"], actor_role=user.get("role"),
         action="designation_delete", resource_type="designation", resource_id=designation_id,
+        details={},
+    ))
+    return {"message": "Deleted"}
+
+
+@router.get("/job-grades")
+async def list_job_grades(_: dict = Depends(get_current_user)):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+    return {"job_grades": await db.job_grades.find({}, {"_id": 0}).sort("name", 1).to_list(length=500)}
+
+
+@router.post("/job-grades")
+async def create_job_grade(
+    body: JobGradeCreate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("job_grades:manage")),
+):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+    doc = {
+        "job_grade_id": str(uuid.uuid4()),
+        "name": body.name,
+        "description": body.description,
+        "created_by": user["email"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await db.job_grades.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(409, "A job grade with this name already exists")
+    doc.pop("_id", None)
+
+    asyncio.create_task(log_audit_event(
+        db, actor_email=user["email"], actor_role=user.get("role"),
+        action="job_grade_create", resource_type="job_grade", resource_id=doc["job_grade_id"],
+        details={"name": body.name},
+    ))
+    return doc
+
+
+@router.patch("/job-grades/{job_grade_id}")
+async def update_job_grade(
+    job_grade_id: str,
+    body: JobGradeUpdate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("job_grades:manage")),
+):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+    update = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(400, "No fields to update")
+    try:
+        result = await db.job_grades.update_one({"job_grade_id": job_grade_id}, {"$set": update})
+    except DuplicateKeyError:
+        raise HTTPException(409, "A job grade with this name already exists")
+    if result.matched_count == 0:
+        raise HTTPException(404, "Job grade not found")
+
+    asyncio.create_task(log_audit_event(
+        db, actor_email=user["email"], actor_role=user.get("role"),
+        action="job_grade_update", resource_type="job_grade", resource_id=job_grade_id,
+        details=update,
+    ))
+    return {"message": "Updated"}
+
+
+@router.delete("/job-grades/{job_grade_id}")
+async def delete_job_grade(
+    job_grade_id: str,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("job_grades:manage")),
+):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+    result = await db.job_grades.delete_one({"job_grade_id": job_grade_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Job grade not found")
+
+    asyncio.create_task(log_audit_event(
+        db, actor_email=user["email"], actor_role=user.get("role"),
+        action="job_grade_delete", resource_type="job_grade", resource_id=job_grade_id,
         details={},
     ))
     return {"message": "Deleted"}

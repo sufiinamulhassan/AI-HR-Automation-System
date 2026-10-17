@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import ProctoringMonitor from '../../modules/m1-hrbot/components/ProctoringMonitor'
+import BrandLogo from '../../components/BrandLogo'
+import LegalLinks from '../../components/LegalLinks'
+import { useBrand } from '../../lib/brand'
+import ProctoringMonitor, { type MonitorState } from '../../modules/m1-hrbot/components/ProctoringMonitor'
 import CodingWorkspace from '../../components/coding/CodingWorkspace'
 import { useCodingSession } from '../../components/coding/useCodingSession'
 import { enterFullscreen } from '../../modules/m1-hrbot/lib/lockdown'
@@ -17,6 +20,8 @@ import AiNotesPanel from './components/AiNotesPanel'
 import FreeformCodeEditor from './components/FreeformCodeEditor'
 import Whiteboard from './components/Whiteboard'
 import TurnControls from './components/TurnControls'
+import SelfIdScreen from './components/SelfIdScreen'
+import CameraConsentScreen from './components/CameraConsentScreen'
 import './InterviewPage.css'
 
 type Tab = 'notes' | 'transcript' | 'summary' | 'code' | 'whiteboard'
@@ -27,16 +32,23 @@ function isDesignQuestion(question?: string) {
 }
 
 const BrandMark = () => (
-  <svg width="20" height="20" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M20 14C22.2091 14 24 12.2091 24 10C24 7.79086 22.2091 6 20 6C17.7909 6 16 7.79086 16 10C16 12.2091 17.7909 14 20 14Z" fill="#4778f3" />
-    <path d="M20 16C14.4772 16 10 20.4772 10 26C10 31.5228 14.4772 36 20 36C25.5228 36 30 31.5228 30 26C30 24 29.2 22.2 27.8 20.8L25.8 22.8C26.5 23.7 27 24.8 27 26C27 29.866 23.866 33 20 33C16.134 33 13 29.866 13 26C13 22.134 16.134 19 20 19C21.2 19 22.3 19.3 23.2 19.9L25.2 17.9C23.7 16.7 21.9 16 20 16Z" fill="#4778f3" />
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="9" cy="7" r="4" stroke="var(--secondary)" strokeWidth="2" />
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="var(--secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="m16 11 2 2 4-4" stroke="var(--secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 export default function InterviewPage() {
   const { token } = useParams<{ token: string }>()
+  const brand = useBrand()
   const [tab, setTab] = useState<Tab>('transcript')
   const [ccEnabled, setCcEnabled] = useState(false)
+  const [selfIdResolved, setSelfIdResolved] = useState(false)
+
+  const [proctoringConsent, setProctoringConsent] = useState<'pending' | 'enabled' | 'declined'>('pending')
+
+  const [cvStatus, setCvStatus] = useState<MonitorState>('initializing')
 
   const [handsFreeWanted, setHandsFreeWanted] = useState(true)
   const handsFreeRef = useRef(false)
@@ -112,13 +124,13 @@ export default function InterviewPage() {
     setTab('whiteboard')
   }, [autoOfferWhiteboard, currentQuestion])
 
-
   if (s.status === 'scheduled') return (
     <div className="iv-gate">
       <div className="iv-gate-card">
         <div className="iv-gate-icon">🕒</div>
         <h2>This interview isn't open yet</h2>
         <p>{s.scheduledMsg || 'This interview is scheduled to begin later. Please check back at the scheduled time.'}</p>
+        <LegalLinks />
       </div>
     </div>
   )
@@ -129,6 +141,7 @@ export default function InterviewPage() {
         <div className="iv-gate-icon">✕</div>
         <h2>Session Error</h2>
         <p>{s.errorMsg || 'This interview link is invalid or has already been used.'}</p>
+        <LegalLinks />
       </div>
     </div>
   )
@@ -139,36 +152,54 @@ export default function InterviewPage() {
         <div className="iv-gate-spinner" />
         <h2>Preparing your interview</h2>
         <p>One moment while we load your session…</p>
+        <LegalLinks />
       </div>
     </div>
   )
 
-  if (s.status === 'lobby') return (
-    <div className="iv-gate">
-      <div className="iv-gate-card iv-lobby">
-        <div className="iv-gate-icon">🎙️</div>
-        <h2>{s.candidateName ? `Hello ${s.candidateName}` : 'Ready to begin'}</h2>
-        <p className="iv-lobby-lead">
-          One tap to grant camera and microphone access and enter fullscreen - required by your
-          browser to start.
-        </p>
-        {s.mediaError && <div className="iv-lobby-error">{s.mediaError}</div>}
-        <button className="btn-lobby-start" onClick={() => s.grantMediaAndStart()} disabled={s.requestingMedia}>
-          {s.requestingMedia ? 'Starting…' : s.mediaError ? 'Retry' : 'Start Interview'}
-        </button>
+  if (s.status === 'lobby') {
+    if (proctoringConsent === 'pending') {
+      return (
+        <CameraConsentScreen
+          onEnable={() => setProctoringConsent('enabled')}
+          onDecline={() => setProctoringConsent('declined')}
+        />
+      )
+    }
+    return (
+      <div className="iv-gate">
+        <div className="iv-gate-card iv-lobby">
+          <div className="iv-gate-icon">🎙️</div>
+          <h2>{s.candidateName ? `Hello ${s.candidateName}` : 'Ready to begin'}</h2>
+          <p className="iv-lobby-lead">
+            One tap to grant camera and microphone access and enter fullscreen, required by your
+            browser to start.
+          </p>
+          {s.mediaError && <div className="iv-lobby-error">{s.mediaError}</div>}
+          <button className="btn-lobby-start" onClick={() => s.grantMediaAndStart()} disabled={s.requestingMedia}>
+            {s.requestingMedia ? 'Starting…' : s.mediaError ? 'Retry' : 'Start Interview'}
+          </button>
+          <LegalLinks />
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
-  if (s.status === 'done') return (
-    <div className="iv-gate">
-      <div className="iv-gate-card iv-gate-success">
-        <div className="iv-gate-icon">✓</div>
-        <h2>Interview complete</h2>
-        <p>Your responses have been recorded and sent to the hiring team. You may now close this window.</p>
+  if (s.status === 'done') {
+    if (!selfIdResolved && token) {
+      return <SelfIdScreen token={token} onDone={() => setSelfIdResolved(true)} />
+    }
+    return (
+      <div className="iv-gate">
+        <div className="iv-gate-card iv-gate-success">
+          <div className="iv-gate-icon">✓</div>
+          <h2>Interview complete</h2>
+          <p>Your responses have been recorded and sent to the hiring team. You may now close this window.</p>
+          <LegalLinks />
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   if (s.status === 'terminated') return (
     <div className="iv-gate">
@@ -179,17 +210,19 @@ export default function InterviewPage() {
           You navigated away from the interview {MAX_VIOLATIONS} times. Your answers so far have
           been submitted and your recruiter has been notified.
         </p>
+        <LegalLinks />
       </div>
     </div>
   )
-
 
   return (
     <div className="iv-page">
       <header className="iv-header">
         <div className="iv-brand">
-          <BrandMark />
-          Hirely.ai Interview
+          <BrandLogo>
+            <BrandMark />
+          </BrandLogo>
+          {brand.name} Interview
         </div>
 
         <div className="iv-header-right">
@@ -202,6 +235,12 @@ export default function InterviewPage() {
           {s.violationCount > 0 && (
             <div className="iv-violations" title="Tab switches recorded">
               ⚠ {s.violationCount} / {MAX_VIOLATIONS}
+            </div>
+          )}
+          {proctoringConsent === 'enabled' && cvStatus === 'initializing' && (
+            <div className="iv-securing" role="status">
+              <span className="iv-securing-dot" />
+              Securing your session…
             </div>
           )}
           <div className="iv-status">
@@ -291,6 +330,7 @@ export default function InterviewPage() {
                       runErrorMsg={coding.runErrorMsg}
                       onRun={coding.run}
                       onIntegrityEvent={coding.flag}
+                      onAutosave={coding.autosave}
                     />
                   ) : (
                     <FreeformCodeEditor onIntegrityEvent={coding.flag} />
@@ -332,7 +372,7 @@ export default function InterviewPage() {
       {s.fullscreenLost && !s.warningOpen && (
         <div className="iv-nag">
           <span>
-            You left fullscreen. This has been recorded - please return to fullscreen
+            You left fullscreen. This has been recorded. Please return to fullscreen
             to continue your interview.
           </span>
           <button className="btn-refullscreen" onClick={() => { void enterFullscreen() }}>
@@ -341,7 +381,13 @@ export default function InterviewPage() {
         </div>
       )}
 
-      <ProctoringMonitor stream={s.stream} onFlag={s.handleProctoringFlag} headless />
+      <ProctoringMonitor
+        stream={s.stream}
+        onFlag={s.handleProctoringFlag}
+        enabled={proctoringConsent === 'enabled'}
+        onStatusChange={setCvStatus}
+        headless
+      />
 
       {s.warningOpen && (
         <div className="modal-overlay iv-warning-overlay">

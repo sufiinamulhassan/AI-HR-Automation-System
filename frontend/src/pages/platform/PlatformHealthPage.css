@@ -1,0 +1,6 @@
+.pco-hl-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem; }
+.pco-hl-detail { max-width: 36ch; overflow-wrap: anywhere; color: var(--gray-600); }
+
+@media (max-width: 640px) {
+  .pco-hl-tiles { grid-template-columns: 1fr; }
+}

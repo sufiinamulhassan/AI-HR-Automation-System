@@ -20,13 +20,14 @@ if not settings.DEFAULT_SUPERADMIN_PASSWORD or (
 ):
     settings.DEFAULT_SUPERADMIN_PASSWORD = "test-superadmin-password"
 
-from config.database import get_db, init_db, close_db
+from config import tenancy
+from config.database import get_db, get_platform_db, init_db, close_db
+from config.tenancy_migration import ensure_default_workspace
 from main import app
 from passlib.context import CryptContext
 
 
 def apply_test_database_settings() -> None:
-    """Point tests at the dedicated test cluster/database from .env."""
     settings.MONGODB_URI = settings.MONGODB_TEST_URI or settings.MONGODB_URI
     settings.MONGODB_DB = settings.MONGODB_TEST
     settings.PINECONE_API_KEY = settings.PINECONE_API_KEY_TEST
@@ -34,11 +35,21 @@ def apply_test_database_settings() -> None:
     settings.PINECONE_ENV = settings.PINECONE_ENV_TEST
     settings.ALLOW_DEMO_AUTH = True
     settings.HACKATHON_DEMO_MODE = False
+    settings.DEMO_COMPANY_ID = ""
+    settings.EMAIL_HOST = ""
+    settings.AWS_SES_ENABLED = False
+    settings.STRIPE_SECRET_KEY = ""
+    settings.STRIPE_WEBHOOK_SECRET = ""
+    settings.PLATFORM_ALERT_EMAILS = ""
 
 
 apply_test_database_settings()
 
+tenancy.use_fallback_company(tenancy.DEFAULT_COMPANY_ID)
+
 pwd_ctx = CryptContext(schemes=["bcrypt"])
+
+TEST_USER_EMAILS = ["superadmin@hirely.ai", "hradmin@hirely.ai", "user@hirely.ai"]
 
 
 @pytest.fixture(scope="session")
@@ -71,6 +82,15 @@ async def setup_test_db(client):
         )
         raise RuntimeError("Database connection not initialized by conftest init_db")
 
+    await ensure_default_workspace(get_platform_db())
+
+    await get_platform_db().users.delete_many({"email": {"$in": TEST_USER_EMAILS}})
+
+    await get_platform_db().rate_limits.delete_many({"_id": {"$regex": "^co:"}})
+    await db.roles.delete_many({})
+    await db.offers.delete_many({})
+    await db.security_policies.delete_many({})
+    await db.company_settings.delete_many({})
     await db.users.delete_many({})
     await db.jobs.delete_many({})
     await db.resumes.delete_many({})
@@ -86,6 +106,7 @@ async def setup_test_db(client):
             "role": "superadmin",
             "otp_required": False,
             "is_active": True,
+            "is_platform_admin": True,
         },
         {
             "name": "HR Admin",

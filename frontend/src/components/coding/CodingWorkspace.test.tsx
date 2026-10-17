@@ -1,9 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import CodingWorkspace from './CodingWorkspace'
+import CodingWorkspace, { AUTOSAVE_INTERVAL_MS } from './CodingWorkspace'
 import type { CodingSessionData } from './useCodingSession'
-
 
 const session: CodingSessionData = {
   question_id: 'q1',
@@ -80,7 +79,7 @@ describe('CodingWorkspace', () => {
     expect(screen.getByRole('button', { name: /running/i })).toBeDisabled()
   })
 
-  it('blocks every paste - manual entry only - and reports it, but not ordinary typing', async () => {
+  it('blocks every paste, manual entry only, and reports it, but not ordinary typing', async () => {
     const onIntegrityEvent = vi.fn()
     renderWorkspace({ onIntegrityEvent })
 
@@ -146,5 +145,67 @@ describe('CodingWorkspace', () => {
       },
     })
     expect(screen.getByText('5')).toBeInTheDocument()
+  })
+
+  describe('autosave', () => {
+    it('saves on a fixed interval rather than on every keystroke', () => {
+      vi.useFakeTimers()
+      try {
+        const onAutosave = vi.fn()
+        renderWorkspace({ onAutosave })
+
+        fireEvent.change(editor(), { target: { value: 'partial one' } })
+        fireEvent.change(editor(), { target: { value: 'partial two' } })
+        expect(onAutosave).not.toHaveBeenCalled()
+
+        act(() => { vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS) })
+
+        expect(onAutosave).toHaveBeenCalledTimes(1)
+        expect(onAutosave).toHaveBeenCalledWith('python', 'partial two')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps saving the latest code on each subsequent tick', () => {
+      vi.useFakeTimers()
+      try {
+        const onAutosave = vi.fn()
+        renderWorkspace({ onAutosave })
+
+        act(() => { vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS) })
+        fireEvent.change(editor(), { target: { value: 'more code' } })
+        act(() => { vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS) })
+
+        expect(onAutosave).toHaveBeenCalledTimes(2)
+        expect(onAutosave).toHaveBeenLastCalledWith('python', 'more code')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stops autosaving once the attempt is locked', () => {
+      vi.useFakeTimers()
+      try {
+        const onAutosave = vi.fn()
+        renderWorkspace({ onAutosave, status: 'submitting' })
+
+        act(() => { vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS * 2) })
+
+        expect(onAutosave).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('never fires when no autosave handler is wired up', () => {
+      vi.useFakeTimers()
+      try {
+        expect(() => renderWorkspace()).not.toThrow()
+        expect(() => act(() => { vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS * 2) })).not.toThrow()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })

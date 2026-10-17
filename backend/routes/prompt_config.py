@@ -1,16 +1,3 @@
-"""AI Prompt Configuration route — hr_module (MVP2 §2.20 slice).
-
-Admin-only CRUD over LLM prompt overrides for the two highest-value, most-
-cited prompts in this codebase: JD parsing (`jd_parse`) and interview
-question generation / evaluation (`interview_questions` / `interview_eval`).
-See services/hr_module/prompt_config_service.py for the storage model,
-fallback contract, and the exact placeholder names each key's
-`user_prompt_template` must use.
-
-Every endpoint here — including the list/get reads — requires admin, unlike
-the read-open pattern used by routes/scenarios.py and routes/admin_config.py,
-because prompt overrides directly control LLM behavior platform-wide.
-"""
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,10 +8,12 @@ from config.database import get_db
 from services.hr_module.audit_service import log_audit_event
 from services.hr_module.prompt_config_service import (
     KNOWN_PROMPT_KEYS,
+    PromptTemplateError,
     list_prompt_templates,
     get_prompt_template_detail,
     upsert_prompt_template,
     reset_prompt_template,
+    validate_user_prompt_template,
 )
 
 router = APIRouter()
@@ -61,6 +50,10 @@ async def update_prompt_template_route(
         raise HTTPException(404, "Unknown prompt key")
     if not body.system_prompt.strip() or not body.user_prompt_template.strip():
         raise HTTPException(400, "system_prompt and user_prompt_template are required")
+    try:
+        validate_user_prompt_template(key, body.user_prompt_template)
+    except PromptTemplateError as exc:
+        raise HTTPException(422, str(exc))
 
     try:
         doc = await upsert_prompt_template(

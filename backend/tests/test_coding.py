@@ -1,16 +1,3 @@
-"""Tests for the AI Coding Assessment feature (MVP2 §2.10).
-
-Neither sandbox engine (Judge0, Piston) is configured or reachable in this test
-environment, so these tests are structured around:
-  - the "not configured" (503) path for the candidate submit flow,
-  - the 400 (no question assigned) path for the candidate session flow,
-  - pure functions (LANGUAGE_IDS mapping, score computation) tested directly,
-  - evaluate_submission's scoring math with the sandbox call monkeypatched
-    (never a real network call),
-  - the Piston adapter's translation into Judge0's response shape, driven off
-    canned Piston payloads.
-No test calls out to a live Judge0 or Piston instance.
-"""
 import uuid
 
 import pytest
@@ -257,8 +244,6 @@ async def _insert_submission(candidate_id: str, question_id: str, **overrides) -
 
 
 async def test_list_all_submissions_filters_and_enriches(client, admin_headers):
-    """The cross-candidate list: filters narrow it, and each row carries the
-    candidate/question labels the ids alone don't give."""
     question_id = await _create_question(client, admin_headers)
     cand_a = await _create_candidate_doc()
     cand_b = await _create_candidate_doc()
@@ -309,8 +294,6 @@ def test_language_ids_contains_required_minimum():
 
 
 def test_language_maps_cover_the_same_languages():
-    """Switching CODE_SANDBOX_PROVIDER must never silently drop a language a
-    stored question already has a starter template for."""
     from services.hr_module.coding_service import LANGUAGE_IDS, PISTON_LANGUAGES
     assert set(LANGUAGE_IDS) == set(PISTON_LANGUAGES)
 
@@ -320,6 +303,39 @@ async def test_run_on_judge0_raises_when_not_configured(monkeypatch):
     monkeypatch.setattr(settings, "JUDGE0_API_URL", "")
     with pytest.raises(RuntimeError, match="not configured"):
         await run_on_judge0("print(1)", 71, "")
+
+
+async def test_run_on_judge0_sends_explicit_resource_limits(monkeypatch):
+    from services.hr_module import coding_service
+
+    captured = {}
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            captured.update(url=url, json=json, headers=headers)
+            return _FakeResponse({"stdout": "5\n", "status": {"id": 3, "description": "Accepted"}})
+
+    monkeypatch.setattr(coding_service.httpx, "AsyncClient", _Client)
+    monkeypatch.setattr(coding_service.settings, "JUDGE0_API_URL", "https://fake-judge0.invalid")
+    monkeypatch.setattr(coding_service.settings, "JUDGE0_API_HOST", "")
+    monkeypatch.setattr(coding_service.settings, "JUDGE0_API_KEY", "")
+
+    await coding_service.run_on_judge0("print(1)", 71, "")
+
+    assert captured["json"]["cpu_time_limit"] == 5
+    assert captured["json"]["wall_time_limit"] == 10
+    assert captured["json"]["memory_limit"] == 256000
+    assert captured["json"]["source_code"] == "print(1)"
+    assert captured["json"]["language_id"] == 71
 
 
 class _FakeResponse:
@@ -334,8 +350,6 @@ class _FakeResponse:
 
 
 def _stub_piston(monkeypatch, payload):
-    """Point the service at Piston and replay `payload` for the one HTTP call
-    the adapter makes. Returns the dict the request is captured into."""
     from services.hr_module import coding_service
 
     captured: dict = {}
@@ -389,8 +403,6 @@ async def test_run_on_piston_maps_successful_run(monkeypatch):
 
 
 async def test_run_on_piston_maps_compile_failure_to_status_6(monkeypatch):
-    """Status id 6 is what makes _run_test_cases skip the remaining cases
-    instead of paying for N identical failures."""
     from services.hr_module import coding_service
 
     _stub_piston(monkeypatch, {
@@ -416,8 +428,6 @@ async def test_run_on_piston_maps_kill_signal_to_time_limit_exceeded(monkeypatch
 
 
 async def test_run_on_piston_successful_compile_is_not_a_failure(monkeypatch):
-    """A compiled language that built cleanly reports compile.code == 0 — that
-    must not be read as a compile error."""
     from services.hr_module import coding_service
 
     _stub_piston(monkeypatch, {
@@ -439,8 +449,6 @@ async def test_run_on_piston_rejects_unsupported_language(monkeypatch):
 
 
 async def test_run_in_sandbox_routes_by_provider(monkeypatch):
-    """The dispatcher, not the caller, decides which engine runs — and the
-    Judge0 branch must stay monkeypatchable through the module global."""
     from services.hr_module import coding_service
 
     _stub_piston(monkeypatch, {"run": {"stdout": "piston\n", "code": 0, "signal": None}})
@@ -459,9 +467,6 @@ async def test_run_in_sandbox_routes_by_provider(monkeypatch):
 async def test_evaluate_submission_scores_the_same_on_piston(
     client, admin_headers, monkeypatch,
 ):
-    """The whole point of normalising to Judge0's shape: identical scoring math
-    on either engine. Mirrors the stubbed-Judge0 scoring test above — one
-    visible case passes, the hidden case does not."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)
@@ -501,8 +506,6 @@ async def test_evaluate_submission_scores_the_same_on_piston(
 
 
 async def test_submit_returns_503_when_piston_selected_but_unset(client, admin_headers, monkeypatch):
-    """Selecting an engine you haven't configured must report itself, not fall
-    through to the other engine's URL."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)
@@ -526,10 +529,6 @@ async def test_submit_returns_503_when_piston_selected_but_unset(client, admin_h
 
 
 async def test_evaluate_submission_scoring_with_stubbed_judge0(client, admin_headers, monkeypatch):
-    """Monkeypatch run_on_judge0 (an async function) so no network call is made,
-    and verify evaluate_submission computes score/results correctly, including
-    hidden-test detail being present in the STORED doc (redaction happens at
-    the route layer, not in evaluate_submission itself)."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)
@@ -568,8 +567,6 @@ async def test_evaluate_submission_scoring_with_stubbed_judge0(client, admin_hea
 
 
 async def test_compile_error_short_circuits_and_is_reported(client, admin_headers, monkeypatch):
-    """A submission that does not compile must say so — and must not spend one
-    sandbox call per test case re-discovering the same failure."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)
@@ -605,7 +602,6 @@ async def test_compile_error_short_circuits_and_is_reported(client, admin_header
 
 
 async def test_execution_telemetry_is_captured(client, admin_headers, monkeypatch):
-    """Time and memory were already on the wire and were being discarded."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)
@@ -640,7 +636,6 @@ async def test_execution_telemetry_is_captured(client, admin_headers, monkeypatc
 
 
 async def test_total_sandbox_failure_scores_none_not_zero(client, admin_headers, monkeypatch):
-    """A sandbox outage must not be written onto a hiring report as 0/N."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)
@@ -697,12 +692,6 @@ async def test_evaluate_submission_unsupported_language_raises(monkeypatch, clie
 
 
 async def test_code_quality_review_skipped_without_anthropic_key(monkeypatch):
-    """No key must skip the review, not fail the submission.
-
-    CODE_EVAL_MODEL is pinned explicitly rather than left at its default: the
-    default is an OpenAI model, so relying on it would silently test the
-    OpenAI gate under a test named for the Anthropic one.
-    """
     from config.settings import settings
     from services.hr_module.coding_service import evaluate_code_quality
 
@@ -716,8 +705,6 @@ async def test_code_quality_review_skipped_without_anthropic_key(monkeypatch):
 
 
 async def test_code_quality_review_skipped_without_openai_key(monkeypatch):
-    """The mirror of the above for the default (OpenAI) model — the gate that
-    actually runs in this deployment."""
     from config.settings import settings
     from services.hr_module.coding_service import evaluate_code_quality
 
@@ -786,6 +773,7 @@ def test_anthropic_models_registered_and_priced():
         assert provider_for_model(m["id"]) == "anthropic"
         assert m["id"] in _LLM_PRICING, f"{m['id']} missing from pricing table"
     assert provider_for_model("ft:gpt-4o:acme:xyz") == "openai"
+    assert provider_for_model("claude-opus-4-7") == "anthropic"
 
 
 def test_code_evaluation_prompt_key_registered():
@@ -802,13 +790,6 @@ def test_code_evaluation_prompt_key_registered():
 
 
 def test_anthropic_request_shape(monkeypatch):
-    """The Anthropic path must not reuse OpenAI's request shape.
-
-    Verified without a live key because these are exactly the mistakes that
-    only surface as a 400 in production: `system` is a top-level parameter
-    rather than a message, and current Claude models reject `temperature`
-    outright.
-    """
     import asyncio, types
     import config.llm as llm
     from config.settings import settings
@@ -849,7 +830,6 @@ def test_anthropic_request_shape(monkeypatch):
 
 
 def test_anthropic_refusal_returns_empty_json(monkeypatch):
-    """A safety refusal must not be parsed as if it were content."""
     import asyncio, types
     import config.llm as llm
     from config.settings import settings
@@ -873,7 +853,6 @@ def test_anthropic_refusal_returns_empty_json(monkeypatch):
 
 
 async def test_code_quality_review_works_via_openai_model(monkeypatch):
-    """CODE_EVAL_MODEL=gpt-4o must run the review with no Anthropic key at all."""
     import json as _json
     from config.settings import settings
     import services.hr_module.coding_service as cs
@@ -973,9 +952,6 @@ async def test_output_correctness_survives_unparseable_output(monkeypatch):
 
 
 async def test_evaluate_submission_flags_low_typing_ratio(client, admin_headers, monkeypatch):
-    """Very few keystrokes relative to a large authored solution must push a
-    low_typing_ratio flag onto the candidate's coding_integrity_flags and fold
-    a reduced coding_integrity_score onto the stored submission."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)
@@ -1039,8 +1015,6 @@ async def test_coding_flag_invalid_token_404(client):
 
 
 async def test_coding_flag_appends_to_separate_array(client):
-    """coding_integrity_flags must be distinct from the interview's
-    integrity_flags — recording one must never touch the other."""
     cand = await _create_candidate_doc()
     db = get_db()
     await db.candidates.update_one(
@@ -1117,8 +1091,6 @@ async def test_run_unsupported_language_400(client, admin_headers, monkeypatch):
 
 
 async def test_run_stubbed_judge0_returns_raw_output(client, admin_headers, monkeypatch):
-    """/run must hand back raw stdout without grading or persisting anything —
-    no coding_submissions doc should be created by this endpoint."""
     from services.hr_module import coding_service
 
     question_id = await _create_question(client, admin_headers)

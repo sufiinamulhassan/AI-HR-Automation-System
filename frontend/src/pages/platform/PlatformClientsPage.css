@@ -1,0 +1,3 @@
+.pco-clients-table tbody th { min-width: 12rem; }
+.pco-clients-table .pco-name { display: block; }
+.pco-clients-table .pco-cell-meta { overflow-wrap: anywhere; }

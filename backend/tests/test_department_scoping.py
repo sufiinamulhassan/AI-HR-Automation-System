@@ -1,20 +1,3 @@
-"""Tests for task C1 (MVP2 §2.1):
-
-  Part A — department/branch scoping for the Jobs resource
-           (routes/jobs.py: create_job/update_job store department_id,
-           list_jobs applies services.hr_module.permissions.get_department_scope).
-
-  Part B — full audit-log coverage for jobs/interview/offers/scenarios/coding
-           routes (all previously had zero log_audit_event call sites).
-
-Department-scoped users must be REAL DB users with a real JWT (obtained via
-POST /auth/login) — the `demo-<role>-token` bypass in
-shared.auth.get_current_user always returns a static dict with no
-department_id, so it can never exercise get_department_scope's restricted
-branch. admin_headers/standard_headers/superadmin_headers (conftest.py) stay
-on the demo bypass and are used for everything that doesn't need a
-department_id set on the acting user.
-"""
 import asyncio
 import uuid
 
@@ -39,9 +22,6 @@ JOB_PAYLOAD = {
 
 
 async def _make_scoped_user(client, db, *, department_id: str) -> tuple[dict, str]:
-    """Insert a real 'standard' user with department_id set and log in for a
-    real bearer token. Returns (headers, email) — caller is responsible for
-    deleting the user afterwards."""
     email = f"dept-user-{uuid.uuid4().hex[:10]}@example.com"
     password = "Test@12345"
     await db.users.insert_one({
@@ -75,8 +55,6 @@ async def _list_job_ids(client, headers) -> set:
 
 
 async def _find_audit_entry(db, *, action: str, resource_id: str, attempts: int = 10, delay: float = 0.2):
-    """Fire-and-forget audit writes (asyncio.create_task, never awaited inline)
-    need a moment to land — poll briefly instead of a single fixed sleep."""
     for _ in range(attempts):
         entry = await db.audit_log.find_one({"action": action, "resource_id": resource_id})
         if entry:
@@ -133,9 +111,6 @@ async def test_job_with_department_id_visible_to_admin_and_superadmin_regardless
 
 
 async def test_job_without_department_id_is_visible_to_everyone(client, admin_headers):
-    """Backward compatibility: a job with no department_id (the default —
-    every job created before this feature existed) stays visible to every
-    account, department-scoped or not."""
     db = get_db()
     assert db is not None
 

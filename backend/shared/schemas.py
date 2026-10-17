@@ -1,9 +1,8 @@
-"""Shared Pydantic schemas for hr_module — the only module this repo ships."""
 from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -72,12 +71,14 @@ class HRJobCreate(BaseModel):
     difficulty: str = "medium"
     employment_type: str = "full-time"
     location: str | None = None
+    job_grade: str | None = None
     salary_min: int | None = None
     salary_max: int | None = None
     is_remote: bool = False
     company_name: str | None = None
     model_override: str | None = None
     deadline_days: int | None = None
+    is_public: bool = True
 
 
 class HRJobUpdate(BaseModel):
@@ -85,11 +86,13 @@ class HRJobUpdate(BaseModel):
     description: str | None = None
     difficulty: str | None = None
     location: str | None = None
+    job_grade: str | None = None
     salary_min: int | None = None
     salary_max: int | None = None
     is_remote: bool | None = None
     company_name: str | None = None
     deadline_days: int | None = None
+    is_public: bool | None = None
 
 
 class HRCandidateCreate(BaseModel):
@@ -101,9 +104,13 @@ class HRCandidateCreate(BaseModel):
     application_source: str | None = None
 
 
+DecisionReason = Literal["not_a_fit", "salary", "withdrew", "no_show", "position_filled", "other"]
+
+
 class HRCandidateDecision(BaseModel):
     decision: str
     notes: str | None = None
+    reason: DecisionReason | None = None
 
 
 class DepartmentCreate(BaseModel):
@@ -125,4 +132,14 @@ class DesignationCreate(BaseModel):
 class DesignationUpdate(BaseModel):
     name: str | None = None
     department: str | None = None
+    description: str | None = None
+
+
+class JobGradeCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class JobGradeUpdate(BaseModel):
+    name: str | None = None
     description: str | None = None

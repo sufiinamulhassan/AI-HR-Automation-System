@@ -96,7 +96,7 @@ async def test_create_rule_requires_admin(client, standard_headers):
         "/api/v1/workflows",
         json={
             "name": "Standard user attempt",
-            "trigger_type": "resume_processed",
+            "trigger_type": "candidate_invited",
             "conditions": [],
             "action_type": "fire_webhook",
             "action_params": {},
@@ -133,10 +133,11 @@ async def test_dry_run_endpoint_requires_admin_and_does_not_mutate(client, admin
         "/api/v1/workflows",
         json={
             "name": "Dry run target",
-            "trigger_type": "resume_processed",
+            "trigger_type": "candidate_invited",
             "conditions": [{"field": "domain", "operator": "eq", "value": "software_engineering"}],
             "action_type": "change_pipeline_stage",
             "action_params": {"candidate_id": "some-candidate", "stage": "shortlisted"},
+            "is_active": False,
         },
         headers=admin_headers,
     )

@@ -1,4 +1,3 @@
-"""Pinecone connectivity — skipped unless a test index is configured."""
 import pytest
 
 pytestmark = pytest.mark.anyio

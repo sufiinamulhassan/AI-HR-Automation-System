@@ -1,4 +1,3 @@
-# ── Secrets — never commit ─────────────────────────────────────────
 .env
 .env.*
 !.env.example
@@ -6,10 +5,8 @@
 *.key
 *service-account*.json
 
-# ── Vercel CLI — local project link (contains project and org ids) ──
 .vercel
 
-# ── Python ─────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
@@ -22,12 +19,10 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Virtual environments
 venv/
 .venv/
 env/
 
-# ── Node / Vite / Next ─────────────────────────────────────────────
 node_modules/
 dist/
 build/
@@ -38,24 +33,20 @@ out/
 coverage/
 *.tsbuildinfo
 
-# Vendored at install time by scripts/setup-mediapipe.mjs
 frontend/public/mediapipe/
 frontend/public/models/
 
-# ── Logs ───────────────────────────────────────────────────────────
 *.log
 logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# ── Uploads / generated / temp ─────────────────────────────────────
 uploads/
 backend/uploads/
 tmp/
 *.tmp
 
-# ── IDE / OS ───────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp

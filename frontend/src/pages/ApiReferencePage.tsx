@@ -1,8 +1,7 @@
-﻿import { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import apiRef from '../api-reference.json'
 import { API_BASE } from '../lib/config'
 import './ApiReferencePage.css'
-
 
 interface Endpoint {
   id: string
@@ -27,7 +26,6 @@ interface Endpoint {
   content_disposition?: string
 }
 
-
 const METHOD_CONFIG: Record<string, { bg: string; color: string; border: string }> = {
   GET:       { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
   POST:      { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
@@ -38,14 +36,16 @@ const METHOD_CONFIG: Record<string, { bg: string; color: string; border: string 
 
 const GROUP_META: Record<string, { label: string; icon: string; color: string }> = {
   system:      { label: 'System',      icon: '🔌', color: '#64748b' },
-  auth:        { label: 'Auth',        icon: '🔐', color: '#4778f3' },
+  auth:        { label: 'Auth',        icon: '🔐', color: '#222022' },
   jobs:        { label: 'Jobs',        icon: '💼', color: '#0369a1' },
   resumes:     { label: 'Resumes',     icon: '📄', color: '#059669' },
   candidates:  { label: 'Candidates',  icon: '🧑‍💼', color: '#d97706' },
   interview:   { label: 'Interview',   icon: '🎙️', color: '#dc2626' },
   intel:       { label: 'Intel',       icon: '📊', color: '#0891b2' },
+  platform:    { label: 'Platform',    icon: '🛰️', color: '#4778f3' },
+  careers:     { label: 'Careers',     icon: '🧭', color: '#385fc0' },
+  site:        { label: 'Site',        icon: '🌐', color: '#4778f3' },
 }
-
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -62,9 +62,9 @@ function CopyButton({ text }: { text: string }) {
           <polyline points="20 6 9 17 4 12" />
         </svg>
       ) : (
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" fill="none" />
         </svg>
       )}
       {copied ? 'Copied!' : 'Copy'}
@@ -104,8 +104,8 @@ function EndpointCard({ ep }: { ep: Endpoint }) {
   if (ep.payload !== undefined && ep.payload !== null) payloads.push({ label: 'Request Body (JSON)', data: ep.payload })
   if (ep.payload_multipart_form) payloads.push({ label: 'Request Body (multipart/form-data)', data: ep.payload_multipart_form })
   if (ep.payload_form_encoded)   payloads.push({ label: 'Request Body (form-encoded)', data: ep.payload_form_encoded })
-  if (ep.payload_semantic)       payloads.push({ label: 'Request Body - Semantic Search', data: ep.payload_semantic })
-  if (ep.payload_company_chain)  payloads.push({ label: 'Request Body - Company Chain Search', data: ep.payload_company_chain })
+  if (ep.payload_semantic)       payloads.push({ label: 'Request Body, Semantic Search', data: ep.payload_semantic })
+  if (ep.payload_company_chain)  payloads.push({ label: 'Request Body, Company Chain Search', data: ep.payload_company_chain })
   if (ep.client_message_types)   payloads.push({ label: 'Client Message Types (WS)', data: ep.client_message_types })
 
   const responses: Array<{ label: string; data: unknown }> = []
@@ -124,9 +124,9 @@ function EndpointCard({ ep }: { ep: Endpoint }) {
         <div className="ar-ep-badges">
           {ep.auth_required ? (
             <span className="ar-badge ar-badge-auth">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" fill="none" />
               </svg>
               JWT
             </span>
@@ -233,7 +233,6 @@ function GroupSection({
   )
 }
 
-
 export default function ApiReferencePage() {
   const [search, setSearch] = useState('')
   const [filterMethod, setFilterMethod] = useState<string>('ALL')
@@ -280,7 +279,7 @@ export default function ApiReferencePage() {
         <div>
           <div className="page-title">API Reference</div>
           <div className="page-sub">
-            {meta.title} - Base URL: <code>{API_BASE || window.location.origin}</code>
+            {meta.title}, Base URL: <code>{API_BASE || window.location.origin}</code>
           </div>
         </div>
         <div className="ar-header-meta">
@@ -291,8 +290,8 @@ export default function ApiReferencePage() {
 
       <div className="ar-toolbar">
         <div className="ar-search-wrap">
-          <svg className="ar-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+          <svg className="ar-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" fill="none" />
           </svg>
           <input
             className="ar-search"
@@ -346,8 +345,8 @@ export default function ApiReferencePage() {
       <div className="ar-content">
         {Object.keys(filtered).length === 0 ? (
           <div className="ar-empty">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" fill="none" />
             </svg>
             <div>No endpoints match your search</div>
           </div>

@@ -1,17 +1,3 @@
-"""
-Tests for skills-based filtering in the matcher and JD intel pipeline.
-
-All tests marked EXPECTED TO FAIL until implementation.
-
-Coverage:
-  - jd_intel.parse_jd  → targeting includes required_skills
-  - jd_intel.parse_jd  → JD Pinecone vector stores skills metadata
-  - matcher.match_jd_to_resume_pool → Pinecone query filters by skills ($in)
-  - matcher.match_resume_to_jds    → Pinecone query filters by skills ($in)
-  - Edge cases: empty skills, no-filter fallback
-
-Run: pytest tests/unit/test_matcher_skills.py -v
-"""
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch, call
 
@@ -20,6 +6,11 @@ pytestmark = pytest.mark.anyio
 
 def _pinecone_query_filter(mock_pinecone: MagicMock) -> dict:
     return mock_pinecone.query.call_args.kwargs["filter"]
+
+
+def _doc_type(f: dict) -> str:
+    clauses = f["$and"] if "$and" in f else [f]
+    return next(c["doc_type"] for c in clauses if "doc_type" in c)
 
 
 def _pinecone_upsert_metadata(mock_pinecone: MagicMock) -> dict:
@@ -35,14 +26,13 @@ def _mock_pinecone_empty() -> MagicMock:
 def _mock_db() -> MagicMock:
     db = MagicMock()
     db.jobs.update_one = AsyncMock()
-    db.jobs.find_one = AsyncMock(return_value=None)
+    db.jobs.find_one = AsyncMock(return_value={"deadline_at": None})
     return db
 
 
 class TestJdIntelTargeting:
 
     async def test_targeting_includes_required_skills(self):
-        """NEW: parse_jd must put required_skills in targeting so matcher can use them."""
         from services.hr_module.jd_intel import parse_jd
         llm_response = (
             '{"skills": ["Python", "FastAPI", "Docker"], "experience_level": "senior",'
@@ -61,7 +51,6 @@ class TestJdIntelTargeting:
         assert "FastAPI" in targeting["required_skills"]
 
     async def test_targeting_required_skills_empty_when_jd_has_none(self):
-        """required_skills should default to [] when LLM returns no skills."""
         from services.hr_module.jd_intel import parse_jd
         llm_response = (
             '{"skills": [], "experience_level": "mid",'
@@ -79,7 +68,6 @@ class TestJdIntelTargeting:
         assert targeting["required_skills"] == []
 
     async def test_existing_targeting_fields_still_present(self):
-        """Regression: required_domain and required_seniority must still be in targeting."""
         from services.hr_module.jd_intel import parse_jd
         llm_response = (
             '{"skills": ["Python"], "experience_level": "senior",'
@@ -100,7 +88,6 @@ class TestJdIntelTargeting:
 class TestJdPineconeMetadata:
 
     async def test_jd_pinecone_upsert_includes_skills(self):
-        """NEW: JD vector metadata must include skills so resume→JD filtering works."""
         from services.hr_module.jd_intel import parse_jd
         llm_response = (
             '{"skills": ["Python", "FastAPI", "PostgreSQL"], "experience_level": "mid",'
@@ -121,7 +108,6 @@ class TestJdPineconeMetadata:
         assert "FastAPI" in meta["skills"]
 
     async def test_jd_pinecone_existing_fields_still_present(self):
-        """Regression: doc_type, job_domain, experience_level still in JD metadata."""
         from services.hr_module.jd_intel import parse_jd
         llm_response = (
             '{"skills": ["Python"], "experience_level": "senior",'
@@ -145,10 +131,6 @@ class TestJdPineconeMetadata:
 class TestMatchJdToResumePoolSkillsFilter:
 
     async def test_skills_not_hard_filtered_when_required_skills_present(self):
-        """Skills must NOT be a hard Pinecone filter: the resume classifier and JD
-        parser extract skills independently, so an exact $in overlap dropped
-        genuinely-similar candidates and left pipelines empty. Vector similarity
-        (RESUME_SIMILARITY_THRESHOLD) is the gate; domain is the only hard filter."""
         from services.hr_module.matcher import match_jd_to_resume_pool
         mock_pc = _mock_pinecone_empty()
 
@@ -168,7 +150,6 @@ class TestMatchJdToResumePoolSkillsFilter:
         assert "skills" not in f, "skills must not be used as a hard Pinecone filter"
 
     async def test_no_skills_filter_when_required_skills_empty(self):
-        """When required_skills is empty, skills filter must NOT be added (would return zero results)."""
         from services.hr_module.matcher import match_jd_to_resume_pool
         mock_pc = _mock_pinecone_empty()
 
@@ -188,7 +169,6 @@ class TestMatchJdToResumePoolSkillsFilter:
         assert "skills" not in f, "empty required_skills must not add a skills filter"
 
     async def test_no_skills_filter_when_required_skills_missing(self):
-        """Backward compat: targeting without required_skills key must not break matching."""
         from services.hr_module.matcher import match_jd_to_resume_pool
         mock_pc = _mock_pinecone_empty()
 
@@ -207,9 +187,6 @@ class TestMatchJdToResumePoolSkillsFilter:
         assert "skills" not in f
 
     async def test_only_doc_type_filter_applied(self):
-        """doc_type is the only structural filter; matching gates on vector
-        similarity. job_domain/skills/seniority are NOT hard filters (they were
-        zeroing out genuinely-similar candidates)."""
         from services.hr_module.matcher import match_jd_to_resume_pool
         mock_pc = _mock_pinecone_empty()
 
@@ -226,16 +203,14 @@ class TestMatchJdToResumePoolSkillsFilter:
             )
 
         f = _pinecone_query_filter(mock_pc)
-        assert f["doc_type"] == "resume"
-        assert "job_domain" not in f
-        assert "skills" not in f
+        assert _doc_type(f) == "resume"
+        assert "job_domain" not in str(f)
+        assert "skills" not in str(f)
 
 
 class TestMatchResumeToJdsSkillsFilter:
 
     async def test_skills_not_hard_filtered_when_resume_has_skills(self):
-        """Skills must NOT be a hard Pinecone filter on the resume→JD path either —
-        vector similarity is the gate. (See match_jd_to_resume_pool test above.)"""
         from services.hr_module.matcher import match_resume_to_jds
         mock_pc = _mock_pinecone_empty()
 
@@ -255,7 +230,6 @@ class TestMatchResumeToJdsSkillsFilter:
         assert "skills" not in f, "skills must not be used as a hard Pinecone filter"
 
     async def test_no_skills_filter_when_resume_skills_empty(self):
-        """When resume has no skills, skills filter must NOT be added."""
         from services.hr_module.matcher import match_resume_to_jds
         mock_pc = _mock_pinecone_empty()
 
@@ -275,8 +249,6 @@ class TestMatchResumeToJdsSkillsFilter:
         assert "skills" not in f
 
     async def test_only_doc_type_filter_applied(self):
-        """doc_type is the only structural filter on the resume→JD path too; the
-        gate is vector similarity, not domain/skills/seniority metadata."""
         from services.hr_module.matcher import match_resume_to_jds
         mock_pc = _mock_pinecone_empty()
 
@@ -293,6 +265,6 @@ class TestMatchResumeToJdsSkillsFilter:
             )
 
         f = _pinecone_query_filter(mock_pc)
-        assert f["doc_type"] == "job"
-        assert "job_domain" not in f
-        assert "skills" not in f
+        assert _doc_type(f) == "job"
+        assert "job_domain" not in str(f)
+        assert "skills" not in str(f)

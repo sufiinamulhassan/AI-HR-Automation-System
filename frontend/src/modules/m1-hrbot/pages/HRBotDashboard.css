@@ -1,4 +1,3 @@
-
 .hrbot-dashboard { display: flex; height: 100vh; overflow: hidden; }
 
 .hrbot-back-btn { display: none; }
@@ -58,7 +57,6 @@
 }
 .rematch-confirm-body p { font-size: .85rem; color: var(--gray-600); line-height: 1.5; margin-bottom: .55rem; }
 .rematch-confirm-note { font-size: .78rem; color: var(--gray-500); }
-
 
 .stats-bar {
   display: grid;
@@ -164,7 +162,6 @@
 .btn-sm { padding: .32rem .7rem; font-size: .8rem; border-radius: var(--radius); border: none; font-weight: 600; cursor: pointer; }
 .btn-primary { background: var(--primary); color: var(--white); border: none; border-radius: var(--radius); padding: .5rem 1rem; font-size: .875rem; font-weight: 600; cursor: pointer; transition: background .15s; }
 .btn-primary:hover { background: var(--primary-dark); }
-
 
 .intel-overview {
   flex: 1;
@@ -516,3 +513,27 @@
     min-width: 0;
   }
 }
+
+.job-sidebar-footer {
+  flex-shrink: 0;
+  padding: .65rem 1rem;
+  border-top: 1px solid rgba(0,0,0,.05);
+}
+
+.btn-browse-jobs {
+  display: flex; align-items: center; justify-content: center; gap: .4rem;
+  width: 100%;
+  padding: .48rem .7rem;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--gray-700);
+  font-family: var(--font);
+  font-size: .8rem; font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.btn-browse-jobs:hover { border-color: var(--primary); background: var(--primary-light); color: var(--secondary); }
+
+.content-tabs-action { margin-left: auto; align-self: center; flex-shrink: 0; white-space: nowrap; }

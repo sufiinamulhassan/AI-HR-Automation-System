@@ -1,0 +1,12 @@
+.pco-total-row th,
+.pco-total-row td {
+  font-weight: 800;
+  color: var(--gray-900);
+  border-top: 1px solid rgba(0, 0, 0, .12);
+  background: var(--gray-50);
+}
+.pco-table tfoot th,
+.pco-table tfoot td { padding: .65rem .7rem; text-align: left; }
+.pco-table tfoot td.pco-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pco-table tbody .pco-total-row:last-child th,
+.pco-table tbody .pco-total-row:last-child td { border-bottom: none; }

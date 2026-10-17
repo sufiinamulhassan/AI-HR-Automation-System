@@ -39,9 +39,6 @@ export default function IntelStatsPanel({ stats, loading, onBulkUpload, onCreate
       <div className="intel-header">
         <div>
           <h2 className="intel-title">Resume Intelligence</h2>
-          <p className="intel-subtitle">
-            Pool statistics · Auto-invite funnel · Domain &amp; seniority breakdown
-          </p>
         </div>
         <div className="intel-header-actions">
           <button className="btn-ghost intel-action-btn" onClick={onCreateJob}>+ New JD</button>
@@ -100,7 +97,7 @@ export default function IntelStatsPanel({ stats, loading, onBulkUpload, onCreate
                         <div className="intel-sen-bar-wrap">
                           <div
                             className="intel-sen-bar"
-                            style={{ height: `${Math.max(4, (count / maxSeniority) * 56)}px` }}
+                            style={{ height: `${Math.max(4, (count / maxSeniority) * 46)}px` }}
                           />
                         </div>
                         <div className="intel-sen-label">{level}</div>

@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import BrandLogo from '../components/BrandLogo'
+import LegalLinks from '../components/LegalLinks'
+import { useBrand } from '../lib/brand'
 import { API_V1 } from '../lib/config'
 import './OfferAcceptance.css'
 
@@ -17,6 +20,7 @@ type ErrorKind = 'invalid' | 'inactive' | 'generic'
 
 export default function OfferAcceptance() {
   const { token } = useParams<{ token: string }>()
+  const brand = useBrand()
   const [status, setStatus]         = useState<Status>('loading')
   const [errorKind, setErrorKind]   = useState<ErrorKind>('generic')
   const [offer, setOffer]           = useState<OfferPublic | null>(null)
@@ -24,6 +28,9 @@ export default function OfferAcceptance() {
   const [declineReason, setDeclineReason]   = useState('')
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [typedName, setTypedName] = useState('')
+  const [consent, setConsent]     = useState(false)
+  const canAccept = typedName.trim().length > 0 && consent
 
   useEffect(() => {
     if (!token) return
@@ -45,11 +52,15 @@ export default function OfferAcceptance() {
   }, [token])
 
   async function handleAccept() {
-    if (!token || actionBusy) return
+    if (!token || actionBusy || !canAccept) return
     setActionBusy(true)
     setActionError('')
     try {
-      const r = await fetch(`${API_V1}/offers/public/${token}/accept`, { method: 'POST' })
+      const r = await fetch(`${API_V1}/offers/public/${token}/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ typed_name: typedName.trim(), consent: true }),
+      })
       if (!r.ok) throw new Error()
       setStatus('accepted')
     } catch {
@@ -87,11 +98,14 @@ export default function OfferAcceptance() {
     <div className="offer-page">
       <div className="offer-shell">
         <div className="offer-brand">
-          <svg width="20" height="20" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M20 14C22.2091 14 24 12.2091 24 10C24 7.79086 22.2091 6 20 6C17.7909 6 16 7.79086 16 10C16 12.2091 17.7909 14 20 14Z" fill="#4778f3" />
-            <path d="M20 16C14.4772 16 10 20.4772 10 26C10 31.5228 14.4772 36 20 36C25.5228 36 30 31.5228 30 26C30 24 29.2 22.2 27.8 20.8L25.8 22.8C26.5 23.7 27 24.8 27 26C27 29.866 23.866 33 20 33C16.134 33 13 29.866 13 26C13 22.134 16.134 19 20 19C21.2 19 22.3 19.3 23.2 19.9L25.2 17.9C23.7 16.7 21.9 16 20 16Z" fill="#4778f3" />
-          </svg>
-          Hirely.ai
+          <BrandLogo>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="9" cy="7" r="4" stroke="var(--primary)" strokeWidth="2" />
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="m16 11 2 2 4-4" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </BrandLogo>
+          {brand.name}
         </div>
 
         {status === 'loading' && (
@@ -129,7 +143,7 @@ export default function OfferAcceptance() {
           <div className="offer-card offer-card-center">
             <div className="offer-icon offer-icon-success">✓</div>
             <h2>Offer Accepted</h2>
-            <p>You've accepted this offer - the hiring team will be in touch with next steps.</p>
+            <p>You've accepted this offer. The hiring team will be in touch with next steps.</p>
           </div>
         )}
 
@@ -137,7 +151,7 @@ export default function OfferAcceptance() {
           <div className="offer-card offer-card-center">
             <div className="offer-icon offer-icon-neutral">i</div>
             <h2>Response Recorded</h2>
-            <p>Thank you - you've declined this offer. We appreciate you letting us know.</p>
+            <p>Thank you. You've declined this offer. We appreciate you letting us know.</p>
           </div>
         )}
 
@@ -175,14 +189,48 @@ export default function OfferAcceptance() {
             {actionError && <div className="offer-action-error">{actionError}</div>}
 
             {!showDeclineBox ? (
-              <div className="offer-actions">
-                <button className="offer-btn offer-btn-decline" onClick={() => setShowDeclineBox(true)} disabled={actionBusy}>
-                  Decline
-                </button>
-                <button className="offer-btn offer-btn-accept" onClick={handleAccept} disabled={actionBusy}>
-                  {actionBusy ? 'Submitting…' : 'Accept Offer'}
-                </button>
-              </div>
+              <>
+                <div className="offer-sign-box">
+                  <label className="offer-sign-label" htmlFor="typed-name">
+                    Type your full name to sign *
+                  </label>
+                  <input
+                    id="typed-name"
+                    className="offer-sign-input"
+                    type="text"
+                    value={typedName}
+                    onChange={e => setTypedName(e.target.value)}
+                    placeholder="Full legal name"
+                    disabled={actionBusy}
+                  />
+                  <label className="offer-consent-row">
+                    <input
+                      type="checkbox"
+                      checked={consent}
+                      onChange={e => setConsent(e.target.checked)}
+                      disabled={actionBusy}
+                    />
+                    <span>
+                      I have read and agree to the terms of this offer, and I am electronically
+                      signing this document.
+                    </span>
+                  </label>
+                </div>
+
+                <div className="offer-actions">
+                  <button className="offer-btn offer-btn-decline" onClick={() => setShowDeclineBox(true)} disabled={actionBusy}>
+                    Decline
+                  </button>
+                  <button
+                    className="offer-btn offer-btn-accept"
+                    onClick={handleAccept}
+                    disabled={actionBusy || !canAccept}
+                    title={!canAccept ? 'Type your full name and confirm consent to sign' : undefined}
+                  >
+                    {actionBusy ? 'Submitting…' : 'Accept & Sign'}
+                  </button>
+                </div>
+              </>
             ) : (
               <div className="offer-decline-box">
                 <label className="offer-decline-label" htmlFor="decline-reason">
@@ -212,6 +260,7 @@ export default function OfferAcceptance() {
             )}
           </div>
         )}
+        <LegalLinks />
       </div>
     </div>
   )

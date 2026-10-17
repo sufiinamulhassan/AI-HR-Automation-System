@@ -1,17 +1,3 @@
-"""
-Candidate-facing redaction for coding submissions — MVP2 §2.10 / §2.13.
-
-The plagiarism check added in this pass stores, on every submission, a list of
-OTHER candidates' ids and their similarity scores. `_sanitize_submission_for_candidate`
-previously stripped only `_id` and `code`, so anything new added to the
-document would have been returned to the candidate verbatim. That would leak
-one candidate's identity and work to another, and tip a copier off that they
-had been caught.
-
-Reviewing that also turned up an existing leak: the whole `quality` dict —
-including the explicitly recruiter-addressed `feedback_for_recruiter` — was
-already being returned to candidates. These tests pin the boundary.
-"""
 import uuid
 
 import pytest
@@ -69,15 +55,12 @@ async def test_plagiarism_data_never_reaches_the_candidate():
 
 
 async def test_recruiter_feedback_never_reaches_the_candidate():
-    """Pre-existing leak found while adding the above."""
     out = _sanitize_submission_for_candidate(_submission())
     assert "feedback_for_recruiter" not in out.get("quality", {})
     assert "mentoring on edge cases" not in repr(out)
 
 
 async def test_candidate_keeps_their_own_feedback_and_pass_rate():
-    """Redaction must not become a blanket blackout — the candidate-addressed
-    feedback exists precisely to be shown to them."""
     out = _sanitize_submission_for_candidate(_submission())
     assert out["quality"]["feedback_for_candidate"] == "Consider validating input before parsing."
     assert out["score"] == 75.0
@@ -111,15 +94,6 @@ async def test_a_submission_without_a_quality_review_is_handled():
 
 
 async def test_every_submission_key_is_classified(setup_test_db, monkeypatch):
-    """The guard that makes the allow-list self-maintaining.
-
-    Runs a real evaluate_submission (sandbox + both LLM reviews stubbed) and
-    asserts every key of the resulting document is classified as candidate-
-    visible, partially-visible, or admin-only. Add a field to the submission
-    doc without classifying it and this goes red — which is the entire point of
-    inverting the deny-list: the unsafe outcome is loud in CI instead of silent
-    in production.
-    """
     from services.hr_module import coding_service
     from services.hr_module.assessment_view import (
         ALL_CLASSIFIED_SUBMISSION_KEYS,
@@ -165,7 +139,7 @@ async def test_every_submission_key_is_classified(setup_test_db, monkeypatch):
         unclassified = set(doc) - set(ALL_CLASSIFIED_SUBMISSION_KEYS)
         assert not unclassified, (
             f"Unclassified submission field(s): {sorted(unclassified)}. Add each to "
-            "services/hr_module/assessment_view.py — CANDIDATE_VISIBLE_SUBMISSION_KEYS "
+            "services/hr_module/assessment_view.py, CANDIDATE_VISIBLE_SUBMISSION_KEYS "
             "if the candidate may see it, ADMIN_ONLY_SUBMISSION_KEYS if not."
         )
 
@@ -178,7 +152,6 @@ async def test_every_submission_key_is_classified(setup_test_db, monkeypatch):
 
 
 async def test_coding_scores_attach_to_the_interview_report(setup_test_db):
-    """§2.13's last missing dimension, which was blocked on §2.10."""
     from services.hr_module.interview_engine import _attach_coding_scores
 
     db = setup_test_db
@@ -201,8 +174,6 @@ async def test_coding_scores_attach_to_the_interview_report(setup_test_db):
 
 
 async def test_no_coding_submission_leaves_the_keys_absent(setup_test_db):
-    """An unassigned candidate must not get a fabricated 0 — every consumer
-    renders an absent dimension as "—"/"N/A"."""
     from services.hr_module.interview_engine import _attach_coding_scores
 
     report: dict = {}
@@ -212,7 +183,6 @@ async def test_no_coding_submission_leaves_the_keys_absent(setup_test_db):
 
 
 async def test_attaching_coding_scores_never_raises(setup_test_db):
-    """A missing coding score must never fail an otherwise-complete evaluation."""
     from services.hr_module.interview_engine import _attach_coding_scores
 
     report: dict = {"overall_score": 70}

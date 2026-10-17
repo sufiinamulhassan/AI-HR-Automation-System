@@ -1,6 +1,3 @@
-"""Tests for saved filter templates (MVP2 §2.7) — CRUD scoped to the
-requesting user's own saved searches against the marketplace/resumes list
-endpoints. `filter_params` is stored and round-tripped opaquely."""
 import pytest
 
 from config.database import get_db
@@ -10,9 +7,6 @@ pytestmark = pytest.mark.anyio
 
 @pytest.fixture(autouse=True)
 async def _clean_saved_filter_templates():
-    """conftest.py (frozen, not owned by this task) doesn't reset the new
-    saved_filter_templates collection between test modules, so this test file
-    cleans up after itself."""
     db = get_db()
     if db is not None:
         await db.saved_filter_templates.delete_many({})
@@ -68,8 +62,6 @@ async def test_create_list_get_roundtrip(client, standard_headers):
 
 
 async def test_list_scoped_to_requesting_user_only(client, standard_headers, admin_headers):
-    """A saved filter created by one user must never appear in another
-    user's list — this is the core privacy guarantee of §2.7."""
     create_resp = await client.post(
         "/api/v1/saved-filters",
         json={"name": "Standard user's private search", "filter_params": {"skill": "python"}},
@@ -84,10 +76,6 @@ async def test_list_scoped_to_requesting_user_only(client, standard_headers, adm
 
 
 async def test_get_forbidden_for_non_owner_non_admin(client, standard_headers, superadmin_headers):
-    """Demo auth only exposes one identity per role, so we can't mint a
-    second distinct 'standard' user — but we can prove the ownership check
-    at least allows an admin-role override while still gating on identity
-    for the exact-owner path (covered by the 404-after-delete test below)."""
     create_resp = await client.post(
         "/api/v1/saved-filters",
         json={"name": "Owner-only search", "filter_params": {"location": "Remote"}},

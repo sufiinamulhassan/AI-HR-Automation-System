@@ -1,8 +1,3 @@
-"""
-Tests for MVP2 §2.8 (interview-scheduling admin UI backend) + §2.19
-(Calendar half of Integrations): the pure ICS builder and the
-GET /interview/{candidate_id}/schedule.ics endpoint.
-"""
 import uuid
 
 import pytest
@@ -15,7 +10,7 @@ pytestmark = pytest.mark.anyio
 def test_build_ics_event_basic_shape():
     ics = build_ics_event(
         uid="interview-abc123@hrbot",
-        summary="Interview: Jane Doe — Senior Backend Engineer",
+        summary="Interview: Jane Doe, Senior Backend Engineer",
         description="Interview session for Jane Doe.",
         start_iso="2026-07-14T09:00:00",
         duration_minutes=30,
@@ -60,7 +55,7 @@ def test_build_ics_event_escapes_special_characters():
 
 
 def test_build_ics_event_folds_long_lines():
-    long_summary = "Interview: " + ("Very Long Candidate Name " * 6) + "— Role"
+    long_summary = "Interview: " + ("Very Long Candidate Name " * 6) + ", Role"
     ics = build_ics_event(
         uid="u3",
         summary=long_summary,

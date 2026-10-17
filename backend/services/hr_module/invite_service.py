@@ -1,10 +1,3 @@
-"""
-Auto-invite and manual-invite orchestration — hr_module.
-
-auto_invite_if_qualified   → triggered by ResumeAgent after matching
-auto_invite_from_jd_match  → triggered by JDAgent after a new JD matches existing resumes
-send_manual_invite         → admin resends invite with existing token
-"""
 import asyncio
 import logging
 import uuid
@@ -12,7 +5,7 @@ from datetime import datetime, timezone
 
 from config.database import get_db
 from config.settings import settings
-from shared.utils import compute_invite_expiry
+from shared.utils import compute_invite_expiry, new_secure_token
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +17,8 @@ async def auto_invite_if_qualified(
     candidate_email: str | None,
     candidate_name: str | None,
 ) -> list[str]:
-    """
-    For a newly processed resume, invite candidate to all JDs where score >= AUTO_INVITE_THRESHOLD.
-    Returns list of created candidate_ids.
-    Skips if candidate was already invited for that job (dedup by email + job_id).
-    """
+    if not settings.AUTO_INVITE_ENABLED:
+        return []
     if not candidate_email or not matched_jds:
         return []
 
@@ -63,12 +53,10 @@ async def auto_invite_from_jd_match(
     *,
     job_id: str,
     matched_resumes: list[dict],
+    force: bool = False,
 ) -> list[str]:
-    """
-    For a newly created JD, invite all qualifying resumes above AUTO_INVITE_THRESHOLD.
-    Fetches candidate email and name from the resume / marketplace profile.
-    Returns list of created candidate_ids.
-    """
+    if not settings.AUTO_INVITE_ENABLED and not force:
+        return []
     if not matched_resumes:
         return []
 
@@ -95,7 +83,7 @@ async def auto_invite_from_jd_match(
             candidate_name = profile.get("name") or candidate_name
 
         if not candidate_email:
-            logger.info("No email for resume %s — skipping auto-invite", resume_id)
+            logger.info("No email for resume %s: skipping auto-invite", resume_id)
             continue
 
         candidate_id = await _create_and_invite(
@@ -114,8 +102,14 @@ async def auto_invite_from_jd_match(
 
 
 async def send_manual_invite(*, candidate: dict, admin_email: str) -> bool:
-    """Re-send invite email for an existing candidate using their current secure_token."""
     from services.hr_module.email_service import send_invite_email
+
+    if candidate.get("interview_mode") == "external":
+        logger.warning(
+            "Not sending the AI interview link: candidate_id=%s is interviewed on another platform",
+            candidate.get("candidate_id"),
+        )
+        return False
 
     db = get_db()
     job: dict = {}
@@ -145,10 +139,6 @@ async def _create_and_invite(
     candidate_name: str,
     invite_type: str,
 ) -> str | None:
-    """
-    Create a candidate record and send an invite email.
-    Returns candidate_id if successful, None if skipped (duplicate) or failed.
-    """
     existing = await db.candidates.find_one({"job_id": job_id, "email": candidate_email})
     if existing:
         logger.info("Skipping duplicate invite | email=%s job_id=%s", candidate_email, job_id)
@@ -156,7 +146,7 @@ async def _create_and_invite(
 
     job = await db.jobs.find_one({"job_id": job_id}) or {}
     candidate_id = str(uuid.uuid4())
-    token = f"tok_{uuid.uuid4().hex[:12]}"
+    token = new_secure_token()
     now = datetime.now(timezone.utc).isoformat()
 
     scenario_id = None
@@ -228,20 +218,24 @@ async def _create_and_invite(
     )
     if not delivered:
         logger.error(
-            "Invite email FAILED to send — candidate created but not contacted | "
+            "Invite email FAILED to send: candidate created but not contacted | "
             "email=%s job_id=%s candidate_id=%s",
             candidate_email, job_id, candidate_id,
         )
 
-    from services.hr_module.workflow_engine import evaluate_and_apply_rules
+    from services.hr_module.workflow_engine import TRIGGER_CANDIDATE_INVITED, evaluate_and_apply_rules
     asyncio.create_task(evaluate_and_apply_rules(
-        trigger_type="candidate_invited",
+        trigger_type=TRIGGER_CANDIDATE_INVITED,
         context={
             "candidate_id": candidate_id, "job_id": job_id, "email": candidate_email,
             "candidate_name": candidate_name, "invite_type": invite_type,
             "secure_token": token, "score": score,
         },
     ))
+    from services.hr_module.lifecycle_events import announce_candidate_invited
+    await announce_candidate_invited(
+        candidate_id=candidate_id, name=candidate_name, job_id=job_id, invite_type=invite_type,
+    )
 
     logger.info(
         "Auto-invited | email=%s job_id=%s score=%.2f candidate_id=%s",
@@ -251,7 +245,6 @@ async def _create_and_invite(
 
 
 async def _prepare_interview_questions(secure_token: str) -> None:
-    """Pre-generate interview questions in the background so the session starts instantly."""
     try:
         from agents.interview_agent import build_interview_agent
         prepare, _ = build_interview_agent()

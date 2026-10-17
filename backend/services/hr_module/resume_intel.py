@@ -1,14 +1,3 @@
-"""
-Async resume ingestion pipeline — hr_module.
-
-Responsibilities:
-  - Text extraction from PDF / DOCX
-  - Candidate email extraction (regex → fallback)
-  - SHA-256 deduplication
-  - MongoDB + Pinecone storage
-  - Bulk batch orchestration
-  - Post-hire outcome propagation (absorbed from pipeline.py)
-"""
 import asyncio
 import hashlib
 import io
@@ -21,7 +10,12 @@ import pdfplumber
 from docx import Document
 
 from config.database import get_db, get_pinecone
+from config.llm import embedding_model
 from config.settings import settings
+from services.hr_module import plan_service
+from services.hr_module.legacy_doc import extract_doc_text
+from services.hr_module.resume_profile import profile_fields, split_profile
+from services.hr_module.vector_scope import vector_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +47,14 @@ def _extract_sync(raw_bytes: bytes, filename: str) -> str:
         except Exception as exc:
             raise ValueError(f"Could not read DOCX file: {exc}")
     if name.endswith(".doc"):
-        raise ValueError("Legacy .doc format is not supported — please re-save as .docx or PDF.")
+        try:
+            return extract_doc_text(raw_bytes)
+        except Exception as exc:
+            raise ValueError(f"Could not read DOC file: {exc}")
     return raw_bytes.decode("utf-8", errors="ignore")
 
 
 def extract_email_from_text(text: str) -> str | None:
-    """Extract the first plausible email address from resume text."""
     matches = _EMAIL_RE.findall(text[:5000])
     filtered = [
         e for e in matches
@@ -79,8 +75,6 @@ def _file_hash(raw_bytes: bytes) -> str:
 
 
 def _text_hash(text: str) -> str:
-    """Content fingerprint: normalize whitespace + case so the same resume
-    re-exported to different bytes (different file_hash) is still caught."""
     normalized = re.sub(r"\s+", " ", text or "").strip().lower()
     if len(normalized) < 30:
         return ""
@@ -92,13 +86,6 @@ async def check_duplicate(
     text: str | None = None,
     exclude_resume_id: str | None = None,
 ) -> str | None:
-    """Return the resume_id of an existing non-failed duplicate, else None.
-
-    Matches on exact file bytes (file_hash) and, when extracted text is provided,
-    on a normalized content fingerprint (text_hash). Failed records are ignored so
-    a previously-failed upload can be retried. exclude_resume_id skips the record
-    being processed (its own pending stub).
-    """
     db = get_db()
     if db is None:
         return None
@@ -117,18 +104,27 @@ async def check_duplicate(
     return doc["resume_id"] if doc else None
 
 
+def resume_vector_metadata(classification: dict, text: str) -> dict:
+    return vector_metadata({
+        "doc_type": "resume",
+        "job_domain": classification.get("job_domain", ""),
+        "seniority_level": classification.get("seniority_level", ""),
+        "skills": (classification.get("skills") or [])[:20],
+        "confidence": float(classification.get("confidence", 0.5)),
+        "years_experience": int(classification.get("years_experience", 0)),
+        "education_level": classification.get("education_level", "other"),
+        "text_snippet": (text or "")[:500],
+    })
+
+
 async def store_resume(state: dict) -> dict:
-    """
-    Persist resume to MongoDB + Pinecone.
-    Extracts candidate name and email; returns them so the agent can
-    pass them downstream (e.g. to auto_invite_node).
-    """
     db = get_db()
     pinecone = get_pinecone()
 
     resume_id = state["resume_id"]
     text = state.get("text", "")
-    classification = state.get("classification", {})
+    classification, profile = split_profile(state.get("classification"))
+    profile_doc = profile_fields(profile, classification.get("job_domain"))
     embedding = state.get("embedding", [])
     filename = state.get("filename", "unknown.pdf")
     raw_bytes = state.get("raw_bytes", b"")
@@ -173,7 +169,9 @@ async def store_resume(state: dict) -> dict:
         "file_hash": file_hash,
         "text_hash": text_hash,
         "classification": classification,
+        **profile_doc,
         "embedding": embedding,
+        "embedding_model": embedding_model(),
         "matched_jds": matched_jds,
         "batch_id": state.get("batch_id"),
         "processing_status": "processed",
@@ -191,11 +189,13 @@ async def store_resume(state: dict) -> dict:
             upsert=True,
         )
         if raw_bytes:
-            await db.resume_files.update_one(
+            stored = await db.resume_files.update_one(
                 {"resume_id": resume_id},
                 {"$set": {"resume_id": resume_id, "filename": filename, "data": raw_bytes}},
                 upsert=True,
             )
+            if getattr(stored, "upserted_id", None) is not None:
+                await plan_service.record_stored_bytes(len(raw_bytes))
 
         if prior_doc:
             try:
@@ -214,16 +214,7 @@ async def store_resume(state: dict) -> dict:
             vectors=[{
                 "id": resume_id,
                 "values": embedding,
-                "metadata": {
-                    "doc_type": "resume",
-                    "job_domain": classification.get("job_domain", ""),
-                    "seniority_level": classification.get("seniority_level", ""),
-                    "skills": classification.get("skills", [])[:20],
-                    "confidence": float(classification.get("confidence", 0.5)),
-                    "years_experience": int(classification.get("years_experience", 0)),
-                    "education_level": classification.get("education_level", "other"),
-                    "text_snippet": text[:500],
-                },
+                "metadata": resume_vector_metadata(classification, text),
             }]
         )
 
@@ -235,10 +226,6 @@ async def process_bulk_batch(
     batch_id: str,
     model_override: str | None = None,
 ) -> None:
-    """
-    Process a list of (filename, bytes) pairs through the full ResumeAgent pipeline.
-    Updates upload_batches collection with per-file progress including auto_invited count.
-    """
     from agents.resume_agent import build_resume_agent
     from config.llm import start_usage_tracking, record_cost
     agent = build_resume_agent()
@@ -316,16 +303,6 @@ async def apply_resume_outcome(
     company: str | None = None,
     job_title: str | None = None,
 ) -> None:
-    """
-    Write an admin hire/reject decision back onto the resume document.
-
-    Called from the hire/reject endpoints in routes/candidates.py and
-    routes/jobs.py, neither of which guards the call — so this must not raise
-    on a decision that was otherwise valid.
-
-    The resume record is the whole propagation — there is no marketplace profile
-    or alumni record to keep in step, both being out of scope.
-    """
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
 

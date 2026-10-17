@@ -1,0 +1,71 @@
+.igm-box { max-width: 680px; }
+.igm-header { gap: .75rem; }
+.igm-header h2 { min-width: 0; overflow-wrap: anywhere; }
+.igm-box .modal-close { display: inline-flex; align-items: center; justify-content: center; }
+.igm-box .modal-close:focus-visible,
+.igm-link-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.igm-body { padding: 1rem 1.4rem; display: flex; flex-direction: column; gap: 1rem; }
+.igm-status { color: var(--gray-500); font-size: .82rem; text-align: center; padding: 1.25rem 0; }
+.igm-empty { color: var(--gray-500); font-size: .9rem; text-align: center; padding: 1.5rem 0; }
+.igm-note {
+  margin: 0; padding: .45rem .7rem; border-radius: var(--radius);
+  background: var(--gray-50); border: 1px solid var(--gray-200); border-left: 3px solid var(--primary);
+  font-size: .78rem; color: var(--gray-700);
+}
+.igm-error {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: .5rem .75rem; border-radius: var(--radius);
+  background: #fef2f2; border: 1px solid #fecaca; color: var(--danger);
+  font-size: .8rem; line-height: 1.45;
+}
+.igm-link-btn { background: none; border: none; padding: 0; font-size: .8rem; font-weight: 700; color: var(--danger); text-decoration: underline; cursor: pointer; }
+
+.igm-list { display: flex; flex-direction: column; gap: .75rem; padding-left: 1.4rem; }
+.igm-item { padding-left: .25rem; break-inside: avoid; }
+.igm-item::marker { font-weight: 800; color: var(--gray-500); }
+.igm-q { margin: 0; font-size: .9rem; font-weight: 600; line-height: 1.45; color: var(--gray-900); overflow-wrap: anywhere; }
+.igm-dim { margin: .15rem 0 0; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--gray-500); }
+.igm-listen { margin: .25rem 0 0; font-size: .8rem; line-height: 1.5; color: var(--gray-700); overflow-wrap: anywhere; }
+.igm-meta { margin: 0; font-size: .75rem; color: var(--gray-500); }
+
+.igm-item-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.igm-item-main { min-width: 0; flex: 1; }
+.igm-tags { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; margin-top: .15rem; }
+.igm-tags .igm-dim { margin: 0; }
+.igm-custom { font-size: .64rem; padding: .08rem .4rem; }
+.igm-item-actions { display: flex; gap: .2rem; flex-shrink: 0; }
+.igm-icon-btn {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0;
+  border: 1px solid var(--gray-200); border-radius: 8px; background: var(--white); color: var(--gray-600);
+  transition: background .15s, border-color .15s, color .15s;
+}
+.igm-icon-btn:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-light); color: var(--gray-900); }
+.igm-icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.igm-icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.igm-icon-btn-danger:hover:not(:disabled) { border-color: #fecaca; background: #fef2f2; color: var(--danger); }
+.igm-item .igm-error { margin-top: .5rem; }
+
+.igm-add { display: flex; flex-direction: column; }
+.igm-add-open { align-self: flex-start; }
+.igm-add-form {
+  display: flex; flex-direction: column; gap: .7rem;
+  padding: .8rem; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50);
+}
+.igm-add-field { display: flex; flex-direction: column; gap: .3rem; }
+.igm-textarea { resize: vertical; min-height: 3.5rem; line-height: 1.45; font-family: var(--font); }
+.igm-add-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+
+.igm-footer { flex-wrap: wrap; }
+
+@media print {
+  body.igm-printing #root { display: none !important; }
+  body.igm-printing .igm-overlay {
+    position: static; display: block; padding: 0; background: none; backdrop-filter: none; animation: none;
+  }
+  body.igm-printing .igm-box {
+    max-width: none; max-height: none; overflow: visible; border-radius: 0; box-shadow: none;
+  }
+  body.igm-printing .igm-no-print { display: none !important; }
+  body.igm-printing .igm-body { padding: 1rem 0; }
+}

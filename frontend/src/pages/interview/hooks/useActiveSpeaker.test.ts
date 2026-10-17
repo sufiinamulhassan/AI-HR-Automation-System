@@ -2,7 +2,6 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useActiveSpeaker, type ActiveSpeakerInput } from './useActiveSpeaker'
 
-
 const LOUD = 0.3
 const QUIET = 0
 

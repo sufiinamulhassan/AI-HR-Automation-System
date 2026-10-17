@@ -1,5 +1,8 @@
-﻿import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Component, useEffect, useState, type ReactNode } from 'react'
+import { authApi } from '../../lib/api'
+import { useBrand } from '../../lib/brand'
+import { useSessionRefresh } from '../../lib/useSessionRefresh'
 import { useAuthStore } from '../../store/auth.store'
 
 class PageBoundary extends Component<{ children: ReactNode }, { crashed: boolean; msg: string }> {
@@ -21,11 +24,12 @@ class PageBoundary extends Component<{ children: ReactNode }, { crashed: boolean
     return this.props.children
   }
 }
-import ModelSelector from './ModelSelector'
+import TopBar from './TopBar'
+import { usePerformanceAccess } from '../../pages/performance/usePerformanceAccess'
 import './DashboardLayout.css'
 
 const DashboardIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <rect x="3" y="3" width="7" height="9" rx="1" />
     <rect x="14" y="3" width="7" height="5" rx="1" />
     <rect x="14" y="12" width="7" height="9" rx="1" />
@@ -34,60 +38,71 @@ const DashboardIcon = () => (
 )
 
 const HRBotIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M12 8V4H8" />
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M12 8V4H8" fill="none" />
     <rect width="16" height="12" x="4" y="8" rx="2" />
-    <path d="M2 14h2" />
-    <path d="M20 14h2" />
-    <path d="M15 13v2" />
-    <path d="M9 13v2" />
+    <path d="M2 14h2" fill="none" />
+    <path d="M20 14h2" fill="none" />
+    <path d="M15 13v2" fill="none" />
+    <path d="M9 13v2" fill="none" />
   </svg>
 )
 
-const ActivityIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+const ResumesIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" fill="none" />
+    <circle cx="12" cy="13" r="2" fill="none" />
+    <path d="M8.5 19a3.5 3.5 0 0 1 7 0" fill="none" />
   </svg>
 )
 
 const UsersIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" fill="none" />
     <circle cx="9" cy="7" r="4" />
-    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" fill="none" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" />
   </svg>
 )
 
 const ScenariosIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
+    <polyline points="14 2 14 8 20 8" fill="none" />
     <line x1="9" y1="13" x2="15" y2="13" />
     <line x1="9" y1="17" x2="15" y2="17" />
   </svg>
 )
 
 const SettingsIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <circle cx="12" cy="12" r="3" />
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <circle cx="12" cy="12" r="3" fill="none" />
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06-.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 )
 
+const PerformanceIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" fill="none" />
+    <circle cx="12" cy="12" r="1" fill="none" />
+  </svg>
+)
+
 const CompanyIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <rect x="4" y="2" width="16" height="20" rx="1" />
-    <path d="M9 22v-4h6v4" />
-    <path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" />
+    <path d="M9 22v-4h6v4" fill="none" />
+    <path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" fill="none" />
   </svg>
 )
 
 const GuideIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" fill="none" />
     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-    <path d="M9 7h6" />
+    <path d="M9 7h6" fill="none" />
   </svg>
 )
 
@@ -115,9 +130,11 @@ const ChevronIcon = () => (
 
 const MODULES: { to: string; label: string; icon: ReactNode; end?: boolean }[] = [
   { to: '/dashboard',             label: 'Dashboard',        icon: <DashboardIcon />, end: true },
-  { to: '/dashboard/hrbot',       label: 'Recruiting',           icon: <HRBotIcon /> },
-  { to: '/dashboard/activity',    label: 'Activity',         icon: <ActivityIcon /> },
+  { to: '/dashboard/hrbot',       label: 'Recruiting',       icon: <HRBotIcon /> },
+  { to: '/dashboard/resumes',     label: 'Résumés',          icon: <ResumesIcon /> },
 ]
+
+const PERFORMANCE_NAV = { to: '/dashboard/performance', label: 'Performance', icon: <PerformanceIcon /> }
 
 const ADMIN_NAV = [
   { to: '/dashboard/users', label: 'Users & Roles', icon: <UsersIcon /> },
@@ -134,20 +151,31 @@ const ROLE_LABELS: Record<string, string> = {
   standard: 'Recruiter',
 }
 
-const ROLE_CLASS: Record<string, string> = {
-  superadmin: 'role-super',
-  admin: 'role-admin',
-  standard: 'role-standard',
-}
-
 export default function DashboardLayout() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, avatarDataUrl, setAvatarDataUrl } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const u = user as Record<string, string> | null
+  const u = user
+  const companyName = useBrand().companyName || u?.company_name
   const role = u?.role || 'standard'
   const isAdmin = role === 'admin' || role === 'superadmin'
+  const perfAccess = usePerformanceAccess()
+  useSessionRefresh()
+
+  useEffect(() => {
+    if (avatarDataUrl !== undefined) return
+    let active = true
+    authApi.getAvatar()
+      .then(r => {
+        if (!active) return
+        setAvatarDataUrl(r.data?.configured && r.data?.image_base64
+          ? `data:${r.data.content_type || 'image/png'};base64,${r.data.image_base64}`
+          : null)
+      })
+      .catch(() => { if (active) setAvatarDataUrl(null) })
+    return () => { active = false }
+  }, [avatarDataUrl, setAvatarDataUrl])
 
   const isOnAdminRoute = ADMIN_NAV.some(n => location.pathname.startsWith(n.to))
   const [adminExpanded, setAdminExpanded] = useState(isOnAdminRoute)
@@ -165,7 +193,7 @@ export default function DashboardLayout() {
     return () => { document.body.style.overflow = '' }
   }, [mobileOpen])
 
-  const allNav = [...MODULES, ...(isAdmin ? ADMIN_NAV : []), GUIDE_NAV]
+  const allNav = [...MODULES, ...(perfAccess.hasAnyAccess ? [PERFORMANCE_NAV] : []), ...(isAdmin ? ADMIN_NAV : []), GUIDE_NAV]
   const currentPage = allNav.find(n => ('end' in n && n.end) ? location.pathname === n.to : location.pathname.startsWith(n.to))
   const pageTitle = location.pathname === '/dashboard/profile' ? 'Profile' : (currentPage?.label || 'Dashboard')
 
@@ -173,6 +201,8 @@ export default function DashboardLayout() {
     logout()
     navigate('/login')
   }
+
+  if (u?.is_platform_admin === true) return <Navigate to="/platform" replace />
 
   return (
     <div className="dashboard-shell">
@@ -201,6 +231,7 @@ export default function DashboardLayout() {
           </div>
           <div className="brand-text">
             <div className="brand-name">Hirely<span className="brand-name-sub">.ai</span></div>
+            {companyName && <div className="brand-company" title={companyName}>{companyName}</div>}
             <div className="brand-role-desc">
               {role === 'superadmin' ? 'Super Admin Portal' : role === 'admin' ? 'HR Admin Portal' : 'Recruiter Portal'}
             </div>
@@ -225,6 +256,15 @@ export default function DashboardLayout() {
                 <span className="nav-label">{n.label}</span>
               </NavLink>
             ))}
+            {perfAccess.hasAnyAccess && (
+              <NavLink
+                to={PERFORMANCE_NAV.to}
+                className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+              >
+                <span className="nav-icon">{PERFORMANCE_NAV.icon}</span>
+                <span className="nav-label">{PERFORMANCE_NAV.label}</span>
+              </NavLink>
+            )}
           </nav>
 
           {isAdmin && (
@@ -257,43 +297,32 @@ export default function DashboardLayout() {
             </>
           )}
 
-          <div className="sidebar-divider" />
-          <nav className="sidebar-nav">
-            <NavLink
-              to={GUIDE_NAV.to}
-              className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-            >
-              <span className="nav-icon">{GUIDE_NAV.icon}</span>
-              <span className="nav-label">{GUIDE_NAV.label}</span>
-            </NavLink>
-          </nav>
         </div>
 
         <div className="sidebar-footer">
-          <div className="sidebar-model-wrap">
-            <ModelSelector />
-          </div>
-
-          <NavLink to="/dashboard/profile" className={({ isActive }) => `sidebar-user${isActive ? ' sidebar-user-active' : ''}`}>
-            <div className="sidebar-user-avatar">
-              {(u?.name || 'A').charAt(0).toUpperCase()}
+          <Link to={GUIDE_NAV.to} className="sidebar-promo-card">
+            <span className="sidebar-promo-icon">{GUIDE_NAV.icon}</span>
+            <div className="sidebar-promo-text">
+              <div className="sidebar-promo-heading">User Guide</div>
             </div>
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">{u?.name || 'Admin'}</div>
-              <span className={`role-badge ${ROLE_CLASS[role] || 'role-standard'}`}>
-                {ROLE_LABELS[role] || role}
-              </span>
-            </div>
-          </NavLink>
+            <span className="sidebar-promo-pill">Open guide <ChevronIcon /></span>
+          </Link>
 
           <button className="btn-logout" onClick={handleLogout}>
-            <span className="btn-logout-icon"><LogoutIcon /></span>
-            <span className="btn-logout-text">Sign out</span>
+            <LogoutIcon />
+            <span>Sign out</span>
           </button>
         </div>
       </aside>
 
       <main className="dashboard-main">
+        <TopBar
+          name={u?.name || 'Admin'}
+          roleLabel={ROLE_LABELS[role] || role}
+          avatarInitial={(u?.name || 'A').charAt(0).toUpperCase()}
+          avatarUrl={avatarDataUrl}
+          showAttention={isAdmin}
+        />
         <PageBoundary>
           <Outlet />
         </PageBoundary>

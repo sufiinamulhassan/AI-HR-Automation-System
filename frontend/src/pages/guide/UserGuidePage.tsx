@@ -16,7 +16,6 @@ import './UserGuidePage.css'
 
 const OVERVIEW = 'overview'
 
-
 function isGuideLike(v: unknown): v is RoleGuide {
   if (!v || typeof v !== 'object') return false
   const g = v as Partial<RoleGuide>
@@ -52,7 +51,6 @@ function mergeGuides(bundled: RoleGuide[], fromServer: RoleGuide[]): RoleGuide[]
   return [...byRole.values()].sort((a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role])
 }
 
-
 interface FlatSection {
   key: string
   chapter: GuideChapter
@@ -85,10 +83,9 @@ function toGuideRole(raw: unknown): GuideRole {
   return raw === 'superadmin' || raw === 'admin' ? raw : 'standard'
 }
 
-
 const SearchIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" fill="none" />
   </svg>
 )
 
@@ -110,7 +107,6 @@ const ChevronRightIcon = () => (
     <polyline points="9 18 15 12 9 6" />
   </svg>
 )
-
 
 function renderInline(text: string): ReactNode {
   const parts = text.split(/\*\*(.+?)\*\*/g)
@@ -240,7 +236,6 @@ function OverviewView({ guide, onOpen }: { guide: RoleGuide; onOpen: (key: strin
     </article>
   )
 }
-
 
 export default function UserGuidePage() {
   const user = useAuthStore(s => s.user) as Record<string, unknown> | null

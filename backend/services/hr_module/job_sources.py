@@ -1,14 +1,3 @@
-"""External Job Description source connectors — hr_module.
-
-Pluggable fetchers that pull JDs from job boards and normalise them to the shape
-the JD pipeline expects:
-
-    { title, description, company_name, location, employment_type, is_remote, source_url }
-
-Open APIs (Remotive, Arbeitnow) work with no key. Keyed platforms (LinkedIn,
-Naukri) have no free public API — they require a provider key in settings and are
-otherwise reported as "not configured".
-"""
 import logging
 import re
 import time
@@ -23,13 +12,10 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 20.0
-_HEADERS = {"User-Agent": "HRBot-JobImporter/1.0", "Accept": "application/json"}
+_HEADERS = {"User-Agent": "Hirely-JobImporter/1.0", "Accept": "application/json"}
 
 SOURCES = [
     {"id": "linkedin",     "label": "LinkedIn",     "requires_key": True,  "key": "LINKEDIN_API_KEY"},
-    {"id": "naukri",       "label": "Naukri",       "requires_key": True,  "key": "NAUKRI_API_KEY"},
-    {"id": "dice",         "label": "Dice",         "requires_key": True,  "key": "DICE_API_KEY"},
-    {"id": "careerbuilder","label": "CareerBuilder","requires_key": True,  "key": "CAREERBUILDER_API_KEY"},
     {"id": "indeed",       "label": "Indeed",       "requires_key": True,  "key": "INDEED_API_KEY"},
     {"id": "remotive",     "label": "Remotive",     "requires_key": False, "key": None},
     {"id": "arbeitnow",    "label": "Arbeitnow",    "requires_key": False, "key": None},
@@ -38,15 +24,15 @@ SOURCES = [
     {"id": "jobicy",       "label": "Jobicy",       "requires_key": False, "key": None},
 ]
 
-_KEYED_SOURCE_IDS = {"linkedin", "naukri", "dice", "careerbuilder", "indeed"}
+_KEYED_SOURCE_IDS = {"linkedin", "indeed"}
 
 
 class JobSourceError(Exception):
-    """Generic source failure (network, bad response)."""
+    pass
 
 
 class JobSourceNotConfigured(JobSourceError):
-    """A keyed source was requested but no API key is configured."""
+    pass
 
 
 def _key_for(source_id: str) -> str:
@@ -57,7 +43,6 @@ def _key_for(source_id: str) -> str:
 
 
 def list_sources() -> list[dict]:
-    """Sources + whether each is usable (free, or keyed-and-configured)."""
     out = []
     for s in SOURCES:
         out.append({
@@ -70,12 +55,6 @@ def list_sources() -> list[dict]:
 
 
 class _HTMLToText(HTMLParser):
-    """Convert JD HTML to clean, structured plain text:
-      - headings (<h1-6>) → '## ' lines
-      - list items (<li>) → '- ' lines, each kept on a single line
-      - block tags → line breaks; inline tags → joined
-    so the frontend can render headings/bullets/paragraphs without guessing.
-    """
     _BLOCK = {"p", "div", "section", "article", "ul", "ol", "table",
               "thead", "tbody", "tr", "header", "footer", "nav"}
     _HEAD = {"h1", "h2", "h3", "h4", "h5", "h6"}
@@ -116,7 +95,6 @@ class _HTMLToText(HTMLParser):
 
 
 def _strip_html(text: str) -> str:
-    """HTML → tidy markdown-ish text (also handles plain text gracefully)."""
     if not text:
         return ""
     parser = _HTMLToText()
@@ -154,13 +132,11 @@ _STOPWORDS = {"a", "an", "the", "of", "and", "or", "in", "at", "to", "for", "wit
 
 
 def _tokens(text: str) -> list[str]:
-    """Split a query/location into meaningful lowercase tokens."""
     raw = re.split(r"[^a-z0-9+#.]+", (text or "").lower())
     return [t for t in raw if len(t) >= 2 and t not in _STOPWORDS]
 
 
 def _match_score(haystack: str, query_tokens: list[str]) -> int:
-    """How many query tokens appear in the text (0 = no match)."""
     if not query_tokens:
         return 1
     hl = haystack.lower()
@@ -175,9 +151,6 @@ async def _get_json(url: str, params: dict | None = None):
 
 
 def _rank(candidates: list[dict], query: str | None, location: str | None, limit: int) -> list[dict]:
-    """Rank normalised candidates by query relevance (title-weighted) with a soft
-    location bonus, dropping non-matches when a query is given. Shared by all sources
-    so behaviour is consistent and adding a source is just a normaliser away."""
     qtokens = _tokens(query or "")
     wants_remote = "remote" in (location or "").lower()
     loc_tokens = [t for t in _tokens(location or "") if t != "remote"]
@@ -200,7 +173,6 @@ def _rank(candidates: list[dict], query: str | None, location: str | None, limit
 
 
 def _parse_epoch(value) -> float | None:
-    """Best-effort parse of a date/timestamp into epoch seconds."""
     if value is None or value == "":
         return None
     if isinstance(value, (int, float)):
@@ -241,7 +213,6 @@ def _apply_filters(cands: list[dict], date_posted: str | None,
 async def fetch_jobs(source: str, query: str | None = None, location: str | None = None,
                      limit: int = 10, *, date_posted: str | None = None,
                      job_type: str | None = None, remote_only: bool = False) -> list[dict]:
-    """Fetch + normalise JDs from one source, apply filters, and rank by relevance."""
     limit = max(1, min(int(limit or 10), 50))
     connectors = {
         "remotive": _fetch_remotive,
@@ -375,28 +346,6 @@ async def _fetch_jobicy(query) -> list[dict]:
 
 
 async def _fetch_keyed(source: str, query) -> list[dict]:
-    """Provider call for keyed sources (LinkedIn / Naukri / Dice / CareerBuilder / Indeed).
-
-    Research notes (Phase 2C, 2026-07): none of these five currently offer a
-    free/public search API that could be legitimately called without a signed
-    partner agreement —
-      - LinkedIn: Jobs data is only available via the (paid, approval-gated)
-        Talent/Recruiter partner APIs. No public search endpoint.
-      - Naukri: No public API; all access is via paid RPC/partner integrations.
-      - Dice: the old public Dice Jobs API was shut down (~2017). What remains is
-        a paid "Dice Open Web" partner feed.
-      - CareerBuilder: the Data Science / job-search APIs require a partner
-        application (developer.careerbuilder.com) and OAuth2 client-credentials
-        access issued by CareerBuilder's Authorization team — not self-serve/free.
-      - Indeed: the free Publisher API (XML feed + key) was deprecated in 2023;
-        job data now requires an enterprise data-partnership agreement.
-    Scraping any of these sites is explicitly out of bounds (ToS/robots.txt), so
-    each is registered as `requires_key=True` and gated on its settings key. The
-    real provider call goes here once a signed partner agreement + credentials
-    exist (the key is read via `_key_for`). Until then this is unreachable —
-    `fetch_jobs` raises `JobSourceNotConfigured` before ever calling this function
-    for an unconfigured source — so returning [] here is only a defensive fallback.
-    """
     logger.info("Keyed job source '%s' invoked with a key but no provider wired yet.", source)
     return []
 
@@ -405,8 +354,6 @@ _NUM = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 
 
 def _to_int(num: str, has_k: bool) -> int:
-    """Parse a matched number token (with optional thousands separators) to int,
-    applying the x1000 multiplier when the surrounding match had a 'k' suffix."""
     value = float(num.replace(",", ""))
     if has_k:
         value *= 1000
@@ -415,26 +362,21 @@ def _to_int(num: str, has_k: bool) -> int:
 
 _CUR = r"(?:USD|US\$|GBP|EUR|£|\$|€)"
 
+_RANGE_SEP = "(?:-|–|" + chr(0x2014) + "|to)"
+
 _SALARY_PATTERNS = [
     re.compile(
-        rf"{_CUR}\s?({_NUM})\s*(k)?\s*(?:-|–|—|to)\s*{_CUR}?\s?({_NUM})\s*(k)?",
+        rf"{_CUR}\s?({_NUM})\s*(k)?\s*{_RANGE_SEP}\s*{_CUR}?\s?({_NUM})\s*(k)?",
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b({_NUM})\s*(k)\b\s*(?:-|–|—|to)\s*({_NUM})\s*(k)\b",
+        rf"\b({_NUM})\s*(k)\b\s*{_RANGE_SEP}\s*({_NUM})\s*(k)\b",
         re.IGNORECASE,
     ),
 ]
 
 
 def extract_salary_range(text: str) -> tuple[int | None, int | None]:
-    """Best-effort, deterministic (regex-only, no LLM) extraction of a salary range
-    from free-form job description text. Returns (min, max), or (None, None) when no
-    recognisable pattern is found. Handles:
-      - "$80,000 - $120,000", "USD 90000-110000", "£45,000 to £60,000"
-      - "80k-120k", "80k to 120k"
-    Order of the two numbers in the match is normalised so min <= max.
-    """
     if not text:
         return (None, None)
 

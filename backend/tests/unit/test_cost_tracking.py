@@ -1,6 +1,3 @@
-"""Tests for OpenAI usage/cost accumulation — config.llm."""
-
-
 class _Usage:
     def __init__(self, prompt=0, completion=0, total=0):
         self.prompt_tokens = prompt
@@ -37,3 +34,20 @@ def test_unknown_model_uses_fallback_pricing():
     acc = llm.start_usage_tracking()
     llm._record_llm("some-unknown-model", _Usage(prompt=1_000_000, completion=0))
     assert abs(acc["cost_usd"] - 2.5) < 1e-6
+
+
+def test_embeddings_are_tracked_per_model():
+    from config import llm
+    acc = llm.start_usage_tracking()
+    llm._record_embed("text-embedding-3-small", _Usage(total=2000))
+    llm._record_embed("text-embedding-3-small", _Usage(total=500))
+    llm._record_embed("text-embedding-3-large", _Usage(total=1000))
+
+    small = acc["embedding_models"]["text-embedding-3-small"]
+    large = acc["embedding_models"]["text-embedding-3-large"]
+    assert (small["calls"], small["tokens"]) == (2, 2500)
+    assert abs(small["cost_usd"] - 2500 * 0.02 / 1e6) < 1e-12
+    assert (large["calls"], large["tokens"]) == (1, 1000)
+    assert abs(large["cost_usd"] - 1000 * 0.13 / 1e6) < 1e-12
+    assert sum(m["calls"] for m in acc["embedding_models"].values()) == acc["embedding_calls"]
+    assert sum(m["tokens"] for m in acc["embedding_models"].values()) == acc["embedding_tokens"]

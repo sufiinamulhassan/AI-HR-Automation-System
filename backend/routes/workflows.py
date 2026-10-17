@@ -1,14 +1,3 @@
-"""
-Workflow automation routes — hr_module Workflow Automation (MVP2 §2.18).
-
-    POST   /                    create a workflow rule                  (admin)
-    GET    /                    list workflow rules                     (any authenticated user)
-    GET    /{rule_id}           get a single rule                       (any authenticated user)
-    PATCH  /{rule_id}           update a rule                           (admin)
-    DELETE /{rule_id}           delete a rule                           (admin)
-    POST   /{rule_id}/test      dry-run conditions against a sample context, no action applied (admin)
-    POST   /run-reminders       manually trigger send_pending_reminders (admin)
-"""
 import asyncio
 import uuid
 from datetime import datetime, timezone
@@ -18,14 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from config.database import get_db
-from shared.auth import get_current_user, require_admin
+from shared.auth import get_current_user, require_admin, require_permission
+from services.hr_module.plan_service import require_feature
 from services.hr_module.audit_service import log_audit_event
 from services.hr_module.workflow_engine import evaluate_conditions, send_pending_reminders
 
 router = APIRouter()
 
-from services.hr_module.workflow_engine import (  # noqa: E402
-    _ACTION_TYPES, _OPERATORS, _TRIGGER_TYPES,
+from services.hr_module.workflow_engine import (
+    _ACTION_TYPES, _OPERATORS, _TRIGGER_TYPES, TRIGGERS,
 )
 
 
@@ -61,9 +51,15 @@ class RunRemindersRequest(BaseModel):
     reminder_after_hours: int | None = None
 
 
-def _validate_rule_fields(trigger_type: str, conditions: list[Condition], action_type: str) -> None:
+def _validate_trigger(trigger_type: str) -> None:
     if trigger_type not in _TRIGGER_TYPES:
-        raise HTTPException(422, f"Invalid trigger_type. Must be one of: {sorted(_TRIGGER_TYPES)}")
+        choices = ", ".join(t["key"] for t in TRIGGERS)
+        raise HTTPException(422, f"Unknown trigger_type: {trigger_type}. Choose one of: {choices}")
+
+
+def _validate_rule_fields(trigger_type: str | None, conditions: list[Condition], action_type: str) -> None:
+    if trigger_type is not None:
+        _validate_trigger(trigger_type)
     if action_type not in _ACTION_TYPES:
         raise HTTPException(422, f"Invalid action_type. Must be one of: {sorted(_ACTION_TYPES)}")
     for cond in conditions:
@@ -72,7 +68,12 @@ def _validate_rule_fields(trigger_type: str, conditions: list[Condition], action
 
 
 @router.post("")
-async def create_rule(body: CreateRuleRequest, user: dict = Depends(require_admin)):
+async def create_rule(
+    body: CreateRuleRequest,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("workflows:manage")),
+    _plan: None = Depends(require_feature("workflows")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -107,6 +108,7 @@ async def list_rules(
     trigger_type: str | None = None,
     is_active: bool | None = None,
     _: dict = Depends(get_current_user),
+    _plan: None = Depends(require_feature("workflows")),
 ):
     db = get_db()
     if db is None:
@@ -123,8 +125,13 @@ async def list_rules(
     return {"rules": rules}
 
 
+@router.get("/triggers")
+async def list_triggers(_: dict = Depends(get_current_user), _plan: None = Depends(require_feature("workflows"))):
+    return {"triggers": [dict(t) for t in TRIGGERS]}
+
+
 @router.get("/{rule_id}")
-async def get_rule(rule_id: str, _: dict = Depends(get_current_user)):
+async def get_rule(rule_id: str, _: dict = Depends(get_current_user), _plan: None = Depends(require_feature("workflows"))):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -135,7 +142,13 @@ async def get_rule(rule_id: str, _: dict = Depends(get_current_user)):
 
 
 @router.patch("/{rule_id}")
-async def update_rule(rule_id: str, body: UpdateRuleRequest, user: dict = Depends(require_admin)):
+async def update_rule(
+    rule_id: str,
+    body: UpdateRuleRequest,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("workflows:manage")),
+    _plan: None = Depends(require_feature("workflows")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -150,10 +163,11 @@ async def update_rule(rule_id: str, body: UpdateRuleRequest, user: dict = Depend
             c if isinstance(c, dict) else c.model_dump() for c in updates["conditions"]
         ]
 
-    trigger_type = updates.get("trigger_type", existing.get("trigger_type"))
+    if "trigger_type" in updates:
+        _validate_trigger(updates["trigger_type"])
     action_type = updates.get("action_type", existing.get("action_type"))
     conditions = updates.get("conditions", existing.get("conditions") or [])
-    _validate_rule_fields(trigger_type, [Condition(**c) for c in conditions], action_type)
+    _validate_rule_fields(None, [Condition(**c) for c in conditions], action_type)
 
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.workflow_rules.update_one({"rule_id": rule_id}, {"$set": updates})
@@ -167,7 +181,12 @@ async def update_rule(rule_id: str, body: UpdateRuleRequest, user: dict = Depend
 
 
 @router.delete("/{rule_id}")
-async def delete_rule(rule_id: str, user: dict = Depends(require_admin)):
+async def delete_rule(
+    rule_id: str,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("workflows:manage")),
+    _plan: None = Depends(require_feature("workflows")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -183,9 +202,13 @@ async def delete_rule(rule_id: str, user: dict = Depends(require_admin)):
 
 
 @router.post("/{rule_id}/test")
-async def test_rule(rule_id: str, body: TestRuleRequest, _: dict = Depends(require_admin)):
-    """Dry-run: evaluates the rule's conditions against a supplied sample
-    context. Never applies the action — purely diagnostic."""
+async def test_rule(
+    rule_id: str,
+    body: TestRuleRequest,
+    _: dict = Depends(require_admin),
+    __: dict = Depends(require_permission("workflows:manage")),
+    _plan: None = Depends(require_feature("workflows")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -198,7 +221,12 @@ async def test_rule(rule_id: str, body: TestRuleRequest, _: dict = Depends(requi
 
 
 @router.post("/run-reminders")
-async def run_reminders(body: RunRemindersRequest = RunRemindersRequest(), _: dict = Depends(require_admin)):
+async def run_reminders(
+    body: RunRemindersRequest = RunRemindersRequest(),
+    _: dict = Depends(require_admin),
+    __: dict = Depends(require_permission("workflows:manage")),
+    _plan: None = Depends(require_feature("workflows")),
+):
     kwargs = {}
     if body.reminder_after_hours is not None:
         kwargs["reminder_after_hours"] = body.reminder_after_hours

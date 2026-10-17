@@ -1,27 +1,10 @@
-"""Company Settings service — hr_module Admin Configuration (MVP2 §2.20 slice).
-
-Two responsibilities:
-
-1. A SINGLETON company-profile document (`company_settings` collection),
-   looked up by a fixed `_id` of the literal string "singleton" — there is
-   never more than one document, so GET/PATCH always target the same row
-   with no id to look up or generate. On a fresh install, the first GET
-   upserts sensible blank defaults into existence rather than 404ing, so the
-   Company Settings admin page always has something to render/edit.
-
-2. A read-only "integrations status" aggregation across every external
-   dependency configured in `config/settings.py`, reporting only booleans
-   (never the underlying secret values) — the same honest-disclosure pattern
-   `services.hr_module.job_sources.list_sources()` already established for
-   job boards, extended to cover OpenAI, Pinecone, Judge0, Google OAuth SSO,
-   webhook signing, and SMTP email. Job-board entries are read directly from
-   `list_sources()` (not duplicated) so the two never drift out of sync.
-"""
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from config.database import get_db
 from config.settings import sandbox_provider, settings
+from config.tenancy import current_company
 from shared.utils import mongo_doc
 
 logger = logging.getLogger(__name__)
@@ -30,7 +13,39 @@ SINGLETON_ID = "singleton"
 
 _EDITABLE_FIELDS = (
     "company_name", "industry", "size", "website", "address", "primary_contact_email",
+    "terms_url", "privacy_url",
 )
+
+_LEGAL_LINK_FIELDS = {"terms_url": "The terms link", "privacy_url": "The privacy link"}
+MAX_LEGAL_URL_CHARS = 300
+
+_PRIVATE_SECTIONS = ("mail", "integrations", "sso")
+
+
+def clean_legal_url(value, label: str = "The link") -> str:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return ""
+    if len(text) > MAX_LEGAL_URL_CHARS:
+        raise ValueError(f"{label} must be at most {MAX_LEGAL_URL_CHARS} characters.")
+    if any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in text):
+        raise ValueError(f"{label} must be a web address starting with https://.")
+    try:
+        parts = urlsplit(text)
+        parts.port
+    except ValueError:
+        raise ValueError(f"{label} must be a web address starting with https://.")
+    if parts.scheme.lower() != "https" or not parts.hostname or parts.username or parts.password:
+        raise ValueError(f"{label} must be a web address starting with https://.")
+    return text
+
+
+def _public_view(doc: dict) -> dict:
+    for key in _PRIVATE_SECTIONS:
+        doc.pop(key, None)
+    for field in _EDITABLE_FIELDS:
+        doc.setdefault(field, "")
+    return doc
 
 
 def _default_doc() -> dict:
@@ -41,16 +56,14 @@ def _default_doc() -> dict:
 
 
 async def get_company_settings() -> dict:
-    """Fetch the singleton company-profile document, upserting blank defaults
-    into existence on first call so a fresh install never 404s."""
     db = get_db()
     if db is None:
         logger.warning("get_company_settings: database unavailable, returning in-memory defaults")
-        return mongo_doc(_default_doc())
+        return _public_view(mongo_doc(_default_doc()))
 
     doc = await db.company_settings.find_one({"_id": SINGLETON_ID})
     if doc is not None:
-        return mongo_doc(doc)
+        return _public_view(mongo_doc(doc))
 
     fresh = _default_doc()
     try:
@@ -59,22 +72,32 @@ async def get_company_settings() -> dict:
         logger.info("company_settings singleton insert race, re-reading: %s", exc)
         existing = await db.company_settings.find_one({"_id": SINGLETON_ID})
         if existing is not None:
-            return mongo_doc(existing)
-    return mongo_doc(fresh)
+            return _public_view(mongo_doc(existing))
+    return _public_view(mongo_doc(fresh))
+
+
+async def organization_name() -> str:
+    db = get_db()
+    stored = (await db.company_settings.find_one({"_id": SINGLETON_ID}, {"company_name": 1}) or {}) if db is not None else {}
+    return " ".join(str(stored.get("company_name") or "").split())
+
+
+async def display_name() -> str:
+    return await organization_name() or str(current_company().get("name") or "").strip()
 
 
 async def update_company_settings(updates: dict, updated_by: str | None = None) -> dict:
-    """Patch the singleton document (creating it first with defaults if it
-    doesn't exist yet), applying only the whitelisted, explicitly-provided
-    fields."""
     clean = {k: v for k, v in updates.items() if k in _EDITABLE_FIELDS and v is not None}
+    for field, label in _LEGAL_LINK_FIELDS.items():
+        if field in clean:
+            clean[field] = clean_legal_url(clean[field], label)
 
     db = get_db()
     if db is None:
         logger.warning("update_company_settings: database unavailable, update not persisted")
         merged = _default_doc()
         merged.update(clean)
-        return mongo_doc(merged)
+        return _public_view(mongo_doc(merged))
 
     await get_company_settings()
 
@@ -84,7 +107,7 @@ async def update_company_settings(updates: dict, updated_by: str | None = None) 
 
     await db.company_settings.update_one({"_id": SINGLETON_ID}, {"$set": clean}, upsert=True)
     doc = await db.company_settings.find_one({"_id": SINGLETON_ID})
-    return mongo_doc(doc) if doc is not None else mongo_doc(_default_doc())
+    return _public_view(mongo_doc(doc) if doc is not None else mongo_doc(_default_doc()))
 
 
 def _google_oauth_configured() -> bool:
@@ -96,31 +119,31 @@ def _google_oauth_configured() -> bool:
 
 
 def _core_integrations() -> list[dict]:
-    """Booleans-only status for every non-job-board external dependency in
-    config/settings.py. Never includes the actual key/secret values."""
+    active_sandbox = sandbox_provider()
     return [
         {"id": "openai", "label": "OpenAI", "configured": bool(settings.OPENAI_API_KEY)},
+        {"id": "anthropic", "label": "Anthropic", "configured": bool(settings.ANTHROPIC_API_KEY)},
         {"id": "pinecone", "label": "Pinecone", "configured": bool(settings.PINECONE_API_KEY)},
         {
             "id": "judge0", "label": "Judge0 (Coding Assessment)",
-            "configured": bool(settings.JUDGE0_API_URL),
-            "active": sandbox_provider() == "judge0",
+            "configured": active_sandbox == "judge0" and bool(settings.JUDGE0_API_URL),
+            "active": active_sandbox == "judge0",
         },
         {
             "id": "piston", "label": "Piston (Coding Assessment)",
-            "configured": bool(settings.PISTON_API_URL),
-            "active": sandbox_provider() == "piston",
+            "configured": active_sandbox == "piston" and bool(settings.PISTON_API_URL),
+            "active": active_sandbox == "piston",
         },
         {"id": "google_oauth_sso", "label": "Google OAuth SSO", "configured": _google_oauth_configured()},
         {"id": "webhook_signing", "label": "Webhook Signing", "configured": bool(settings.WEBHOOK_SIGNING_SECRET)},
-        {"id": "smtp_email", "label": "SMTP Email", "configured": bool(settings.EMAIL_HOST)},
+        {
+            "id": "smtp_email", "label": "SMTP Email",
+            "configured": bool(settings.AWS_SES_ENABLED) or bool(settings.EMAIL_HOST),
+        },
     ]
 
 
 async def get_integrations_status() -> dict:
-    """Read-only configured/not-configured status for every external
-    dependency: the 6 core integrations above, plus every job-board source
-    from `job_sources.list_sources()` (reused directly, not duplicated)."""
     from services.hr_module.job_sources import list_sources
 
     return {

@@ -1,18 +1,10 @@
-"""Bidirectional JD ↔ Resume matching via Pinecone + metadata filtering — hr_module.
-
-match_resume_to_jds   → called when a new resume is processed
-match_jd_to_resume_pool → called when a new JD is created
-Both return scored match dicts so callers can apply invite thresholds.
-
-Scoring: composite = vector_similarity + SKILLS_WEIGHT × skills_jaccard (skills boost only, never penalise).
-Gates:   domain alignment (same vs cross-domain threshold), seniority flex window, deadline.
-"""
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from config.database import get_db, get_pinecone
 from config.settings import settings
+from services.hr_module.vector_scope import query_filter
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +21,6 @@ _SENIORITY_FLEX: dict[str, list[str]] = {
 
 
 def _job_is_open(job: dict) -> bool:
-    """A JD accepts new candidates unless its application deadline has passed."""
     deadline = (job or {}).get("deadline_at")
     if not deadline:
         return True
@@ -40,7 +31,6 @@ def _job_is_open(job: dict) -> bool:
 
 
 def _skills_jaccard(skills_a: list[str], skills_b: list[str]) -> float:
-    """Jaccard similarity between two skill lists (case-insensitive)."""
     if not skills_a or not skills_b:
         return 0.0
     set_a = {s.lower().strip() for s in skills_a if s}
@@ -53,12 +43,6 @@ def _skills_jaccard(skills_a: list[str], skills_b: list[str]) -> float:
 
 
 def _composite_score(vector_score: float, resume_skills: list[str], jd_skills: list[str]) -> float:
-    """Vector score boosted by skill overlap — skills can only help, never hurt.
-
-    Zero skill overlap (or missing skills) leaves the vector score unchanged.
-    Strong overlap adds up to SKILLS_WEIGHT on top, pushing borderline matches
-    over the auto-invite threshold.
-    """
     if not resume_skills or not jd_skills:
         return vector_score
     jaccard = _skills_jaccard(resume_skills, jd_skills)
@@ -66,18 +50,12 @@ def _composite_score(vector_score: float, resume_skills: list[str], jd_skills: l
 
 
 def _seniority_ok(candidate_seniority: str | None, required_seniority: list[str]) -> bool:
-    """True if the candidate's seniority is within the JD's flex window.
-
-    Permissive when data is missing on either side to avoid silently dropping
-    resumes that were processed before seniority classification was added.
-    """
     if not candidate_seniority or not required_seniority:
         return True
     return candidate_seniority in required_seniority
 
 
 def _passes_relevance(score: float, domain_a: str | None, domain_b: str | None) -> bool:
-    """Relevance gate: same-domain uses the standard threshold, cross-domain uses a higher bar."""
     if domain_a and domain_b and domain_a == domain_b:
         return score >= settings.RESUME_SIMILARITY_THRESHOLD
     return score >= settings.CROSS_DOMAIN_SIMILARITY_THRESHOLD
@@ -88,11 +66,6 @@ async def match_resume_to_jds(
     embedding: list,
     classification: dict,
 ) -> list[dict]:
-    """Find JDs that match a newly processed resume.
-
-    Returns [{job_id, score}] sorted desc by composite score.
-    Gate: composite score >= domain-aware threshold AND seniority within JD's flex window.
-    """
     pinecone = get_pinecone()
     db = get_db()
     if pinecone is None or db is None:
@@ -106,7 +79,7 @@ async def match_resume_to_jds(
         vector=embedding,
         top_k=settings.RESUME_TOP_N_MATCHES_PER_JD,
         namespace="jobs",
-        filter={"doc_type": "job"},
+        filter=query_filter("job"),
         include_metadata=True,
     )
 
@@ -165,18 +138,15 @@ async def match_jd_to_resume_pool(
     targeting: dict,
     jd_embedding: list,
 ) -> list[dict]:
-    """Find resumes that match a newly created JD.
-
-    Returns [{resume_id, score}] sorted desc by composite score.
-    Gate: composite score >= domain-aware threshold AND seniority within required_seniority window.
-    """
     pinecone = get_pinecone()
     db = get_db()
     if pinecone is None or db is None:
         return []
 
     job_doc = await db.jobs.find_one({"job_id": job_id}, {"_id": 0, "deadline_at": 1})
-    if job_doc is not None and not _job_is_open(job_doc):
+    if job_doc is None:
+        return []
+    if not _job_is_open(job_doc):
         return []
 
     jd_domain = targeting.get("required_domain")
@@ -187,12 +157,14 @@ async def match_jd_to_resume_pool(
         vector=jd_embedding,
         top_k=settings.RESUME_TOP_N_MATCHES_PER_JD,
         namespace="",
-        filter={"doc_type": "resume"},
+        filter=query_filter("resume"),
         include_metadata=True,
     )
 
-    matches: list[dict] = []
+    scored: list[tuple[str, float]] = []
     for match in _parse_matches(results):
+        if not match["id"]:
+            continue
         meta = match.get("metadata") or {}
         resume_domain = meta.get("job_domain")
         resume_skills: list[str] = meta.get("skills") or []
@@ -203,9 +175,24 @@ async def match_jd_to_resume_pool(
             continue
         if not _seniority_ok(resume_seniority, required_seniority):
             continue
+        scored.append((match["id"], round(score, 4)))
 
-        resume_id = match["id"]
-        score = round(score, 4)
+    if not scored:
+        return []
+
+    wanted = [resume_id for resume_id, _ in scored]
+    present = {
+        d["resume_id"]
+        for d in await db.resumes.find(
+            {"resume_id": {"$in": wanted}}, {"_id": 0, "resume_id": 1},
+        ).to_list(length=len(wanted))
+    }
+
+    matches: list[dict] = []
+    for resume_id, score in scored:
+        if resume_id not in present:
+            logger.info("Matcher skipped a vector with no resume in this company | resume_id=%s", resume_id)
+            continue
 
         await db.jobs.update_one(
             {"job_id": job_id, "candidate_pipeline.resume_id": {"$ne": resume_id}},

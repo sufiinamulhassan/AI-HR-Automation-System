@@ -1,8 +1,3 @@
-"""
-Centralized LLM client supporting OpenAI and Ollama Cloud.
-Provider is controlled by LLM_PROVIDER in .env (openai | ollama).
-"""
-
 import os
 
 try:
@@ -26,7 +21,7 @@ openai_client = None
 ollama_client = None
 
 if OpenAI is None:
-    print("[WARN] openai package not installed — LLM features disabled")
+    print("[WARN] openai package not installed, LLM features disabled")
 else:
     if OPENAI_API_KEY:
         try:
@@ -47,11 +42,10 @@ else:
         except Exception as e:
             print(f"[WARN] Ollama Cloud client init failed: {e}")
     else:
-        print("[WARN] OLLAMA_API_KEY not set — Ollama Cloud disabled")
+        print("[WARN] OLLAMA_API_KEY not set, Ollama Cloud disabled")
 
 
 def _active_client():
-    """Return (client, model) for the configured provider, with fallback."""
     if LLM_PROVIDER == "ollama" and ollama_client:
         return ollama_client, OLLAMA_MODEL
     if LLM_PROVIDER == "openai" and openai_client:
@@ -70,10 +64,6 @@ def ask_openai(
     temperature: float = 0.7,
     model: str = None,
 ) -> str:
-    """
-    Send a prompt to the active LLM provider and return the text response.
-    Pass model= to override the default for a single call.
-    """
     client, default_model = _active_client()
     if not client:
         print("[WARN] No LLM client available, returning empty response")

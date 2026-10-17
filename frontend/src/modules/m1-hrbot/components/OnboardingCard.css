@@ -1,0 +1,33 @@
+.ob-head-end { display: inline-flex; align-items: center; gap: .6rem; flex-shrink: 0; }
+.ob-dismiss {
+  background: none; border: none; padding: .15rem .3rem; border-radius: 6px;
+  font-size: .76rem; font-weight: 700; color: var(--gray-500);
+}
+.ob-dismiss:hover:not(:disabled) { color: var(--gray-900); background: var(--gray-50); }
+.ob-dismiss:disabled { opacity: .6; cursor: not-allowed; }
+.ob-dismiss:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.ob-list { list-style: none; display: flex; flex-direction: column; gap: .35rem; margin: 0; padding: 0; }
+.ob-row {
+  position: relative;
+  display: flex; align-items: center; gap: .65rem;
+  padding: .5rem .75rem; border: 1px solid rgba(0,0,0,.06); border-radius: 10px; background: var(--gray-50);
+  font-size: .82rem; font-weight: 600; color: var(--gray-800);
+}
+.ob-row:hover { background: var(--white); border-color: var(--primary); }
+.ob-check {
+  flex-shrink: 0; width: 1.15rem; height: 1.15rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--gray-300); background: var(--white); color: var(--secondary);
+}
+.ob-row-done .ob-check { background: var(--primary); border-color: var(--primary); }
+.ob-row-done .ob-link { color: var(--gray-500); text-decoration: line-through; }
+.ob-link { flex: 1; min-width: 0; overflow-wrap: anywhere; color: inherit; }
+a.ob-link:hover { color: var(--gray-900); text-decoration: underline; }
+a.ob-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+.ob-error { display: block; margin-top: .6rem; font-size: .78rem; font-weight: 600; color: var(--danger); }
+
+.ob-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
+}

@@ -74,3 +74,82 @@
 .offer-create-btn {
   align-self: flex-start;
 }
+
+.offer-signature {
+  display: flex; flex-direction: column; gap: .25rem;
+  margin-top: .45rem;
+  padding: .5rem .65rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+}
+
+.offer-signature-row {
+  display: flex; align-items: baseline; gap: .5rem;
+  font-size: .74rem;
+}
+
+.offer-signature-label {
+  font-weight: 700; color: var(--gray-500);
+  flex-shrink: 0;
+}
+
+.offer-signature-value {
+  color: var(--gray-800);
+  word-break: break-word;
+}
+
+.offer-signature-ua {
+  font-size: .7rem;
+}
+
+.offer-signature-details {
+  margin-top: .3rem;
+}
+
+.offer-signature-details summary {
+  font-size: .72rem; font-weight: 700; color: var(--gray-500);
+  cursor: pointer;
+}
+
+.offer-signature-details[open] summary {
+  margin-bottom: .35rem;
+}
+
+.offer-ai-letter {
+  display: flex; flex-direction: column; gap: .4rem;
+  margin-top: .45rem;
+  padding: .55rem .7rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+}
+
+.offer-ai-letter-header {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+
+.offer-ai-letter-title {
+  font-size: .74rem; font-weight: 700; color: var(--gray-500);
+}
+
+.offer-ai-letter-body {
+  font-size: .78rem; color: var(--gray-800); line-height: 1.5;
+  white-space: pre-wrap;
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: 6px;
+  padding: .5rem .6rem;
+}
+
+.offer-ai-letter-empty {
+  font-size: .76rem; color: var(--gray-400); margin: 0;
+}
+
+.offer-ai-letter-actions {
+  display: flex; gap: .4rem;
+}
+
+.offer-ai-letter-hint {
+  font-size: .7rem; color: var(--gray-400); margin: 0;
+}

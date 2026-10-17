@@ -1,4 +1,3 @@
-"""Tests for RBAC — Role/Permission model + AuditLog (MVP2 §2.1)."""
 import asyncio
 import uuid
 
@@ -217,10 +216,6 @@ async def test_audit_log_paginated_shape(client, admin_headers):
 
 
 async def test_audit_log_date_only_end_date_includes_that_day(client, admin_headers):
-    """A date-only end_date (what <input type="date"> submits) must cover the
-    whole day. Compared raw, "2026-08-07" sorts below every timestamp on
-    2026-08-07, so the filter would return nothing for that day.
-    """
     db = get_db()
     assert db is not None
     resource_id = f"audit-range-{uuid.uuid4().hex[:10]}"
@@ -335,8 +330,6 @@ async def test_user_create_is_audit_logged(client, admin_headers):
 
 
 async def test_update_user_role_requires_superadmin(client, admin_headers):
-    """An `admin` must not be able to promote anyone (including themselves)
-    through the auth route — that would bypass rbac:manage entirely."""
     db = get_db()
     assert db is not None
     email = f"gate-test-{uuid.uuid4().hex[:8]}@hirely.ai"
@@ -355,8 +348,6 @@ async def test_update_user_role_requires_superadmin(client, admin_headers):
 
 
 async def test_update_user_rejects_unknown_role(client, superadmin_headers):
-    """An unvalidated role string resolves to an empty permission set, which
-    silently locks the account out of everything — reject it up front."""
     db = get_db()
     assert db is not None
     email = f"gate-test-{uuid.uuid4().hex[:8]}@hirely.ai"
@@ -377,8 +368,6 @@ async def test_update_user_rejects_unknown_role(client, superadmin_headers):
 
 
 async def test_update_user_non_role_fields_still_work_for_admin(client, admin_headers):
-    """The gate must apply only to `role` — an admin editing a name or
-    toggling is_active is unaffected."""
     db = get_db()
     assert db is not None
     email = f"gate-test-{uuid.uuid4().hex[:8]}@hirely.ai"
@@ -401,7 +390,6 @@ async def test_update_user_non_role_fields_still_work_for_admin(client, admin_he
 
 
 async def test_update_user_role_allowed_for_superadmin(client, superadmin_headers):
-    """The endpoint still works for its legitimate caller."""
     db = get_db()
     assert db is not None
     email = f"gate-test-{uuid.uuid4().hex[:8]}@hirely.ai"

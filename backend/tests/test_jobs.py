@@ -63,20 +63,20 @@ async def test_create_job_success_and_lifecycle(client):
     assert job["title"] == "Senior Python Developer"
     assert job["company_name"] == "FinTech LLC"
     assert job["created_by"] == "demo-admin@hirely.ai"
-    
+
     job_id = job["job_id"]
-    
+
     get_headers = {"Authorization": "Bearer demo-standard-token"}
     get_response = await client.get(f"/api/v1/jobs/{job_id}", headers=get_headers)
     assert get_response.status_code == 200
     assert get_response.json()["title"] == "Senior Python Developer"
-    
+
     list_response = await client.get("/api/v1/jobs", headers=get_headers)
     assert list_response.status_code == 200
     list_data = list_response.json()
     assert list_data["total"] >= 1
     assert any(j["job_id"] == job_id for j in list_data["jobs"])
-    
+
     search_response = await client.get("/api/v1/jobs?search=Senior", headers=get_headers)
     assert search_response.status_code == 200
     search_data = search_response.json()
@@ -91,15 +91,6 @@ async def test_get_job_not_found(client):
 
 
 async def test_pipeline_hydrates_candidate_id_from_candidates_collection(client, admin_headers):
-    """candidate_pipeline array entries are never written with their own
-    candidate_id — create_candidate only ever $sets pipeline_stage on the
-    matching array element (routes/candidates.py). Every candidate-scoped
-    admin action in the pipeline UI (resend invite, regenerate token, offers,
-    notes, cross-job history, coding assignment, scheduling, communication
-    center) depends on GET .../pipeline resolving candidate_id here instead —
-    without it, every one of those actions is permanently unreachable for
-    every candidate, invited or not.
-    """
     job_id = await _create_job(client, admin_headers)
     db = get_db()
     resume_id = "test-resume-" + uuid.uuid4().hex[:8]

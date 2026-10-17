@@ -1,18 +1,3 @@
-"""
-Saved filter templates route — hr_module (MVP2 §2.7).
-
-Any authenticated user (standard/admin/superadmin) may create and manage
-their own saved filters — recruiters, not just admins, run searches day to
-day. `filter_params` is stored and returned opaquely: whatever query params
-the caller's marketplace/resumes list call used round-trip unchanged, so this
-route never needs to know their shape.
-
-  POST   /                    create a saved filter (owned by the caller)
-  GET    /                    list the caller's own saved filters (scoped)
-  GET    /{template_id}       get one (owner or admin only)
-  PATCH  /{template_id}       rename / replace filter_params (owner or admin)
-  DELETE /{template_id}       delete (owner or admin)
-"""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -56,7 +41,6 @@ async def create_saved_filter(body: SavedFilterCreate, user: dict = Depends(get_
 
 @router.get("")
 async def list_saved_filters(scope: str | None = None, user: dict = Depends(get_current_user)):
-    """Scoped strictly to the requesting user's own saved filters."""
     templates = await saved_filter_service.list_templates(created_by=user["email"], scope=scope)
     return {"templates": templates, "total": len(templates)}
 

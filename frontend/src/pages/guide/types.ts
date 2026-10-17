@@ -1,4 +1,3 @@
-
 export type GuideRole = 'superadmin' | 'admin' | 'standard'
 
 export interface GuideControl {

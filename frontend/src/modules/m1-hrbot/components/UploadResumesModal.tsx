@@ -1,7 +1,6 @@
 import ResumeUpload from './ResumeUpload'
 import './UploadResumesModal.css'
 
-
 interface Props {
   onClose: () => void
   onUploaded?: () => void

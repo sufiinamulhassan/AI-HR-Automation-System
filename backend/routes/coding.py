@@ -1,66 +1,32 @@
-"""AI Coding Assessment route — hr_module (MVP2 §2.10).
-
-Admin CRUD:
-  POST/GET/PATCH/DELETE /coding/questions        → require_admin throughout (GET includes
-                                                     hidden test cases/expected output, so
-                                                     reads are admin-gated too, not just writes)
-  POST   /coding/questions/generate               → require_admin — AI-drafts a question via
-                                                     services.hr_module.coding_service.generate_question_with_ai,
-                                                     then inserts it through the SAME insert helper
-                                                     create_question uses (no separate insert path)
-  PATCH  /coding/assign/{candidate_id}            → require_admin — also sends the candidate a
-                                                     coding-assessment invite email (link + instructions
-                                                     only, no scores) to their existing secure_token URL
-  GET    /coding/submissions                      → require_admin — submissions across ALL
-                                                     candidates, newest first, with optional
-                                                     candidate_id/question_id/status/flagged
-                                                     filters and pagination
-  GET    /coding/submissions/{candidate_id}       → require_admin (full detail, incl. hidden tests
-                                                     and submitted source code)
-
-Both submission reads return candidate name/email and question title alongside
-the stored ids (see _enrich_submissions) — additive fields only.
-
-Candidate-facing (token-based, same trust model as interview session endpoints —
-reuses the existing candidates.secure_token, no separate invite system):
-  GET  /coding/session/{secure_token}             → assigned question, hidden test
-                                                       cases filtered out entirely
-  POST /coding/session/{secure_token}/run         → scratch execution via Judge0 (raw
-                                                       stdout/stderr, one sample case or
-                                                       custom stdin) — not graded, not
-                                                       persisted, "try it before you submit"
-  POST /coding/session/{secure_token}/submit      → runs code via Judge0, hidden
-                                                       test detail stripped from response.
-                                                       Optional `keystrokes` drives the
-                                                       typing-ratio integrity check.
-  POST /coding/session/{secure_token}/flag        → live integrity events from the editor
-                                                       (paste_blocked, paste_burst,
-                                                       drop_blocked, ...), appended to
-                                                       candidates.coding_integrity_flags —
-                                                       a SEPARATE array from the interview's
-                                                       integrity_flags (see
-                                                       services.hr_module.integrity)
-
-SECURITY: this route never executes candidate code itself — all execution is
-delegated to the configured sandbox (Judge0 or Piston, see CODE_SANDBOX_PROVIDER)
-via services.hr_module.coding_service. If that sandbox is not configured (blank
-JUDGE0_API_URL / PISTON_API_URL), submit/run fail with 503, never a local run.
-The AI question-generation endpoint never executes anything either — it only
-asks the LLM (via config.llm.ask_llm) for text and validates its JSON shape.
-"""
+import html as _html
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
-from shared.auth import require_admin
+from shared.auth import require_admin, require_permission
+from shared.quotas import ai_action
+from shared.rate_limit import public_token_throttle
+from shared.links import base_url
+from shared.utils import require_selectable_model
 from config.database import get_db
 from config.settings import settings
+from services.hr_module import department_access
 from services.hr_module.audit_service import log_audit_event
+from services.hr_module.coding_link_service import (
+    EXPIRY_PROJECTION,
+    coding_expiry_stamp,
+    coding_link_expired,
+    require_live_coding_link,
+)
+from services.hr_module import email_layout, email_service, mail_brand
+from services.hr_module.email_service import sender_name
+from services.hr_module.erasure_service import ensure_not_erased
+from services.hr_module.plan_service import require_feature
 from services.hr_module.assessment_view import (
     project_submission_for_candidate,
     redact_hidden_results,
@@ -69,6 +35,10 @@ from services.hr_module.assessment_view import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_session_throttle = public_token_throttle("coding", ip_limit=1500, token_limit=60, tenant="candidate")
+_sandbox_throttle = public_token_throttle("coding-run", ip_limit=1500, token_limit=30, tenant="candidate")
+_editor_throttle = public_token_throttle("coding-editor", ip_limit=1500, token_limit=240, tenant="candidate")
 
 
 class TestCasePayload(BaseModel):
@@ -123,8 +93,12 @@ class CodingFlagPayload(BaseModel):
     event: str
 
 
+class AutosavePayload(BaseModel):
+    language: str
+    code: str
+
+
 def _visible_test_cases(test_cases: list[dict]) -> list[dict]:
-    """Non-hidden test cases only — never leak hidden inputs/outputs to a candidate."""
     return [tc for tc in test_cases if not tc.get("is_hidden", False)]
 
 
@@ -143,9 +117,6 @@ async def _insert_question(
     difficulty: str,
     created_by: str,
 ) -> dict:
-    """Single insert path for coding_questions — used by both the manual
-    create_question endpoint and the AI-generate endpoint below, so a
-    generated question is persisted identically to a hand-authored one."""
     doc = {
         "question_id": str(uuid.uuid4()),
         "title": title,
@@ -166,7 +137,12 @@ async def _insert_question(
 
 
 @router.post("/questions")
-async def create_question(body: CodingQuestionCreate, user: dict = Depends(require_admin)):
+async def create_question(
+    body: CodingQuestionCreate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:manage")),
+    _plan: None = Depends(require_feature("coding")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -190,28 +166,29 @@ async def create_question(body: CodingQuestionCreate, user: dict = Depends(requi
 
 
 @router.post("/questions/generate")
-async def generate_question(body: GenerateQuestionRequest, user: dict = Depends(require_admin)):
-    """AI-draft a coding question from a job domain (+ optional topic hint),
-    then persist it through the exact same insert path as create_question.
-
-    The question is inserted into the bank immediately so an admin can inspect
-    it via the normal question-detail view — it is NOT auto-assigned to any
-    candidate. Assignment is a separate, explicit admin action via
-    PATCH /coding/assign/{candidate_id}, same as for a hand-authored question.
-    """
+async def generate_question(
+    body: GenerateQuestionRequest,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:manage")),
+    _plan: None = Depends(require_feature("coding")),
+    _quota: None = Depends(ai_action("coding_generate", per_hour=120)),
+):
+    model_override = require_selectable_model(body.model_override)
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
 
+    from config.llm import track_llm_cost
     from services.hr_module.coding_service import generate_question_with_ai
 
     try:
-        generated = await generate_question_with_ai(
-            job_domain=body.job_domain,
-            difficulty=body.difficulty,
-            topic_hint=body.topic_hint,
-            model=body.model_override,
-        )
+        async with track_llm_cost("coding_question_generation"):
+            generated = await generate_question_with_ai(
+                job_domain=body.job_domain,
+                difficulty=body.difficulty,
+                topic_hint=body.topic_hint,
+                model=model_override,
+            )
     except RuntimeError as e:
         raise HTTPException(502, str(e))
 
@@ -236,10 +213,14 @@ async def list_questions(
     page: int = 1,
     limit: int = 20,
     _: dict = Depends(require_admin),
+    __: dict = Depends(require_permission("coding:read")),
+    _plan: None = Depends(require_feature("coding")),
 ):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
+    limit = max(1, min(limit, 100))
+    page = max(1, page)
     query: dict = {}
     if job_domain:
         query["job_domain"] = job_domain
@@ -256,7 +237,12 @@ async def list_questions(
 
 
 @router.get("/questions/{question_id}")
-async def get_question(question_id: str, _: dict = Depends(require_admin)):
+async def get_question(
+    question_id: str,
+    _: dict = Depends(require_admin),
+    __: dict = Depends(require_permission("coding:read")),
+    _plan: None = Depends(require_feature("coding")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -267,11 +253,20 @@ async def get_question(question_id: str, _: dict = Depends(require_admin)):
 
 
 @router.patch("/questions/{question_id}")
-async def update_question(question_id: str, body: CodingQuestionUpdate, user: dict = Depends(require_admin)):
+async def update_question(
+    question_id: str,
+    body: CodingQuestionUpdate,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:manage")),
+    _plan: None = Depends(require_feature("coding")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
-    update = {k: v for k, v in body.model_dump().items() if v is not None}
+    provided = body.model_dump(exclude_unset=True)
+    update = {k: v for k, v in provided.items() if v is not None}
+    if "job_domain" in provided:
+        update["job_domain"] = (provided["job_domain"] or "").strip() or None
     if "test_cases" in update:
         update["test_cases"] = [
             tc if isinstance(tc, dict) else tc.model_dump() for tc in update["test_cases"]
@@ -291,7 +286,12 @@ async def update_question(question_id: str, body: CodingQuestionUpdate, user: di
 
 
 @router.delete("/questions/{question_id}")
-async def delete_question(question_id: str, user: dict = Depends(require_admin)):
+async def delete_question(
+    question_id: str,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:manage")),
+    _plan: None = Depends(require_feature("coding")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -306,26 +306,10 @@ async def delete_question(question_id: str, user: dict = Depends(require_admin))
 
 
 async def _send_coding_assessment_invite(db, candidate_id: str) -> bool:
-    """Best-effort candidate-facing coding-assessment invite email.
-
-    Built INLINE here with the existing low-level
-    services.hr_module.email_service.send_email (never a new named template
-    function in email_service.py — a different task owns that file this
-    round). Link + short instructions only — NO scores, NO recommendation,
-    matching this codebase's hard candidate-email content rule. Points at
-    FRONTEND_URL/coding/{secure_token}, reusing the candidate's EXISTING
-    token (the /coding/session/{secure_token} route already trusts this same
-    token — see this route's module docstring — so no new token is minted).
-
-    Returns False (never raises) on any missing data or send failure — the
-    assignment itself has already succeeded by the time this is called, so a
-    delivery problem must not fail the whole request; it's independently
-    visible via email_log / GET /candidates/{id}/emails for follow-up.
-    """
     cand = await db.candidates.find_one({"candidate_id": candidate_id})
     if not cand or not cand.get("secure_token") or not cand.get("email"):
         logger.warning(
-            "Coding assessment invite skipped — candidate/email/token missing | candidate_id=%s",
+            "Coding assessment invite skipped: candidate/email/token missing | candidate_id=%s",
             candidate_id,
         )
         return False
@@ -333,9 +317,10 @@ async def _send_coding_assessment_invite(db, candidate_id: str) -> bool:
     job = await db.jobs.find_one({"job_id": cand.get("job_id")}) or {}
     job_title = job.get("title") or "the role"
     candidate_name = cand.get("name") or "Candidate"
-    coding_url = f"{settings.FRONTEND_URL}/coding/{cand['secure_token']}"
+    coding_url = f"{base_url()}/coding/{cand['secure_token']}"
+    await mail_brand.load()
 
-    subject = f"Coding Assessment — {job_title}"
+    subject = f"Coding Assessment: {job_title}"
     text_body = f"""Dear {candidate_name},
 
 As the next step for the {job_title} position, please complete your coding assessment using the link below.
@@ -346,42 +331,22 @@ Please complete it at your earliest convenience using a stable internet connecti
 If you run into any issues, contact your recruiter.
 
 Best regards,
-{settings.EMAIL_FROM_NAME}"""
-    html_body = f"""<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-        <tr><td style="background:#0e7490;padding:28px 40px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;">Coding Assessment</h1>
-        </td></tr>
-        <tr><td style="padding:36px 40px;">
-          <p style="color:#374151;font-size:16px;">Dear <strong>{candidate_name}</strong>,</p>
-          <p style="color:#374151;font-size:15px;line-height:1.6;">
-            As the next step for the <strong>{job_title}</strong> position, please complete your coding assessment using the link below.
-          </p>
-          <div style="text-align:center;margin:32px 0;">
-            <a href="{coding_url}"
-               style="background:#0e7490;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:6px;font-size:16px;font-weight:600;display:inline-block;">
-              Start Coding Assessment &rarr;
-            </a>
-          </div>
-          <p style="color:#6b7280;font-size:13px;">
-            This link is unique to you. If you run into any issues, please contact your recruiter.
-          </p>
-        </td></tr>
-        <tr><td style="background:#f9fafb;padding:16px 40px;border-top:1px solid #e5e7eb;">
-          <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">
-            This is an automated message. If you have questions, please contact your recruiter directly.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
+{sender_name()}"""
+    body_html = (
+        email_layout.greeting(_html.escape(str(candidate_name)))
+        + email_layout.paragraph(
+            f"As the next step for the <strong>{_html.escape(str(job_title))}</strong> position, "
+            "please complete your coding assessment using the link below."
+        )
+        + email_service.cta(coding_url, "Start Coding Assessment")
+        + email_layout.small("This link is unique to you. If you run into any issues, please contact your recruiter.")
+        + email_layout.signoff(_html.escape(sender_name()))
+    )
+    html_body = email_service.wrap_html(heading="Coding Assessment", body_html=body_html)
+
+    await db.candidates.update_one(
+        {"candidate_id": candidate_id}, {"$set": {"coding_invite_expires_at": coding_expiry_stamp()}},
+    )
 
     from services.hr_module.email_service import send_email
     return await send_email(
@@ -397,10 +362,18 @@ Best regards,
 
 
 @router.patch("/assign/{candidate_id}")
-async def assign_question(candidate_id: str, body: AssignQuestionRequest, user: dict = Depends(require_admin)):
+async def assign_question(
+    candidate_id: str,
+    body: AssignQuestionRequest,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:manage")),
+    _plan: None = Depends(require_feature("coding")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
+    await department_access.ensure_candidate_in_scope(db, user, candidate_id)
+    await ensure_not_erased(db, candidate_id)
     if not await db.coding_questions.find_one({"question_id": body.question_id}):
         raise HTTPException(404, "Coding question not found")
 
@@ -427,7 +400,7 @@ async def assign_question(candidate_id: str, body: AssignQuestionRequest, user: 
     }
 
 
-@router.get("/session/{secure_token}")
+@router.get("/session/{secure_token}", dependencies=[Depends(_session_throttle)])
 async def get_session(secure_token: str):
     db = get_db()
     if db is None:
@@ -436,6 +409,7 @@ async def get_session(secure_token: str):
     cand = await db.candidates.find_one({"secure_token": secure_token})
     if not cand:
         raise HTTPException(404, "Invalid link")
+    require_live_coding_link(cand)
 
     question_id = cand.get("coding_question_id")
     if not question_id:
@@ -459,7 +433,7 @@ async def get_session(secure_token: str):
     }
 
 
-@router.post("/session/{secure_token}/submit")
+@router.post("/session/{secure_token}/submit", dependencies=[Depends(_sandbox_throttle)])
 async def submit_session(secure_token: str, payload: SubmitPayload):
     db = get_db()
     if db is None:
@@ -468,6 +442,7 @@ async def submit_session(secure_token: str, payload: SubmitPayload):
     cand = await db.candidates.find_one({"secure_token": secure_token})
     if not cand:
         raise HTTPException(404, "Invalid link")
+    require_live_coding_link(cand)
 
     question_id = cand.get("coding_question_id")
     if not question_id:
@@ -491,16 +466,8 @@ async def submit_session(secure_token: str, payload: SubmitPayload):
     return _sanitize_submission_for_candidate(submission)
 
 
-@router.post("/session/{secure_token}/run")
+@router.post("/session/{secure_token}/run", dependencies=[Depends(_sandbox_throttle)])
 async def run_session(secure_token: str, payload: RunPayload):
-    """Execute the candidate's current draft in the configured sandbox and hand
-    back raw stdout/stderr — a "try it before you submit" console, distinct from
-    /submit which grades against every test case and persists a record.
-
-    Nothing is persisted here and no grading happens: this is scratch
-    execution only, so a candidate can iterate freely without burning
-    submission attempts or polluting the plagiarism/quality pipeline.
-    """
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -508,6 +475,7 @@ async def run_session(secure_token: str, payload: RunPayload):
     cand = await db.candidates.find_one({"secure_token": secure_token})
     if not cand:
         raise HTTPException(404, "Invalid link")
+    require_live_coding_link(cand)
 
     question_id = cand.get("coding_question_id")
     if not question_id:
@@ -536,7 +504,7 @@ async def run_session(secure_token: str, payload: RunPayload):
         raise HTTPException(400, str(e))
     except Exception as e:
         logger.warning("Sandbox run failed for question=%s: %s", question_id, e)
-        raise HTTPException(502, "Code execution failed — please try again")
+        raise HTTPException(502, "Code execution failed: please try again")
 
     return {
         "stdin": stdin,
@@ -549,15 +517,8 @@ async def run_session(secure_token: str, payload: RunPayload):
     }
 
 
-@router.post("/session/{secure_token}/modify-probe")
+@router.post("/session/{secure_token}/modify-probe", dependencies=[Depends(_sandbox_throttle)])
 async def get_modify_probe(secure_token: str):
-    """
-    AI-assistance mitigation: ask the candidate to make a small live modification
-    to their own already-submitted solution, to check genuine understanding
-    independent of whether the original submission passed. Additive, sibling to
-    /run and /submit — requires a completed submission to already exist; does not
-    re-score or persist anything itself.
-    """
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -565,6 +526,7 @@ async def get_modify_probe(secure_token: str):
     cand = await db.candidates.find_one({"secure_token": secure_token})
     if not cand:
         raise HTTPException(404, "Invalid link")
+    require_live_coding_link(cand)
 
     question_id = cand.get("coding_question_id")
     if not question_id:
@@ -581,37 +543,31 @@ async def get_modify_probe(secure_token: str):
     if not question:
         raise HTTPException(404, "Assigned coding question not found")
 
+    from config.llm import track_llm_cost
     from services.hr_module.coding_service import generate_live_modification_probe
 
-    probe = await generate_live_modification_probe(
-        question=question,
-        language=submission.get("language", ""),
-        code=submission.get("code", ""),
-    )
+    async with track_llm_cost("coding_quality_review"):
+        probe = await generate_live_modification_probe(
+            question=question,
+            language=submission.get("language", ""),
+            code=submission.get("code", ""),
+        )
 
     return {"probe": probe}
 
 
-@router.post("/session/{secure_token}/flag")
+@router.post("/session/{secure_token}/flag", dependencies=[Depends(_editor_throttle)])
 async def record_coding_flag(secure_token: str, payload: CodingFlagPayload):
-    """Record a coding-assessment integrity event (paste_blocked, paste_burst,
-    drop_blocked, ...) live as it happens in the editor.
-
-    Deliberately a SEPARATE array (`coding_integrity_flags`) and a separate
-    endpoint from the interview's POST /interview/session/{token}/flag — see
-    services/hr_module/integrity.py's module docstring for why the two must
-    never merge. The token guard mirrors the interview flag endpoint: an
-    unknown token is rejected, but there is no active/consumed-status check
-    here since a coding assessment has no single "session over" moment the
-    way the interview's token_status does.
-    """
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
 
-    cand = await db.candidates.find_one({"secure_token": secure_token}, {"_id": 0, "candidate_id": 1})
+    cand = await db.candidates.find_one(
+        {"secure_token": secure_token}, {"_id": 0, "candidate_id": 1, **EXPIRY_PROJECTION},
+    )
     if not cand:
         raise HTTPException(404, "Invalid link")
+    require_live_coding_link(cand)
 
     flag = f"{payload.event}@{datetime.now(timezone.utc).isoformat()}"
     await db.candidates.update_one(
@@ -621,16 +577,157 @@ async def record_coding_flag(secure_token: str, payload: CodingFlagPayload):
     return {"recorded": True}
 
 
+@router.post("/session/{secure_token}/autosave", dependencies=[Depends(_editor_throttle)])
+async def autosave_session(secure_token: str, payload: AutosavePayload):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+
+    cand = await db.candidates.find_one(
+        {"secure_token": secure_token},
+        {"_id": 0, "candidate_id": 1, "coding_question_id": 1, **EXPIRY_PROJECTION},
+    )
+    if not cand:
+        raise HTTPException(404, "Invalid link")
+    require_live_coding_link(cand)
+
+    question_id = cand.get("coding_question_id")
+    if not question_id:
+        raise HTTPException(400, "No coding assessment has been assigned yet")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.coding_session_state.update_one(
+        {"candidate_id": cand["candidate_id"], "question_id": question_id},
+        {"$set": {
+            "candidate_id": cand["candidate_id"],
+            "question_id": question_id,
+            "language": payload.language,
+            "code": payload.code,
+            "updated_at": now,
+        }},
+        upsert=True,
+    )
+    return {"saved": True, "updated_at": now}
+
+
+ACTIVE_SESSION_WINDOW_MINUTES = 30
+_MAX_LIVE_SESSIONS = 200
+
+
+@router.get("/live/sessions")
+async def list_live_sessions(
+    _admin: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:read_submissions")),
+    _plan: None = Depends(require_feature("coding")),
+):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=ACTIVE_SESSION_WINDOW_MINUTES)).isoformat()
+    cursor = (
+        db.coding_session_state.find(
+            {"updated_at": {"$gte": cutoff}},
+            {"_id": 0, "candidate_id": 1, "question_id": 1, "language": 1, "updated_at": 1},
+        )
+        .sort("updated_at", -1)
+        .limit(_MAX_LIVE_SESSIONS)
+    )
+    states = await cursor.to_list(length=_MAX_LIVE_SESSIONS)
+    visible = await department_access.candidate_ids_in_scope(
+        db, _admin, list({s["candidate_id"] for s in states if s.get("candidate_id")}),
+    )
+    if visible is not None:
+        states = [s for s in states if s.get("candidate_id") in visible]
+    if not states:
+        return {"sessions": []}
+
+    candidate_ids = list({s["candidate_id"] for s in states if s.get("candidate_id")})
+    question_ids = list({s["question_id"] for s in states if s.get("question_id")})
+
+    submitted = {
+        (s["candidate_id"], s["question_id"])
+        async for s in db.coding_submissions.find(
+            {"candidate_id": {"$in": candidate_ids}, "question_id": {"$in": question_ids}},
+            {"_id": 0, "candidate_id": 1, "question_id": 1},
+        )
+    }
+    names = {
+        c["candidate_id"]: c.get("name")
+        async for c in db.candidates.find({"candidate_id": {"$in": candidate_ids}}, {"_id": 0, "candidate_id": 1, "name": 1})
+    }
+    titles = {
+        q["question_id"]: q.get("title")
+        async for q in db.coding_questions.find({"question_id": {"$in": question_ids}}, {"_id": 0, "question_id": 1, "title": 1})
+    }
+
+    return {"sessions": [
+        {
+            "candidate_id": s["candidate_id"],
+            "candidate_name": names.get(s["candidate_id"]),
+            "question_title": titles.get(s.get("question_id")),
+            "language": s.get("language"),
+            "last_saved_at": s.get("updated_at"),
+        }
+        for s in states
+        if (s.get("candidate_id"), s.get("question_id")) not in submitted
+    ]}
+
+
+@router.get("/live/{candidate_id}")
+async def get_live_session(
+    candidate_id: str,
+    _admin: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:read_submissions")),
+    _plan: None = Depends(require_feature("coding")),
+):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+
+    cand = await department_access.require_candidate(
+        db, _admin, candidate_id, projection={"_id": 0, "candidate_id": 1, "coding_question_id": 1},
+    )
+
+    question_id = cand.get("coding_question_id")
+    if not question_id:
+        return {
+            "candidate_id": candidate_id,
+            "question_id": None,
+            "question_title": None,
+            "language": None,
+            "code": None,
+            "last_saved_at": None,
+            "status": "not_assigned",
+        }
+
+    submitted = await db.coding_submissions.find_one(
+        {"candidate_id": candidate_id, "question_id": question_id}, {"_id": 0, "submission_id": 1},
+    )
+    draft = await db.coding_session_state.find_one(
+        {"candidate_id": candidate_id, "question_id": question_id}, {"_id": 0},
+    )
+    question = await db.coding_questions.find_one({"question_id": question_id}, {"_id": 0, "title": 1})
+
+    if submitted:
+        status_value = "submitted"
+    elif draft:
+        status_value = "in_progress"
+    else:
+        status_value = "not_started"
+
+    return {
+        "candidate_id": candidate_id,
+        "question_id": question_id,
+        "question_title": (question or {}).get("title"),
+        "language": (draft or {}).get("language"),
+        "code": (draft or {}).get("code"),
+        "last_saved_at": (draft or {}).get("updated_at"),
+        "status": status_value,
+    }
+
+
 async def _enrich_submissions(db, submissions: list[dict]) -> list[dict]:
-    """Attach candidate name/email and question title to each submission.
-
-    A submission stores only ids. Every admin view of one wants the human
-    labels, and resolving them client-side means one request per row — so the
-    join happens here, in two batched queries regardless of page size.
-
-    Purely additive: no stored field is removed or renamed, so callers that
-    only read the original keys are unaffected.
-    """
     if not submissions:
         return submissions
 
@@ -671,16 +768,10 @@ async def list_all_submissions(
     flagged: bool | None = None,
     page: int = 1,
     limit: int = 25,
-    _: dict = Depends(require_admin),
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:read_submissions")),
+    _plan: None = Depends(require_feature("coding")),
 ):
-    """Admin-facing — submissions across all candidates, newest first.
-
-    Exists because the only way to see a submission used to be to already know
-    the candidate_id and type it in; there was no way to answer "what came in
-    today" or "who got flagged for similarity". Same full detail (hidden test
-    results, submitted code) as the per-candidate endpoint — this route is
-    admin-gated for exactly that reason.
-    """
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -691,6 +782,11 @@ async def list_all_submissions(
     query: dict = {}
     if candidate_id:
         query["candidate_id"] = candidate_id
+    visible = await department_access.candidate_ids_in_scope(db, user)
+    if visible is not None:
+        if candidate_id and candidate_id not in visible:
+            return {"submissions": [], "total": 0}
+        query.setdefault("candidate_id", {"$in": list(visible)})
     if question_id:
         query["question_id"] = question_id
     if status:
@@ -710,11 +806,16 @@ async def list_all_submissions(
 
 
 @router.get("/submissions/{candidate_id}")
-async def list_submissions(candidate_id: str, _: dict = Depends(require_admin)):
-    """Admin-facing — full results for one candidate, including hidden test detail."""
+async def list_submissions(
+    candidate_id: str,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("coding:read_submissions")),
+    _plan: None = Depends(require_feature("coding")),
+):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
+    await department_access.ensure_candidate_in_scope(db, user, candidate_id)
     cursor = db.coding_submissions.find({"candidate_id": candidate_id}, {"_id": 0}).sort("submitted_at", -1)
     submissions = await cursor.to_list(length=200)
     return {"submissions": await _enrich_submissions(db, submissions)}

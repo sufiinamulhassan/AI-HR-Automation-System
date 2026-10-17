@@ -1,22 +1,3 @@
-"""Permission catalog, default role->permission mappings, and role resolution
-for the RBAC system (MVP2 §2.1 — see docs/report.md §3 for the scoping note).
-
-Deliberately realistic scope for this pass: this gives the app a genuine
-Role/Permission model on top of the existing 3 flat role strings
-(standard/admin/superadmin) plus admin-authored custom roles stored in the
-`roles` collection. It does NOT attempt department/branch/company scoping or
-multi-tenant support — every permission here is global, not scoped to a
-department. That is an explicitly separate, larger effort (see MVP2.md §2.1
-"Build" notes) left for a future pass.
-
-Two building blocks:
-  - PERMISSION_CATALOG / DEFAULT_ROLE_PERMISSIONS: static, in-process data —
-    no DB round trip needed to know what a *default* role can do.
-  - resolve_permissions(role_name): the one function everything else in the
-    app should call to find out what a role can actually do right now, since
-    it also accounts for any custom role document that overrides/extends a
-    role's permissions.
-"""
 import logging
 
 from config.database import get_db
@@ -27,6 +8,7 @@ logger = logging.getLogger(__name__)
 PERMISSION_CATALOG: list[str] = [
     "jobs:read", "jobs:create", "jobs:update", "jobs:delete",
     "jobs:import", "jobs:manage_settings",
+    "jobs:ai_fit_opinion", "jobs:bulk_stage",
 
     "resumes:read", "resumes:upload", "resumes:delete",
 
@@ -34,8 +16,11 @@ PERMISSION_CATALOG: list[str] = [
 
     "candidates:read", "candidates:invite", "candidates:resend_invite",
     "candidates:decide", "candidates:send_email",
+    "candidates:erase",
 
     "interview:read_report", "interview:schedule",
+    "interview:share_report",
+    "interview:external_schedule", "interview:external_review",
 
     "coding:read", "coding:manage", "coding:read_submissions",
 
@@ -43,19 +28,34 @@ PERMISSION_CATALOG: list[str] = [
 
     "offers:read", "offers:create", "offers:approve", "offers:send", "offers:withdraw",
 
+    "offers:draft_letter", "offers:approve_letter",
+    "offers:manage_letterhead", "offers:manage_signature",
+
     "analytics:read",
+
+    "attention:read",
+
+    "demographics:read",
+
+    "cost:read",
 
     "workflows:manage",
 
     "webhooks:manage",
 
-    "departments:manage", "designations:manage",
+    "departments:manage", "designations:manage", "job_grades:manage",
 
     "departments:cross_scope",
 
     "users:manage",
     "rbac:read", "rbac:manage",
     "audit:read",
+
+    "security:manage",
+
+    "email:manage",
+
+    "performance:manage", "performance:review", "performance:read",
 ]
 
 _PERMISSION_SET: set[str] = set(PERMISSION_CATALOG)
@@ -66,7 +66,7 @@ _STANDARD_PERMISSIONS: set[str] = {
     "offers:read", "analytics:read",
 }
 
-_ADMIN_EXCLUDED: set[str] = {"users:manage", "rbac:manage"}
+_ADMIN_EXCLUDED: set[str] = {"users:manage", "rbac:manage", "security:manage", "candidates:erase"}
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "standard": sorted(_STANDARD_PERMISSIONS),
@@ -76,19 +76,6 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
 
 
 async def resolve_permissions(role_name: str) -> list[str]:
-    """Effective permission list for a role name, right now.
-
-    Looks up a custom role document in the `roles` collection first (an
-    admin/superadmin-authored override of a built-in role, or an entirely
-    custom role) — falls back to DEFAULT_ROLE_PERMISSIONS if no such document
-    exists, so the three built-in roles (standard/admin/superadmin) keep
-    working exactly as before with zero custom-role setup required.
-
-    Never raises: a DB error degrades to the static defaults (logged, not
-    fatal) rather than locking every request out with a 500. An unknown role
-    name with no custom doc and no default resolves to an empty permission
-    list (fail closed), not an exception.
-    """
     if not role_name:
         return []
 
@@ -107,14 +94,11 @@ async def resolve_permissions(role_name: str) -> list[str]:
     return DEFAULT_ROLE_PERMISSIONS.get(role_name, [])
 
 
-async def is_known_role(db, role_name: str) -> bool:
-    """True if `role_name` is one of the 3 built-ins or an existing custom role.
+def is_reserved_role_name(role_name: str | None) -> bool:
+    return (role_name or "").strip().lower() in DEFAULT_ROLE_PERMISSIONS
 
-    Single source of truth for "is this a role name you're allowed to assign?",
-    shared by the two endpoints that write `users.role` — PATCH
-    /rbac/users/{email}/role and PATCH /auth/users/{email} — so the two paths
-    can never drift apart on which role names they accept.
-    """
+
+async def is_known_role(db, role_name: str) -> bool:
     if role_name in DEFAULT_ROLE_PERMISSIONS:
         return True
     if db is None:
@@ -123,22 +107,6 @@ async def is_known_role(db, role_name: str) -> bool:
 
 
 async def get_department_scope(user: dict) -> str | None:
-    """Department/branch scoping check (MVP2 §2.1).
-
-    Returns the department_id a user's visibility should be restricted to,
-    or None if they should see everything (unrestricted) — either because
-    their role's permission set includes "departments:cross_scope" (true by
-    default for admin/superadmin, exactly matching pre-existing behaviour),
-    or because the user simply has no department_id set (an install that
-    never assigns departments to users keeps working exactly as before,
-    with nobody scoped).
-
-    Route handlers that want department-based filtering should call this
-    once per request and, if it returns a non-None value, add a
-    `{"department_id": scope}` (or equivalent) clause to their query —
-    this function only resolves the scope, it does not filter anything
-    itself, since the right query shape differs per collection.
-    """
     department_id = user.get("department_id")
     if not department_id:
         return None

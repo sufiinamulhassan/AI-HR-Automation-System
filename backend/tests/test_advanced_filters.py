@@ -1,5 +1,3 @@
-"""Tests for MVP2 §2.7 remaining gap: industry classification on resumes,
-and industry / salary_expectation filters on the resumes list endpoint."""
 from unittest.mock import patch
 
 import pytest
@@ -40,9 +38,6 @@ class TestClassifierIndustry:
         assert result["industry"] == "other"
 
     async def test_invalid_industry_falls_back_to_other(self):
-        """A hallucinated value outside the shared taxonomy must not leak
-        into classification.industry unchecked — it would silently break
-        exact-match filtering downstream."""
         from services.hr_module.classifier import classify_resume
 
         llm_response = (
@@ -55,7 +50,6 @@ class TestClassifierIndustry:
         assert result["industry"] == "other"
 
     async def test_shared_with_jd_intel_single_source_of_truth(self):
-        """classifier.py must import, not redefine, jd_intel.py's INDUSTRIES."""
         from services.hr_module import classifier, jd_intel
 
         assert classifier.INDUSTRIES is jd_intel.INDUSTRIES

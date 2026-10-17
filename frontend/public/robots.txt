@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /platform
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /sso-callback
+Disallow: /interview/
+Disallow: /coding/
+Disallow: /offer/
+Disallow: /performance-review/
+Disallow: /report/
+Disallow: /interviewer/

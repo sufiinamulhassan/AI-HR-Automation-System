@@ -1,13 +1,3 @@
-"""Departments & Designations referential integrity (routes/admin_config.py).
-
-A department is referenced two different ways — designations store its NAME,
-while jobs/users/alumni store its department_id — and both a delete and a
-rename used to leave those references dangling without any error. A dangling
-users.department_id is the dangerous one: get_department_scope turns it into
-"this user sees almost nothing" rather than into a failure anyone would notice.
-
-These tests pin the guards, not the happy path CRUD.
-"""
 import uuid
 
 import pytest
@@ -45,7 +35,6 @@ async def _get_department(client, headers, department_id: str) -> dict | None:
 
 @pytest.fixture
 async def department_fixture(client, admin_headers):
-    """A department with one designation naming it. Cleans up whatever survives."""
     suffix = uuid.uuid4().hex[:8]
     dept = await _create_department(client, admin_headers, f"Engineering {suffix}")
     desig = await _create_designation(
@@ -66,8 +55,6 @@ async def test_list_departments_reports_usage(client, admin_headers, department_
 
 
 async def test_usage_is_admin_only(client, standard_headers, department_fixture):
-    """A standard user still gets the department list (job forms populate their
-    picker from it) but not the headcount behind each one."""
     response = await client.get("/api/v1/admin/departments", headers=standard_headers)
     assert response.status_code == 200
     assert response.json()["departments"], "list itself must stay readable"
@@ -103,7 +90,6 @@ async def test_delete_department_with_force_detaches_designations(client, admin_
 
 
 async def test_delete_department_blocked_by_a_scoped_user(client, admin_headers):
-    """users.department_id is the reference that silently breaks visibility."""
     suffix = uuid.uuid4().hex[:8]
     dept = await _create_department(client, admin_headers, f"Support {suffix}")
     db = get_db()

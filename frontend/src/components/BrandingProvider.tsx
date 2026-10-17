@@ -1,15 +1,12 @@
-import { useEffect, type ReactNode } from 'react'
-import { brandingApi } from '../lib/api'
-
-
-const DEFAULT_PRIMARY = '#4778f3'
-const DEFAULT_ACCENT = '#222022'
-
-interface PublicBranding {
-  company_logo_url?: string
-  primary_color?: string
-  accent_color?: string
-}
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
+import { brandingApi, type PublicBrandingContext } from '../lib/api'
+import { pageTitleClaimed } from '../lib/pageTitle'
+import {
+  BrandContext, DEFAULT_ACCENT, DEFAULT_BRAND, DEFAULT_PRIMARY, brandContextFor, brandFromResponse,
+  type Brand,
+} from '../lib/brand'
+import { useAuthStore } from '../store/auth.store'
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
@@ -22,42 +19,62 @@ function darken(hex: string, amount = 0.12): string {
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
 }
 
-function applyTheme(primary: string, accent: string, logoUrl?: string) {
-  const safePrimary = HEX_RE.test(primary) ? primary : DEFAULT_PRIMARY
-  const safeAccent = HEX_RE.test(accent) ? accent : DEFAULT_ACCENT
+function applyTheme(brand: Brand) {
+  const primary = HEX_RE.test(brand.primaryColor) ? brand.primaryColor : DEFAULT_PRIMARY
+  const accent = HEX_RE.test(brand.accentColor) ? brand.accentColor : DEFAULT_ACCENT
   const root = document.documentElement.style
 
-  root.setProperty('--primary', safePrimary)
-  root.setProperty('--primary-dark', darken(safePrimary))
-  root.setProperty('--secondary', safeAccent)
+  root.setProperty('--primary', primary)
+  root.setProperty('--primary-dark', darken(primary))
+  root.setProperty('--secondary', accent)
 
-  root.setProperty('--brand-primary', safePrimary)
-  root.setProperty('--brand-primary-dark', darken(safePrimary))
-  root.setProperty('--brand-accent', safeAccent)
+  root.setProperty('--brand-primary', primary)
+  root.setProperty('--brand-primary-dark', darken(primary))
+  root.setProperty('--brand-accent', accent)
 
-  if (logoUrl) {
-    root.setProperty('--brand-logo-url', `url("${logoUrl.replace(/"/g, '\\"')}")`)
+  if (brand.logoUrl) {
+    root.setProperty('--brand-logo-url', `url("${brand.logoUrl.replace(/"/g, '\\"')}")`)
   } else {
     root.removeProperty('--brand-logo-url')
   }
 }
 
 export default function BrandingProvider({ children }: { children: ReactNode }) {
+  const token = useAuthStore(s => s.token)
+  const { pathname, search } = useLocation()
+  const contextKey = JSON.stringify(brandContextFor(pathname, search) ?? null)
+  const [brand, setBrand] = useState<Brand>(DEFAULT_BRAND)
+  const hadToken = useRef(!!token)
+
   useEffect(() => {
     let cancelled = false
 
-    brandingApi.getPublic()
+    if (hadToken.current && !token) {
+      setBrand(DEFAULT_BRAND)
+      applyTheme(DEFAULT_BRAND)
+    }
+    hadToken.current = !!token
+
+    const context = JSON.parse(contextKey) as PublicBrandingContext | null
+    brandingApi.getPublic(context ?? undefined)
       .then(r => {
         if (cancelled) return
-        const data = (r.data || {}) as PublicBranding
-        applyTheme(data.primary_color || DEFAULT_PRIMARY, data.accent_color || DEFAULT_ACCENT, data.company_logo_url)
+        const next = brandFromResponse(r.data)
+        setBrand(next)
+        applyTheme(next)
       })
       .catch(() => {
-        if (!cancelled) applyTheme(DEFAULT_PRIMARY, DEFAULT_ACCENT)
+        if (cancelled) return
+        setBrand(DEFAULT_BRAND)
+        applyTheme(DEFAULT_BRAND)
       })
 
     return () => { cancelled = true }
-  }, [])
+  }, [token, contextKey])
 
-  return <>{children}</>
+  useEffect(() => {
+    if (!pageTitleClaimed()) document.title = brand.name
+  }, [brand.name])
+
+  return <BrandContext.Provider value={brand}>{children}</BrandContext.Provider>
 }

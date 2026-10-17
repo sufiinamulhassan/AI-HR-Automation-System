@@ -93,7 +93,7 @@
 .rail-chapter-done .rail-chapter-text { color: var(--gray-600); }
 
 .rail-chapter-current .rail-chapter-marker {
-  background: var(--primary); color: #000; border-color: var(--primary);
+  background: var(--primary); color: #ffffff; border-color: var(--primary);
 }
 .rail-chapter-current .rail-chapter-text { color: var(--gray-900); font-weight: 600; }
 

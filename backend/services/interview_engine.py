@@ -1,19 +1,9 @@
-"""
-Adaptive Interview Engine powered by OpenAI.
-Generates dynamic questions from JD + resume and processes responses adaptively.
-"""
-
 from typing import Dict, List
 import time
 import json
 
 
 class AdaptiveInterviewEngine:
-    """
-    Core conversational execution engine for adaptive interviews.
-    Uses OpenAI API to parse the Job Description and candidate resume,
-    then generates tailored, multi-category interview questions dynamically.
-    """
 
     def __init__(self):
         self.sessions_state: Dict[str, dict] = {}
@@ -31,7 +21,6 @@ class AdaptiveInterviewEngine:
         ]
 
     def _generate_questions_with_openai(self, job: dict, resume: dict) -> List[str]:
-        """Use OpenAI to generate 10+ dynamic interview questions from JD and resume."""
         from services.llm_client import ask_openai
 
         job_title = job.get("title", "Software Engineer")
@@ -101,7 +90,6 @@ Example format:
         return self.default_questions
 
     def _generate_custom_questions(self, job: dict, resume: dict) -> List[str]:
-        """Generate custom interview questions — uses OpenAI if available, else heuristic."""
         questions = self._generate_questions_with_openai(job, resume)
         if questions and len(questions) >= 5:
             return questions
@@ -136,7 +124,6 @@ Example format:
         return questions
 
     def init_session(self, session_id: str):
-        """Initialize a new interview session."""
         if session_id in self.sessions_state:
             return
 
@@ -175,7 +162,6 @@ Example format:
         }
 
     def is_session_expired(self, session_id: str) -> bool:
-        """Return True when the 30 minute interview window has elapsed."""
         state = self.sessions_state.get(session_id)
         if not state:
             return False
@@ -187,7 +173,6 @@ Example format:
         return time.time() >= expires_at
 
     def is_session_finished(self, session_id: str) -> bool:
-        """Return True when the session has exhausted the question list or been finalized."""
         state = self.sessions_state.get(session_id)
         if not state:
             return False
@@ -199,7 +184,6 @@ Example format:
         return state.get("current_index", 0) >= len(questions)
 
     def get_next_question(self, session_id: str) -> str:
-        """Get the next interview question for the given session."""
         state = self.sessions_state.get(session_id)
         if not state:
             return "Session not found. Please reconnect."
@@ -211,15 +195,14 @@ Example format:
         questions = state.get("questions", self.default_questions)
         if idx < len(questions):
             question = questions[idx]
-            
+
             if not state["transcript"] or state["transcript"][-1]["content"] != question:
                 state["transcript"].append({"role": "agent", "content": question})
-                
+
             return question
         return "Thank you for your responses. The interview is now completed. You may close this window."
 
     def _generate_final_response(self, session_id: str, candidate_text: str) -> str:
-        """Answer the candidate's last questions and provide a final closing statement."""
         from services.llm_client import ask_openai
         state = self.sessions_state.get(session_id)
         if not state:
@@ -227,7 +210,7 @@ Example format:
 
         job_title = state.get("job_title", "")
         job_desc = state.get("job_desc", "")
-        
+
         prompt = f"""You are a professional HR Interviewer. The interview is wrapping up.
 You just asked the candidate: "Do you have any questions for us?"
 The candidate replied: "{candidate_text}"
@@ -242,36 +225,34 @@ The candidate replied: "{candidate_text}"
 Return ONLY the response text.
 """
         response = ask_openai(prompt, system="You are a helpful HR Interviewer bot.", max_tokens=400, temperature=0.5)
-        
+
         if not response:
             return "Thank you for your time today. It was a pleasure speaking with you. The interview is now completed. You may close this window."
-        
+
         return response
 
     def process_response(self, session_id: str, candidate_text: str) -> str:
-        """Process a candidate's response and return the next question."""
         state = self.sessions_state.get(session_id)
         if not state:
             return "Session not found. Please reconnect."
 
         questions = state.get("questions", self.default_questions)
-        
+
         state["transcript"].append({"role": "candidate", "content": candidate_text})
 
         if state["current_index"] == len(questions) - 1:
             final_reply = self._generate_final_response(session_id, candidate_text)
-            
+
             state["transcript"].append({"role": "agent", "content": final_reply})
-            
+
             state["current_index"] += 1
-            
+
             return final_reply
 
         state["current_index"] += 1
         return self.get_next_question(session_id)
 
     def log_integrity_flag(self, session_id: str, flag_type: str):
-        """Log an integrity violation for the given session."""
         state = self.sessions_state.get(session_id)
         if state:
             state["integrity_flags"].append(
@@ -279,14 +260,12 @@ Return ONLY the response text.
             )
 
     def get_transcript(self, session_id: str) -> List[dict]:
-        """Return the full interview transcript for a session."""
         state = self.sessions_state.get(session_id)
         if not state:
             return []
         return state["transcript"]
 
     def generate_report(self, session_id: str, job: dict = None) -> str:
-        """Use OpenAI to generate a comprehensive interview evaluation report."""
         from services.llm_client import ask_openai
 
         state = self.sessions_state.get(session_id)

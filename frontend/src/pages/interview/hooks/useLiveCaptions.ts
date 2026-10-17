@@ -52,7 +52,7 @@ export function useLiveCaptions(active: boolean) {
         rec.onresult = null
         rec.onerror = null
         rec.onend = null
-        try { rec.abort() } catch {}
+        try { rec.abort() } catch { }
       }
       return
     }
@@ -97,7 +97,7 @@ export function useLiveCaptions(active: boolean) {
       if (!activeRef.current || disabledRef.current) return
       if (restartsRef.current >= MAX_RESTARTS) return
       restartsRef.current += 1
-      try { rec.start() } catch {}
+      try { rec.start() } catch { }
     }
 
     try {
@@ -113,7 +113,7 @@ export function useLiveCaptions(active: boolean) {
       rec.onresult = null
       rec.onerror = null
       rec.onend = null
-      try { rec.abort() } catch {}
+      try { rec.abort() } catch { }
     }
   }, [active])
 
@@ -123,7 +123,7 @@ export function useLiveCaptions(active: boolean) {
     rec.onresult = null
     rec.onerror = null
     rec.onend = null
-    try { rec.abort() } catch {}
+    try { rec.abort() } catch { }
   }, [])
 
   return { text, supported, reset }

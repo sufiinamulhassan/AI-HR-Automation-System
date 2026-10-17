@@ -3,7 +3,6 @@ import type { MutableRefObject } from 'react'
 import { SILENCE_FLOOR } from './useAudioLevel'
 import type { TranscriptEntry, TurnPhase } from '../useInterviewSession'
 
-
 export interface CoachTip {
   id: string
   tone: 'good' | 'watch' | 'tip'
@@ -75,21 +74,21 @@ export function buildTips(m: AnswerMetrics, opts: { live: boolean; longestPauseM
       tips.push({
         id: 'pace-fast',
         tone: 'watch',
-        title: `Slow down a little - ${m.wpm} wpm`,
+        title: `Slow down a little, ${m.wpm} wpm`,
         body: 'You are speaking quickly. A short breath between points makes you much easier to follow.',
       })
     } else if (m.wpm < SLOW_WPM) {
       tips.push({
         id: 'pace-slow',
         tone: 'tip',
-        title: `Pick up the pace - ${m.wpm} wpm`,
+        title: `Pick up the pace, ${m.wpm} wpm`,
         body: 'There is room to speak a little more freely. Aim for a natural conversational rhythm.',
       })
     } else if (m.wpm >= IDEAL_WPM_LOW && m.wpm <= IDEAL_WPM_HIGH) {
       tips.push({
         id: 'pace-good',
         tone: 'good',
-        title: `Good pace - ${m.wpm} wpm`,
+        title: `Good pace, ${m.wpm} wpm`,
         body: 'Clear and easy to follow. Keep it there.',
       })
     }
@@ -109,7 +108,7 @@ export function buildTips(m: AnswerMetrics, opts: { live: boolean; longestPauseM
       id: 'pause',
       tone: 'tip',
       title: 'Long silence detected',
-      body: 'If you need a moment, say so out loud - thinking time is expected and sounds better than dead air.',
+      body: 'If you need a moment, say so out loud. Thinking time is expected and sounds better than dead air.',
     })
   }
 
@@ -127,7 +126,7 @@ export function buildTips(m: AnswerMetrics, opts: { live: boolean; longestPauseM
         id: 'example',
         tone: 'tip',
         title: 'Add a concrete example',
-        body: 'Ground the answer in something you actually did - a project, a decision, a trade-off you made.',
+        body: 'Ground the answer in something you actually did, a project, a decision, a trade-off you made.',
       })
     }
     if (!m.hasNumbers && m.words >= SHORT_ANSWER_WORDS) {

@@ -35,20 +35,25 @@ async def test_create_list_get_update_delete_roundtrip(client, admin_headers):
     webhook = create_resp.json()
     webhook_id = webhook["webhook_id"]
     assert webhook["is_active"] is True
+    assert "secret" not in webhook and webhook["has_secret"] is True
 
     list_resp = await client.get("/api/v1/webhooks", headers=admin_headers)
     assert list_resp.status_code == 200
-    assert any(w["webhook_id"] == webhook_id for w in list_resp.json()["webhooks"])
+    listed = [w for w in list_resp.json()["webhooks"] if w["webhook_id"] == webhook_id]
+    assert len(listed) == 1
+    assert "secret" not in listed[0] and listed[0]["has_secret"] is True
 
     get_resp = await client.get(f"/api/v1/webhooks/{webhook_id}", headers=admin_headers)
     assert get_resp.status_code == 200
     assert get_resp.json()["url"] == WEBHOOK_PAYLOAD["url"]
+    assert "secret" not in get_resp.json() and get_resp.json()["has_secret"] is True
 
     patch_resp = await client.patch(
         f"/api/v1/webhooks/{webhook_id}", json={"is_active": False}, headers=admin_headers
     )
     assert patch_resp.status_code == 200
     assert patch_resp.json()["is_active"] is False
+    assert "secret" not in patch_resp.json() and patch_resp.json()["has_secret"] is True
 
     delete_resp = await client.delete(f"/api/v1/webhooks/{webhook_id}", headers=admin_headers)
     assert delete_resp.status_code == 200

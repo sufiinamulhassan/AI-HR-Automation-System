@@ -1,13 +1,3 @@
-"""Saved filter templates — hr_module (MVP2 §2.7).
-
-Lets any recruiter (standard/admin/superadmin — search isn't an admin-only
-activity) save and reapply their own search filters against the marketplace
-or resumes list endpoints. Each template stores an opaque `filter_params`
-blob — this service never interprets, validates, or reads the shape of that
-blob, it just round-trips it. That is what lets it work unmodified whichever
-list endpoint the caller used (`/marketplace` or `/resumes`) and whatever
-params that endpoint accepts, now or added later.
-"""
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -25,7 +15,6 @@ async def create_template(
     filter_params: dict | None = None,
     scope: str | None = None,
 ) -> dict:
-    """Create a new saved filter template owned by `created_by`."""
     db = get_db()
     if db is None:
         raise RuntimeError("Database unavailable")
@@ -47,7 +36,6 @@ async def create_template(
 
 
 async def list_templates(created_by: str, scope: str | None = None) -> list[dict]:
-    """List templates owned by `created_by` — never another user's."""
     db = get_db()
     if db is None:
         return []
@@ -70,7 +58,6 @@ async def update_template(
     name: str | None = None,
     filter_params: dict | None = None,
 ) -> dict | None:
-    """Only fields explicitly passed (not None) are updated."""
     db = get_db()
     if db is None:
         return None

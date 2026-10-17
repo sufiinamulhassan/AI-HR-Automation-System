@@ -1,4 +1,5 @@
-"""Intel route — hr_module async bulk resume upload with invite funnel tracking."""
+import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -6,15 +7,18 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from pydantic import BaseModel
 
 from shared.auth import get_current_user, require_admin, require_superadmin
+from shared.quotas import ai_action
 from config.database import get_db, get_pinecone
 from config.settings import settings
+from services.hr_module import plan_service
+from services.hr_module.candidate_scope import ResumeScope
+from shared.utils import require_selectable_model
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 def _is_junk_file(filename: str | None) -> bool:
-    """Office/OS temp & lock files that aren't real resumes (e.g. Word's
-    '~$name.docx' owner-lock files, macOS '._' AppleDouble, hidden dotfiles)."""
     base = (filename or "").replace("\\", "/").rsplit("/", 1)[-1]
     return base.startswith("~$") or base.startswith("._") or base.startswith(".") or not base.strip()
 
@@ -25,14 +29,11 @@ async def bulk_upload(
     files: list[UploadFile] = File(...),
     model_override: str | None = Form(default=None),
     user: dict = Depends(require_admin),
+    _quota: None = Depends(ai_action("resumes", per_hour=600)),
 ):
-    """
-    Accept up to MAX_BULK_UPLOAD_FILES PDF/DOCX files.
-    Returns batch_id immediately. Each file is processed via the ResumeAgent
-    pipeline in a background task. Auto-invites fire for matches >= AUTO_INVITE_THRESHOLD.
-    """
     if len(files) > settings.MAX_BULK_UPLOAD_FILES:
         raise HTTPException(400, f"Max {settings.MAX_BULK_UPLOAD_FILES} files per request")
+    model_override = require_selectable_model(model_override)
 
     file_data: list[tuple[str, bytes]] = []
     ignored = 0
@@ -48,6 +49,8 @@ async def bulk_upload(
 
     if not file_data:
         raise HTTPException(400, "No valid resume files to process (only temp/empty files were received).")
+
+    await plan_service.ensure_storage_available(sum(len(content) for _, content in file_data))
 
     db = get_db()
     batch_id = str(uuid.uuid4())
@@ -110,7 +113,6 @@ async def batch_status(batch_id: str, _: dict = Depends(get_current_user)):
 
 @router.get("/resumes/stats")
 async def resume_stats(_: dict = Depends(get_current_user)):
-    """Resume pool statistics including invite funnel breakdown."""
     db = get_db()
     if db is None:
         return {
@@ -169,10 +171,11 @@ async def resume_stats(_: dict = Depends(get_current_user)):
         {"$count": "n"},
     ]).to_list(1)
 
-    auto_invited = await db.candidates.count_documents({"invite_type": "auto"})
-    manually_invited = await db.candidates.count_documents({"invite_type": "manual"})
-    interviewed = await db.candidates.count_documents({"status": "completed"})
-    hired = await db.candidates.count_documents({"pipeline_stage": "hired"})
+    scope = await ResumeScope.load(db)
+    auto_invited = await db.candidates.count_documents(scope.candidates({"invite_type": "auto"}))
+    manually_invited = await db.candidates.count_documents(scope.candidates({"invite_type": "manual"}))
+    interviewed = await db.candidates.count_documents(scope.candidates({"status": "completed"}))
+    hired = await db.candidates.count_documents(scope.candidates({"pipeline_stage": "hired"}))
 
     by_domain = {r["_id"]: r["count"] for r in domain_agg if r["_id"]}
 
@@ -196,7 +199,6 @@ async def resume_stats(_: dict = Depends(get_current_user)):
 
 @router.get("/resumes/batches")
 async def list_batches(limit: int = 25, _: dict = Depends(get_current_user)):
-    """Recent upload batches for the Activity page (newest first)."""
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -206,7 +208,6 @@ async def list_batches(limit: int = 25, _: dict = Depends(get_current_user)):
 
 @router.get("/resumes/batch/{batch_id}/detail")
 async def batch_detail(batch_id: str, _: dict = Depends(get_current_user)):
-    """Full breakdown of a processed batch: counts, per-JD distribution, and cost."""
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -247,8 +248,6 @@ async def batch_detail(batch_id: str, _: dict = Depends(get_current_user)):
 
 @router.delete("/resumes/batch/{batch_id}")
 async def delete_batch(batch_id: str, _: dict = Depends(require_superadmin)):
-    """Super-admin: dismiss a batch notification (removes the batch record only —
-    processed resumes are untouched)."""
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -258,7 +257,6 @@ async def delete_batch(batch_id: str, _: dict = Depends(require_superadmin)):
 
 @router.post("/resumes/batches/clear")
 async def clear_batches(_: dict = Depends(require_superadmin)):
-    """Super-admin: clear all batch notifications (resumes are untouched)."""
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -268,13 +266,6 @@ async def clear_batches(_: dict = Depends(require_superadmin)):
 
 @router.get("/cost/total")
 async def cost_total(_: dict = Depends(get_current_user)):
-    """Platform-wide lifetime AI spend (OpenAI LLM + embeddings) across every
-    processing run — resume uploads, JD parsing, and re-matching.
-
-    Backed by the append-only `cost_ledger`, which is intentionally NOT touched by
-    batch delete/clear or resume purge. So this total covers everything from the
-    first tracked run onward and keeps growing, even after Activity history is wiped.
-    """
     db = get_db()
     zero = {
         "total_cost_usd": 0.0, "prompt_tokens": 0, "completion_tokens": 0,
@@ -329,10 +320,11 @@ class PurgeRequest(BaseModel):
     to_date: str | None = None
 
 
+_PINECONE_DELETE_BATCH = 1000
+
+
 @router.post("/resumes/purge")
 async def purge_resumes(body: PurgeRequest, _: dict = Depends(require_superadmin)):
-    """Super-admin: permanently delete resumes created within a date range from
-    every store (Mongo, file blobs, marketplace, JD pipelines, Pinecone)."""
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -351,15 +343,21 @@ async def purge_resumes(body: PurgeRequest, _: dict = Depends(require_superadmin
         return {"deleted": 0}
 
     await db.resumes.delete_many({"resume_id": {"$in": ids}})
+    freed = await plan_service.stored_bytes(db.resume_files, {"resume_id": {"$in": ids}})
     await db.resume_files.delete_many({"resume_id": {"$in": ids}})
+    await plan_service.record_stored_bytes(-freed)
     await db[settings.MARKETPLACE_COLLECTION].delete_many({"resume_id": {"$in": ids}})
     await db.jobs.update_many({}, {"$pull": {"candidate_pipeline": {"resume_id": {"$in": ids}}}})
 
     pc = get_pinecone()
+    vectors_failed = 0
     if pc is not None:
-        try:
-            pc.delete(ids=ids)
-        except Exception:
-            pass
+        for start in range(0, len(ids), _PINECONE_DELETE_BATCH):
+            batch = ids[start:start + _PINECONE_DELETE_BATCH]
+            try:
+                await asyncio.to_thread(pc.delete, ids=batch)
+            except Exception as exc:
+                vectors_failed += len(batch)
+                logger.warning("Pinecone purge batch failed | ids=%d error=%s", len(batch), type(exc).__name__)
 
-    return {"deleted": len(ids)}
+    return {"deleted": len(ids), "vectors_failed": vectors_failed}

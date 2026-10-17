@@ -1,11 +1,11 @@
-"""Adaptive interview question generation and post-session evaluation — hr_module."""
 import json
 import logging
 import random
 
-from config.llm import ask_llm
+from config.llm import ask_llm, model_for
 from config.settings import settings
 from services.hr_module.prompt_config_service import get_prompt_override
+from services.hr_module.prompt_guard import fence, with_guard
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +54,17 @@ _QUESTION_ANGLES = [
 ]
 
 _STAGE_EMPHASIS = {
-    "basic": "This is an early, basic-screening stage — keep questions broad and fundamentals-focused; avoid deep specialization.\n",
-    "technical": "This is a technical-screening stage — weight questions toward depth: technical skills, problem-solving, and system design.\n",
-    "level2": "This is a later-stage, in-depth interview — favor harder technical/system-design questions and probe past decisions more deeply.\n",
+    "basic": "This is an early, basic-screening stage: keep questions broad and fundamentals-focused; avoid deep specialization.\n",
+    "technical": "This is a technical-screening stage: weight questions toward depth: technical skills, problem-solving, and system design.\n",
+    "level2": "This is a later-stage, in-depth interview: favor harder technical/system-design questions and probe past decisions more deeply.\n",
 }
 
 _EVAL_SYSTEM = (
     "You are an expert HR evaluator. Assess the interview transcript and return a structured "
     "JSON evaluation. Be fair, specific, and evidence-based."
 )
+
+_EVAL_LLM_TIMEOUT_SECONDS = 40.0
 
 _EVAL_PROMPT = """Job: {title}
 Transcript:
@@ -74,10 +76,15 @@ Return JSON:
 {{
   "overall_score": <0-100>,
   "technical_score": <0-100>,
+  "technical_rationale": "<2-3 sentences, evidence-based: cite specifics from the transcript that justify technical_score>",
   "communication_score": <0-100>,
+  "communication_rationale": "<2-3 sentences, evidence-based: cite specifics from the transcript that justify communication_score>",
   "problem_solving_score": <0-100>,
+  "problem_solving_rationale": "<2-3 sentences, evidence-based: cite specifics from the transcript that justify problem_solving_score>",
   "cultural_fit_score": <0-100>,
+  "cultural_fit_rationale": "<2-3 sentences, evidence-based: cite specifics from the transcript that justify cultural_fit_score>",
   "confidence_score": <0-100, how confident and composed the candidate appeared>,
+  "confidence_rationale": "<2-3 sentences, evidence-based: cite specifics from the transcript that justify confidence_score>",
   "strengths": ["strength1", ...],
   "areas_for_improvement": ["area1", ...],
   "recommendation": "<hire|maybe|reject>",
@@ -122,7 +129,7 @@ Job Description:
 Interview Question: {question}
 Candidate Answer: {answer}
 {prior_answer_line}
-Pose ONE probing follow-up that tests genuine understanding rather than recall —
+Pose ONE probing follow-up that tests genuine understanding rather than recall -
 pick whichever of these fits best:
 - Ask WHY they chose that particular approach over a plausible alternative.
 - Change one condition or constraint in the original question and ask how their
@@ -133,7 +140,7 @@ Return JSON:
 {{
   "probe_question": "<the follow-up question to ask the candidate>",
   "probe_type": "<one of: why | changed_condition | edge_case_tradeoff>",
-  "consistency_assessment": "<null, unless a prior answer to the same question was supplied above — in that case, a short note on whether the two answers are consistent with each other>"
+  "consistency_assessment": "<null, unless a prior answer to the same question was supplied above: in that case, a short note on whether the two answers are consistent with each other>"
 }}"""
 
 
@@ -182,12 +189,12 @@ async def generate_questions(
         title=job.get("title", ""),
         difficulty=job.get("difficulty", "medium"),
         seniority_line=seniority_line,
-        jd=(job.get("description") or "")[:2000],
+        jd=fence("JOB DESCRIPTION", (job.get("description") or "")[:2000]),
         skills_line=skills_line,
         topics_line=topics_line,
         stage_line=stage_line,
         angle_line=angle_line,
-        resume=resume_text or "No resume available",
+        resume=fence("RESUME", resume_text or "No resume available"),
         count=settings.INTERVIEW_QUESTION_COUNT,
     )
 
@@ -198,7 +205,7 @@ async def generate_questions(
         try:
             prompt = override["user_prompt_template"].format(**format_kwargs)
             gen_system = override["system_prompt"]
-        except (KeyError, IndexError) as exc:
+        except (KeyError, IndexError, ValueError) as exc:
             logger.warning(
                 "interview_questions prompt override has a placeholder mismatch, "
                 "falling back to default: %s", exc,
@@ -208,8 +215,8 @@ async def generate_questions(
 
     raw = await ask_llm(
         prompt=prompt,
-        system=gen_system,
-        model=model or settings.DEFAULT_LLM_MODEL,
+        system=with_guard(gen_system),
+        model=model_for("interview", model),
         max_tokens=1500,
         temperature=0.4,
         json_mode=True,
@@ -228,24 +235,6 @@ async def generate_questions(
 
 
 def format_transcript(transcript: list[dict]) -> str:
-    """Render a stored transcript as text for the evaluation prompt.
-
-    TWO entry shapes exist and both must work:
-
-      1. ``{question, answer, answered_at}`` — what the live product actually
-         stores. `Interview.tsx` has produced this shape since the earliest
-         interview commit, `routes/interview.py` persists the payload verbatim,
-         and `score_scenario_response()` already reads these keys.
-      2. ``{role, content}`` — a chat-message shape used by fixtures/tests and
-         accepted by the `POST /session/{token}/submit` schema
-         (`list[dict[str, Any]]`), so an integrator could legitimately send it.
-
-    Reading only shape 2 (as this function did until 2026-08-06) produced a
-    block of bare ``[UNKNOWN]:`` lines for every real interview — the scoring
-    LLM saw no question and no answer content at all, so every general score,
-    the summary and the recommendation were ungrounded. Entries that carry
-    neither shape are skipped rather than emitted as empty noise.
-    """
     lines: list[str] = []
     for msg in transcript:
         if not isinstance(msg, dict):
@@ -263,19 +252,6 @@ def format_transcript(transcript: list[dict]) -> str:
 
 
 async def _attach_coding_scores(report: dict, candidate: dict) -> None:
-    """Fold the candidate's coding-assessment result into the interview report
-    (MVP2 §2.13's last missing dimension, which was blocked on §2.10).
-
-    Mutates `report` in place, adding `coding_score` (the Judge0 pass rate) and
-    `coding_quality_score` (the AI review's overall, when it ran). Deliberately
-    additive and never authoritative: `overall_score` is NOT recomputed, so
-    nothing that already reads it shifts meaning. A candidate who was never
-    assigned a coding question leaves both keys absent, and every consumer
-    renders an absent dimension as "—"/"N/A".
-
-    Silent on any failure — a missing coding score must never fail an interview
-    evaluation that is otherwise complete.
-    """
     candidate_id = candidate.get("candidate_id")
     if not candidate_id:
         return
@@ -297,7 +273,7 @@ async def _attach_coding_scores(report: dict, candidate: dict) -> None:
         if submission.get("coding_integrity_score") is not None:
             report["coding_integrity_score"] = submission["coding_integrity_score"]
         report["coding_submission_id"] = submission.get("submission_id")
-    except Exception as exc:  # pragma: no cover — defensive, non-fatal by design
+    except Exception as exc:
         logger.warning("Could not attach coding scores for candidate=%s: %s", candidate_id, exc)
 
 
@@ -313,7 +289,7 @@ async def evaluate_interview(
 
     if not transcript_text.strip():
         logger.warning(
-            "Interview evaluation skipped — transcript has no usable question/answer "
+            "Interview evaluation skipped: transcript has no usable question/answer "
             "content | candidate=%s entries=%d",
             candidate.get("candidate_id"), len(transcript or []),
         )
@@ -336,7 +312,7 @@ async def evaluate_interview(
 
     format_kwargs = dict(
         title=job.get("title", "Unknown Role"),
-        transcript=transcript_text[:6000],
+        transcript=fence("TRANSCRIPT", transcript_text[:6000]),
         flags=flags_text,
     )
 
@@ -347,7 +323,7 @@ async def evaluate_interview(
         try:
             eval_prompt = override["user_prompt_template"].format(**format_kwargs)
             eval_system = override["system_prompt"]
-        except (KeyError, IndexError) as exc:
+        except (KeyError, IndexError, ValueError) as exc:
             logger.warning(
                 "interview_eval prompt override has a placeholder mismatch, "
                 "falling back to default: %s", exc,
@@ -357,11 +333,12 @@ async def evaluate_interview(
 
     raw = await ask_llm(
         prompt=eval_prompt,
-        system=eval_system,
-        model=model or settings.DEFAULT_LLM_MODEL,
+        system=with_guard(eval_system),
+        model=model_for("interview", model),
         max_tokens=1200,
         temperature=0.2,
         json_mode=True,
+        timeout=_EVAL_LLM_TIMEOUT_SECONDS,
     )
 
     try:
@@ -374,10 +351,15 @@ async def evaluate_interview(
         }
     report.setdefault("overall_score", 50)
     report.setdefault("technical_score", 50)
+    report.setdefault("technical_rationale", "")
     report.setdefault("communication_score", 50)
+    report.setdefault("communication_rationale", "")
     report.setdefault("problem_solving_score", 50)
+    report.setdefault("problem_solving_rationale", "")
     report.setdefault("cultural_fit_score", 50)
+    report.setdefault("cultural_fit_rationale", "")
     report.setdefault("confidence_score", 50)
+    report.setdefault("confidence_rationale", "")
     report.setdefault("strengths", [])
     report.setdefault("areas_for_improvement", [])
     report.setdefault("recommendation", "maybe")
@@ -393,6 +375,20 @@ async def evaluate_interview(
         if scenario:
             report["scenario_scores"] = await score_scenario_response(transcript, scenario, model=model)
 
+    breakdown = compute_score_breakdown(
+        dimension_scores={
+            "technical": {"score": report["technical_score"], "rationale": report["technical_rationale"]},
+            "communication": {"score": report["communication_score"], "rationale": report["communication_rationale"]},
+            "problem_solving": {"score": report["problem_solving_score"], "rationale": report["problem_solving_rationale"]},
+            "cultural_fit": {"score": report["cultural_fit_score"], "rationale": report["cultural_fit_rationale"]},
+            "confidence": {"score": report["confidence_score"], "rationale": report["confidence_rationale"]},
+        },
+        integrity_score=report["integrity_score"],
+        integrity_flags=integrity_flags,
+    )
+    report["score_breakdown"] = breakdown
+    report["final_score"] = breakdown["final_score"]
+
     score = float(report.get("overall_score", 50))
     return score, report
 
@@ -403,17 +399,15 @@ async def generate_followup(
     job: dict,
     model: str | None = None,
 ) -> str | None:
-    """One LLM call: decide whether the candidate's answer needs a probing
-    follow-up question. Returns the follow-up question text, or None."""
     raw = await ask_llm(
         prompt=_FOLLOWUP_PROMPT.format(
             title=job.get("title", "Unknown Role"),
-            jd=(job.get("description") or "")[:1500],
+            jd=fence("JOB DESCRIPTION", (job.get("description") or "")[:1500]),
             question=question,
-            answer=answer,
+            answer=fence("CANDIDATE ANSWER", answer),
         ),
-        system=_FOLLOWUP_SYSTEM,
-        model=model or settings.DEFAULT_LLM_MODEL,
+        system=with_guard(_FOLLOWUP_SYSTEM),
+        model=model_for("interview", model),
         max_tokens=300,
         temperature=0.3,
         json_mode=True,
@@ -441,21 +435,9 @@ async def generate_reasoning_probe(
     prior_answer: str | None = None,
     model: str | None = None,
 ) -> dict | None:
-    """One LLM call: pose a why-this-approach / changed-condition / edge-case-tradeoff
-    probe to check the candidate genuinely understands their own answer. Sibling to
-    `generate_followup` — that function catches thin answers; this one probes even a
-    confident, well-formed answer. Stateless like `generate_followup`: never writes to
-    the DB and never counts prior calls — the caller (client) decides cadence, e.g.
-    probing every Nth question rather than every turn.
-
-    When `prior_answer` is supplied (a repeat probe on the same question later in the
-    session), the response also carries a consistency assessment between the two.
-
-    Returns None on any malformed/unparseable LLM response — never raises.
-    """
     prior_answer_line = (
         f"\nThe candidate gave this answer to the SAME question earlier in the interview: "
-        f"{prior_answer}\n"
+        f"{fence('EARLIER ANSWER', prior_answer)}\n"
         if prior_answer else ""
     )
     consistency_line = (
@@ -465,14 +447,14 @@ async def generate_reasoning_probe(
     raw = await ask_llm(
         prompt=_PROBE_PROMPT.format(
             title=job.get("title", "Unknown Role"),
-            jd=(job.get("description") or "")[:1500],
+            jd=fence("JOB DESCRIPTION", (job.get("description") or "")[:1500]),
             question=question,
-            answer=answer,
+            answer=fence("CANDIDATE ANSWER", answer),
             prior_answer_line=prior_answer_line,
             consistency_line=consistency_line,
         ),
-        system=_PROBE_SYSTEM,
-        model=model or settings.DEFAULT_LLM_MODEL,
+        system=with_guard(_PROBE_SYSTEM),
+        model=model_for("interview", model),
         max_tokens=300,
         temperature=0.3,
         json_mode=True,
@@ -498,11 +480,64 @@ async def generate_reasoning_probe(
     }
 
 
-from services.hr_module.integrity import (  # noqa: E402  (re-export)
+from services.hr_module.integrity import (
     _INTEGRITY_UNKNOWN_WEIGHT,
     _INTEGRITY_WEIGHTS,
     compute_integrity_score,
 )
+
+
+def compute_score_breakdown(
+    dimension_scores: dict,
+    integrity_score: int,
+    integrity_flags: list[str],
+) -> dict:
+    weights = settings.SCORE_DIMENSION_WEIGHTS
+    floor = settings.INTEGRITY_MULTIPLIER_FLOOR
+
+    dimensions = []
+    weighted_sum = 0.0
+    for name, weight in weights.items():
+        entry = dimension_scores.get(name) or {}
+        dim_score = entry.get("score") or 0
+        dimensions.append({
+            "name": name,
+            "score": dim_score,
+            "weight": weight,
+            "rationale": entry.get("rationale") or "",
+        })
+        weighted_sum += dim_score * weight
+
+    integrity_deductions = []
+    for flag in integrity_flags or []:
+        if not flag:
+            continue
+        event, _, timestamp = str(flag).partition("@")
+        points = _INTEGRITY_WEIGHTS.get(event, _INTEGRITY_UNKNOWN_WEIGHT)
+        if points:
+            integrity_deductions.append({
+                "event": event,
+                "timestamp": timestamp or None,
+                "points": points,
+            })
+
+    integrity_multiplier = floor + (1 - floor) * integrity_score / 100
+    final_score = round(weighted_sum * integrity_multiplier)
+
+    return {
+        "dimensions": dimensions,
+        "integrity_deductions": integrity_deductions,
+        "integrity_multiplier": round(integrity_multiplier, 4),
+        "final_score": final_score,
+    }
+
+
+def resolve_report_status(candidate: dict) -> str | None:
+    status = candidate.get("report_status")
+    if status is None and candidate.get("report") is not None:
+        return "ready"
+    return status
+
 
 __all__ = [
     "generate_questions",
@@ -510,4 +545,6 @@ __all__ = [
     "format_transcript",
     "generate_followup",
     "compute_integrity_score",
+    "compute_score_breakdown",
+    "resolve_report_status",
 ]

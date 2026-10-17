@@ -15,7 +15,10 @@ interface Props {
   runErrorMsg?: string
   onRun?: (language: string, code: string) => void
   onIntegrityEvent?: (event: string) => void
+  onAutosave?: (language: string, code: string) => void
 }
+
+export const AUTOSAVE_INTERVAL_MS = 8000
 
 const PASTE_BURST_CHARS = 40
 
@@ -33,7 +36,7 @@ function languageLabel(lang: string): string {
 export default function CodingWorkspace({
   session, status, errorMsg, result, onSubmit,
   runStatus = 'idle', runResult = null, runErrorMsg = '', onRun,
-  onIntegrityEvent,
+  onIntegrityEvent, onAutosave,
 }: Props) {
   const [language, setLanguage] = useState('')
   const [code, setCode] = useState('')
@@ -43,6 +46,10 @@ export default function CodingWorkspace({
   const keystrokesByLangRef = useRef<Record<string, number>>({})
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const gutterRef = useRef<HTMLDivElement>(null)
+  const languageRef = useRef(language)
+  languageRef.current = language
+  const codeRef = useRef(code)
+  codeRef.current = code
 
   useEffect(() => {
     const langs = Object.keys(session.language_templates || {})
@@ -59,6 +66,15 @@ export default function CodingWorkspace({
   }, [status])
 
   const locked = status === 'submitting' || status === 'done'
+
+  useEffect(() => {
+    if (!onAutosave) return
+    const id = setInterval(() => {
+      if (locked) return
+      onAutosave(languageRef.current, codeRef.current)
+    }, AUTOSAVE_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [onAutosave, locked])
 
   function changeLanguage(lang: string) {
     codeByLangRef.current[language] = code
@@ -257,7 +273,7 @@ export default function CodingWorkspace({
 
                   {result.status === 'execution_error' && (
                     <div className="ca-submit-error">
-                      We couldn't run your code just now - this is a problem on our side,
+                      We couldn't run your code just now. This is a problem on our side,
                       not with your solution. Please try submitting again.
                     </div>
                   )}

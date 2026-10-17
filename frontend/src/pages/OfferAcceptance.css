@@ -132,7 +132,7 @@
 .offer-btn:disabled { opacity: .6; cursor: not-allowed; }
 
 .offer-btn-accept {
-  background: var(--primary); color: #000;
+  background: var(--primary); color: #ffffff;
   box-shadow: 0 4px 14px rgba(71, 120, 243, 0.3);
 }
 .offer-btn-accept:hover:not(:disabled) {
@@ -189,4 +189,46 @@
   border-color: rgba(71, 120, 243,.5);
   box-shadow: 0 0 0 3px rgba(71, 120, 243,.1);
   background: #fff;
+}
+
+.offer-sign-box {
+  display: flex; flex-direction: column; gap: .6rem;
+  padding: .85rem 1rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+
+.offer-sign-label {
+  font-size: .72rem; font-weight: 700; color: var(--gray-600); letter-spacing: .04em;
+}
+
+.offer-sign-input {
+  width: 100%;
+  background: var(--white);
+  border: 1.5px solid rgba(0,0,0,.08);
+  border-radius: 10px;
+  padding: .6rem .8rem;
+  font-size: .875rem;
+  font-family: inherit;
+  color: var(--gray-900);
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.offer-sign-input:focus {
+  outline: none;
+  border-color: rgba(71, 120, 243, .5);
+  box-shadow: 0 0 0 3px rgba(71, 120, 243, .1);
+}
+
+.offer-consent-row {
+  display: flex; align-items: flex-start; gap: .55rem;
+  font-size: .78rem; color: var(--gray-600); line-height: 1.5;
+  cursor: pointer;
+}
+
+.offer-consent-row input[type="checkbox"] {
+  width: 15px; height: 15px; flex-shrink: 0; margin-top: .15rem;
+  cursor: pointer;
 }

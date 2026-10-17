@@ -1,14 +1,3 @@
-"""
-Resume processing agent — hr_module.
-
-Pipeline:
-  extract_text → check_duplicate → classify → embed → match_jds → store → auto_invite
-
-New in v3:
-  - store_node extracts candidate email + name and returns them to state
-  - auto_invite_node fires invite_service for any JD match >= AUTO_INVITE_THRESHOLD
-  - matched_jds stored as [{job_id, score}] dicts (richer than plain id list)
-"""
 from __future__ import annotations
 
 from typing import TypedDict
@@ -50,8 +39,6 @@ async def extract_text_node(state: ResumeState) -> dict:
 
 @log_node("check_duplicate")
 async def check_duplicate_node(state: ResumeState) -> dict:
-    """Stop processing if this resume already exists (exact file or same content).
-    Runs right after extraction so duplicates never reach the costly LLM steps."""
     from services.hr_module.resume_intel import check_duplicate
     try:
         existing = await check_duplicate(
@@ -68,9 +55,11 @@ async def check_duplicate_node(state: ResumeState) -> dict:
 
 @log_node("classify")
 async def classify_node(state: ResumeState) -> dict:
+    from config.llm import track_llm_cost
     from services.hr_module.classifier import classify_resume
     try:
-        cls = await classify_resume(state["text"], state.get("model_override"))
+        async with track_llm_cost("resume_classification", state.get("resume_id")):
+            cls = await classify_resume(state["text"], state.get("model_override"))
         return {"classification": cls, **append_trace(state, "classified")}
     except Exception as exc:
         return {"error": str(exc)}
@@ -78,9 +67,9 @@ async def classify_node(state: ResumeState) -> dict:
 
 @log_node("embed")
 async def embed_node(state: ResumeState) -> dict:
-    from config.llm import get_embedding
+    from config.llm import get_embedding, require_vector
     try:
-        vec = await get_embedding(state["text"])
+        vec = require_vector(await get_embedding(state["text"]))
         return {"embedding": vec, **append_trace(state, "embedded")}
     except Exception as exc:
         return {"error": str(exc)}
@@ -117,11 +106,6 @@ async def store_node(state: ResumeState) -> dict:
 
 @log_node("auto_invite")
 async def auto_invite_node(state: ResumeState) -> dict:
-    """
-    Non-fatal node: fires auto-invite if match score >= AUTO_INVITE_THRESHOLD.
-    Never sets error — the resume is already stored and matched by this point,
-    so a failed invite must not turn the whole ingest into a failure.
-    """
     from services.hr_module.invite_service import auto_invite_if_qualified
     try:
         invited = await auto_invite_if_qualified(

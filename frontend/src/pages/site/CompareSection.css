@@ -1,0 +1,9 @@
+.cmp-summary {
+  max-width: 48rem;
+  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.3125rem);
+  line-height: 1.6;
+  color: var(--ink);
+}
+.cmp-table { margin-top: 1.5rem; }
+.cmp-fine { margin-top: 1rem; font-size: 0.875rem; color: var(--muted-dark); }
+.cmp-page .xv-card-ink .xv-table-wrap { background: #fff; }

@@ -1,0 +1,7 @@
+.legal-links {
+  display: flex; justify-content: center; flex-wrap: wrap; gap: .25rem 1.25rem;
+  margin-top: 1.25rem;
+  font-size: .75rem;
+}
+.legal-links a { color: var(--gray-500); text-decoration: underline; text-underline-offset: 2px; }
+.legal-links a:hover { color: var(--gray-900); }

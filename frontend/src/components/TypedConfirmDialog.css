@@ -1,0 +1,13 @@
+.tcd-box { max-width: 460px; }
+.tcd-box .modal-header h2 { min-width: 0; overflow-wrap: anywhere; }
+.tcd-body { padding: 1rem 1.4rem 1.2rem; display: flex; flex-direction: column; gap: .85rem; }
+.tcd-field { display: flex; flex-direction: column; gap: .3rem; }
+.tcd-typed { font-family: var(--font-mono); letter-spacing: .06em; }
+.tcd-error {
+  padding: .55rem .75rem; border-radius: var(--radius); font-size: .82rem; line-height: 1.45;
+  color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--white));
+}
+.tcd-footer { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; margin-top: .2rem; }
+.tcd-danger { background: var(--danger); color: var(--white); border: 1px solid var(--danger); }
+.tcd-danger:hover:not(:disabled) { filter: brightness(.92); }
+.tcd-danger:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }

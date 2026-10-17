@@ -4,7 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoleGuide } from './types'
 
-
 const list = vi.fn()
 vi.mock('../../lib/api', () => ({ userGuideApi: { list: (...a: unknown[]) => list(...a) } }))
 

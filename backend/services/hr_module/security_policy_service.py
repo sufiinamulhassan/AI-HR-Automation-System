@@ -1,58 +1,8 @@
-"""Security Policies service — hr_module Admin Configuration (MVP2 §2.20,
-final named gap — see docs/report.md §3 / docs/MVP2.md §2.20).
-
-Same singleton-document, override-with-fallback shape already established in
-this codebase by `services/hr_module/company_settings_service.py` (read that
-file first if this one is unclear) and by `config/database.py`'s
-`_load_runtime_settings()` (which shadows `settings.DEFAULT_LLM_MODEL` from a
-DB collection the same way this module shadows password/lockout/session
-behavior). One fixed document (`_id == SINGLETON_ID`) in a new
-`security_policies` collection — upserted into existence with permissive
-defaults on first read, never absent, never more than one row, so no index
-beyond Mongo's implicit `_id` index is required (see the manifest note for
-`config/database.py` — deliberately not adding a `create_index` call for a
-singleton keyed by a fixed literal `_id`).
-
-CRITICAL SAFETY REQUIREMENT (this module exists only to satisfy it): every
-default value below must change NOTHING about current behavior for any
-existing account or test until an admin explicitly opts in via PATCH:
-
-  password_min_length                 1      — no real minimum (any current
-                                                 password, including a
-                                                 1-character one, still
-                                                 passes)
-  password_require_number              False  — no requirement (matches
-                                                 today, where no such check
-                                                 exists at all)
-  password_require_symbol              False  — same
-  max_login_attempts_before_lockout    0      — 0 means the lockout feature
-                                                 is fully disabled; only 0 or
-                                                 a positive integer are valid,
-                                                 and 0 always means off,
-                                                 exactly like `_EDITABLE`
-                                                 lockout logic in
-                                                 routes/auth.py checks
-                                                 `> 0` before doing anything
-  account_lockout_duration_minutes     15     — irrelevant while lockout is
-                                                 disabled; only used once an
-                                                 admin sets a positive
-                                                 max_login_attempts_before_lockout
-  session_timeout_minutes              None   — None means "fall through to
-                                                 the existing hardcoded
-                                                 settings.ACCESS_TOKEN_EXPIRE_MINUTES
-                                                 exactly as today" (see
-                                                 routes/auth.py `_make_token`)
-
-The consuming logic (password-policy checks, login lockout, token lifetime)
-lives in routes/auth.py — this module only stores/validates/returns the
-policy document itself, exactly the same separation of concerns
-prompt_config_service.py uses (it stores prompt overrides; jd_intel.py /
-interview_engine.py decide how to use them).
-"""
 import logging
 from datetime import datetime, timezone
 
 from config.database import get_db
+from config.settings import settings
 from shared.utils import mongo_doc
 
 logger = logging.getLogger(__name__)
@@ -68,6 +18,8 @@ _EDITABLE_FIELDS = (
     "session_timeout_minutes",
 )
 
+POLICY_FIELDS = _EDITABLE_FIELDS
+
 _DEFAULTS = {
     "password_min_length": 1,
     "password_require_number": False,
@@ -77,19 +29,24 @@ _DEFAULTS = {
     "session_timeout_minutes": None,
 }
 
+_HARDENED_DEFAULTS = {
+    "password_min_length": 8,
+    "password_require_number": True,
+    "password_require_symbol": False,
+    "max_login_attempts_before_lockout": 5,
+    "account_lockout_duration_minutes": 15,
+    "session_timeout_minutes": None,
+}
+
 
 def _default_doc() -> dict:
     now = datetime.now(timezone.utc).isoformat()
     doc = {"_id": SINGLETON_ID, "created_at": now, "updated_at": now}
-    doc.update(_DEFAULTS)
+    doc.update(_DEFAULTS if settings.DEBUG else _HARDENED_DEFAULTS)
     return doc
 
 
 def _validate_fields(fields: dict) -> dict:
-    """Validate + coerce only the known editable fields present in `fields`.
-    Raises ValueError (caught by the route and turned into a 400) on an
-    invalid value. Unknown keys are dropped by the caller before this runs.
-    """
     clean: dict = {}
 
     if "password_min_length" in fields:
@@ -138,10 +95,6 @@ def _validate_fields(fields: dict) -> dict:
 
 
 async def get_security_policies() -> dict:
-    """Fetch the singleton security-policies document, upserting the
-    permissive defaults into existence on first call so a fresh install (or
-    a fresh test database) never 404s and never behaves any differently from
-    "no policy configured" until an admin explicitly PATCHes a change."""
     db = get_db()
     if db is None:
         logger.warning("get_security_policies: database unavailable, returning in-memory defaults")
@@ -163,9 +116,6 @@ async def get_security_policies() -> dict:
 
 
 async def update_security_policies(updated_by: str | None = None, **fields) -> dict:
-    """Admin-authored partial update. Only whitelisted, explicitly-provided
-    fields are validated and persisted; anything else is ignored. Raises
-    ValueError on an invalid value (the route turns this into a 400)."""
     known = {k: v for k, v in fields.items() if k in _EDITABLE_FIELDS}
     clean = _validate_fields(known)
 

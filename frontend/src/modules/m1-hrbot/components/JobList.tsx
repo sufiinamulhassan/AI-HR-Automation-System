@@ -1,8 +1,8 @@
 import './JobList.css'
 
 const EditIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gray-600)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle' }}>
-    <path d="M12 20h9" />
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="var(--gray-600)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle' }}>
+    <path d="M12 20h9" fill="none" />
     <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
   </svg>
 )
@@ -23,11 +23,14 @@ interface Props {
   onSelect: (job: Job) => void
   onEdit: (job: Job) => void
   onDelete: (id: string) => void
+  canManage: boolean
 }
 
-export default function JobList({ jobs, selected, onSelect, onEdit, onDelete }: Props) {
+export default function JobList({ jobs, selected, onSelect, onEdit, onDelete, canManage }: Props) {
   if (jobs.length === 0) return (
-    <div className="job-list-empty">No job descriptions yet. Create one to get started.</div>
+    <div className="job-list-empty">
+      {canManage ? 'No job descriptions yet. Create one to get started.' : 'No job descriptions yet.'}
+    </div>
   )
   return (
     <div className="job-list">
@@ -45,14 +48,16 @@ export default function JobList({ jobs, selected, onSelect, onEdit, onDelete }: 
               {!!j.is_remote && <span> · Remote</span>}
             </div>
             <div className="job-pipeline-count">
-              {((j.candidate_pipeline as { similarity_score?: number }[]) || [])
-                .filter(c => Number(c.similarity_score || 0) >= 0.5).length} candidates
+              {((j.candidate_pipeline as { similarity_score?: number; source?: string }[]) || [])
+                .filter(c => c.source === 'career_page' || Number(c.similarity_score || 0) >= 0.5).length} candidates
             </div>
           </div>
-          <div className="job-item-actions">
-            <button className="icon-btn" title="Edit" onClick={e => { e.stopPropagation(); onEdit(j) }}><EditIcon /></button>
-            <button className="icon-btn" title="Delete" onClick={e => { e.stopPropagation(); onDelete(j.job_id as string) }}><TrashIcon /></button>
-          </div>
+          {canManage && (
+            <div className="job-item-actions">
+              <button className="icon-btn" title="Edit" onClick={e => { e.stopPropagation(); onEdit(j) }}><EditIcon /></button>
+              <button className="icon-btn" title="Delete" onClick={e => { e.stopPropagation(); onDelete(j.job_id as string) }}><TrashIcon /></button>
+            </div>
+          )}
         </div>
       ))}
     </div>

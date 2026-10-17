@@ -1,4 +1,54 @@
-
 .ur-page { padding: 0 0 2rem; }
 
 .ur-page .rp-section { margin-top: 0; }
+
+.ur-page .btn:disabled, .ur-page .um-action-btn:disabled, .ur-page .rp-icon-btn:disabled, .ur-page .rp-empty-role-cta:disabled, .ur-page .btn:disabled:hover, .ur-page .um-action-btn:disabled:hover {
+  opacity: .45; cursor: not-allowed; transform: none; box-shadow: none;
+}
+
+.ur-page .btn-primary:disabled:hover { background: var(--secondary); color: #ffffff; filter: none; }
+
+.ur-page .rp-icon-btn:disabled:hover { background: var(--white); color: var(--gray-500); border-color: var(--gray-200); }
+
+.ur-page .um-toggle input:disabled { cursor: not-allowed; }
+
+.ur-page .form-input:disabled { cursor: not-allowed; opacity: .6; }
+
+.ur-page .um-stats.um-stats-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 540px) {
+  .ur-page .um-stats.um-stats-3 { grid-template-columns: 1fr; }
+}
+
+.ur-page .um-department { font-size: .8rem; color: var(--gray-600); }
+
+.ur-page .um-notice-error {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--white));
+  border-left-color: var(--danger);
+}
+
+.ur-page .rp-role-count { font-size: .68rem; font-weight: 600; color: var(--gray-400); }
+
+.ur-page .rp-delete-sentence { margin: 0; font-size: .85rem; color: var(--gray-700); }
+
+.ur-page .rp-delete-error { font-size: .78rem; font-weight: 500; color: var(--danger); }
+
+.um-action-invite { background: var(--gray-50); color: var(--gray-700); }
+
+.um-action-invite:hover { background: var(--gray-100); }
+
+.ur-page .um-toast.um-toast-warn { background: var(--warning); color: var(--gray-900); }
+
+.um-invited { margin-left: .35rem; }
+
+.um-2fa { margin-left: .35rem; }
+
+.um-action-totp { background: var(--gray-50); color: var(--gray-700); }
+
+.um-action-totp:hover { background: var(--gray-100); }
+
+.um-more { display: flex; justify-content: center; padding: .9rem; border-top: 1px solid var(--gray-100); }
+
+.ur-page .um-table-wrap[aria-busy="true"] .data-table { opacity: .6; transition: opacity .15s; }

@@ -1,36 +1,6 @@
-"""AI Prompt Configuration service — hr_module (MVP2 §2.20 slice).
-
-Lets an admin override the two highest-value, most-cited LLM prompts in this
-codebase — the JD-parsing prompt (`services/hr_module/jd_intel.py`) and the
-interview question-generation + evaluation prompts
-(`services/hr_module/interview_engine.py`) — without a code deploy.
-
-Storage: a single `prompt_templates` collection, one document per known
-prompt `key`, holding only the override. **Absence of a document is the
-normal, expected state** — every one of the three owning call sites
-(`jd_intel.parse_jd`, `interview_engine.generate_questions`,
-`interview_engine.evaluate_interview`) calls `get_prompt_override(key)` first
-and falls back to its own hardcoded `_SYSTEM`/`_PROMPT` constants unchanged
-whenever this returns `None` (no DB, no override document, or a lookup
-error) — so this module can never make JD parsing or interviewing behave
-worse than before it existed.
-
-Known prompt keys and the exact `.format()` placeholder names each prompt's
-`user_prompt_template` MUST use (an override that renames or drops a
-placeholder will fail to render — see `_get_hardcoded_default`'s callers,
-which catch that and fall back to the hardcoded default for that single
-call rather than failing the request):
-
-  jd_parse            — {jd}, {industries}
-  interview_questions  — {title}, {difficulty}, {jd}, {topics_line}, {resume}, {count}
-  interview_eval       — {title}, {transcript}, {flags}
-
-Deliberately NOT covered this pass (see docs/report.md §3 / task scope):
-`services/hr_module/classifier.py` (owned by a different task this round)
-and `services/hr_module/scenario_service.py` (out of scope for this pass) —
-both are trivially reusable candidates for the same pattern later.
-"""
 import logging
+import re
+import string
 from datetime import datetime, timezone
 
 from config.database import get_db
@@ -43,7 +13,7 @@ KNOWN_PROMPT_KEYS: dict[str, dict] = {
         "description": (
             "Extracts structured fields (skills, industry, experience level, "
             "requirements, certifications, interview topics, etc.) from a job "
-            "description. Used by services/hr_module/jd_intel.py."
+            "description."
         ),
         "placeholders": ["jd", "industries"],
     },
@@ -51,8 +21,7 @@ KNOWN_PROMPT_KEYS: dict[str, dict] = {
         "label": "Interview Question Generation",
         "description": (
             "Generates the candidate's interview question set from the job "
-            "description, resume excerpt, and JD-derived interview topics. "
-            "Used by services/hr_module/interview_engine.py."
+            "description, resume excerpt, and JD-derived interview topics."
         ),
         "placeholders": [
             "title", "difficulty", "seniority_line", "jd",
@@ -69,7 +38,7 @@ KNOWN_PROMPT_KEYS: dict[str, dict] = {
         "placeholders": ["title", "transcript", "flags"],
     },
     "code_evaluation": {
-        "label": "Coding Assessment — Code Quality Review",
+        "label": "Coding Assessment: Code Quality Review",
         "description": (
             "Reviews a candidate's submitted code for readability, structure, "
             "efficiency, idiom and problem-solving approach, and writes feedback "
@@ -85,14 +54,51 @@ KNOWN_PROMPT_KEYS: dict[str, dict] = {
 }
 
 
+_OPTIONAL_PLACEHOLDERS: dict[str, list[str]] = {
+    "interview_questions": ["stage_line", "angle_line"],
+}
+
+
+class PromptTemplateError(ValueError):
+    pass
+
+
+def required_placeholders(key: str) -> list[str]:
+    return list(KNOWN_PROMPT_KEYS[key]["placeholders"])
+
+
+def _used_placeholders(template: str) -> list[str]:
+    names: list[str] = []
+    for _literal, field, _spec, _conv in string.Formatter().parse(template):
+        if field is None:
+            continue
+        name = re.split(r"[.\[]", field, maxsplit=1)[0]
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def validate_user_prompt_template(key: str, template: str) -> None:
+    if key not in KNOWN_PROMPT_KEYS:
+        raise KeyError(f"Unknown prompt key: {key}")
+    try:
+        used = _used_placeholders(template)
+    except ValueError:
+        raise PromptTemplateError(
+            "Invalid template: a brace is unmatched. Write {{ and }} for a literal brace."
+        )
+
+    missing = [p for p in required_placeholders(key) if p not in used]
+    if missing:
+        raise PromptTemplateError("Missing placeholders: " + ", ".join("{" + p + "}" for p in missing))
+
+    allowed = set(required_placeholders(key)) | set(_OPTIONAL_PLACEHOLDERS.get(key, []))
+    unknown = [p for p in used if p not in allowed]
+    if unknown:
+        raise PromptTemplateError("Unknown placeholders: " + ", ".join("{" + p + "}" for p in unknown))
+
+
 def _get_hardcoded_default(key: str) -> tuple[str, str]:
-    """Lazily import the owning module's current hardcoded (system, user_template)
-    pair. Local imports only — jd_intel.py / interview_engine.py import THIS
-    module at their own top level (to call get_prompt_override), so importing
-    them back here at module scope would be circular. By the time any caller
-    of this function runs (always at request time, never at import time),
-    both modules are already fully imported, so this is safe.
-    """
     if key == "jd_parse":
         from services.hr_module.jd_intel import _SYSTEM, _PROMPT
         return _SYSTEM, _PROMPT
@@ -109,10 +115,6 @@ def _get_hardcoded_default(key: str) -> tuple[str, str]:
 
 
 async def get_prompt_override(key: str) -> dict | None:
-    """Return the override document for `key`, or None if no override exists
-    (no DB, no document, or a transient lookup error) — the universal signal
-    for "caller should use its own hardcoded default instead." Never raises.
-    """
     try:
         db = get_db()
         if db is None:
@@ -124,9 +126,6 @@ async def get_prompt_override(key: str) -> dict | None:
 
 
 async def list_prompt_templates() -> list[dict]:
-    """Every known prompt key with its currently-effective system/user prompt
-    (override if one exists, otherwise the hardcoded default) plus enough
-    metadata for an admin UI to show what's customized vs. default."""
     results = []
     for key, meta in KNOWN_PROMPT_KEYS.items():
         item = await get_prompt_template_detail(key)
@@ -183,8 +182,6 @@ async def upsert_prompt_template(
 
 
 async def reset_prompt_template(key: str) -> bool:
-    """Delete the override document so the hardcoded default takes over again.
-    Returns True if a document was actually removed."""
     if key not in KNOWN_PROMPT_KEYS:
         raise KeyError(f"Unknown prompt key: {key}")
     db = get_db()

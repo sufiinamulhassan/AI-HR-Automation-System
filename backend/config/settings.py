@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     ALLOW_DEMO_AUTH: bool = Field(default=False)
     HACKATHON_DEMO_MODE: bool = Field(default=False)
+    DEMO_COMPANY_ID: str = Field(default="")
     STRICT_SECURITY_VALIDATION: bool = Field(default=False)
     LOGIN_RATE_LIMIT: int = 10
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
 
     DEFAULT_LLM_MODEL: str = Field(default="gpt-4o")
     RESUME_CLASSIFICATION_MODEL: str = Field(default="gpt-4o-mini")
+    LLM_EFFORT: str = Field(default="low")
     RESUME_EMBEDDING_MODEL: str = Field(default="text-embedding-3-small")
     EMBEDDING_DIMENSIONS: int = 1536
 
@@ -49,11 +51,10 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = Field(default="")
 
     LINKEDIN_API_KEY: str = Field(default="")
-    NAUKRI_API_KEY: str = Field(default="")
-    DICE_API_KEY: str = Field(default="")
-    CAREERBUILDER_API_KEY: str = Field(default="")
     INDEED_API_KEY: str = Field(default="")
     JOB_IMPORT_SYNC_INTERVAL_HOURS: int = 6
+
+    CRON_SECRET: str = Field(default="")
 
     OTP_EXPIRE_MINUTES: int = 10
 
@@ -64,8 +65,23 @@ class Settings(BaseSettings):
     EMAIL_FROM: str = Field(default="hr@company.com")
     EMAIL_FROM_NAME: str = "HR Platform"
     EMAIL_USE_TLS: bool = True
+    EMAIL_ESTIMATED_COST_PER_EMAIL: float = Field(default=0.0001)
 
     FRONTEND_URL: str = Field(default="http://localhost:5173")
+    CLIENT_IP_HEADER: str = Field(default="")
+    EXPOSE_API_DOCS: bool = Field(default=False)
+    SECRETS_ENCRYPTION_KEY: str = Field(default="")
+    SECRETS_ENCRYPTION_KEY_PREVIOUS: str = Field(default="")
+    STRIPE_SECRET_KEY: str = Field(default="")
+    STRIPE_WEBHOOK_SECRET: str = Field(default="")
+    STRIPE_PRICE_IDS: str = Field(default="")
+    PLATFORM_ALERT_EMAILS: str = Field(default="")
+    TERMS_URL: str = Field(default="")
+    PRIVACY_URL: str = Field(default="")
+    CODING_LINK_GRACE_DAYS: int = Field(default=30)
+    CAREERS_MAX_RESUME_MB: int = Field(default=4)
+    CAREERS_APPLICATIONS_PER_HOUR: int = Field(default=120)
+    CAREERS_CACHE_SECONDS: int = Field(default=30)
 
     MAX_BULK_UPLOAD_FILES: int = 500
     RESUME_SIMILARITY_THRESHOLD: float = 0.35
@@ -76,12 +92,27 @@ class Settings(BaseSettings):
     RESUME_ENRICH_MAX_CHARS: int = 16000
 
     AUTO_INVITE_THRESHOLD: float = 0.70
+    AUTO_INVITE_ENABLED: bool = False
     INVITE_LINK_EXPIRY_DAYS: int = 7
+
+    REPORT_SHARE_EXPIRY_DAYS: int = 7
+    REPORT_SHARE_MIN_EXPIRY_DAYS: int = 1
+    REPORT_SHARE_MAX_EXPIRY_DAYS: int = 30
 
     DEFAULT_JD_OPEN_DAYS: int = 30
 
     INTERVIEW_DURATION_MINUTES: int = 30
     INTERVIEW_QUESTION_COUNT: int = 15
+    INTERVIEW_GUIDE_QUESTION_COUNT: int = 10
+
+    SCORE_DIMENSION_WEIGHTS: dict[str, float] = Field(default_factory=lambda: {
+        "technical": 0.30,
+        "communication": 0.20,
+        "problem_solving": 0.25,
+        "cultural_fit": 0.15,
+        "confidence": 0.10,
+    })
+    INTEGRITY_MULTIPLIER_FLOOR: float = 0.6
 
     TTS_MODEL: str = Field(default="gpt-4o-mini-tts")
     TTS_VOICE: str = Field(default="alloy")
@@ -96,10 +127,6 @@ class Settings(BaseSettings):
     AWS_SES_REGION: str = Field(default="")
 
     DEFAULT_SUPERADMIN_EMAIL: str = "superadmin@hirely.ai"
-    # No default on purpose. A shipped superadmin password is a published
-    # credential the moment the repository goes public, and it pairs with the
-    # equally public DEFAULT_SUPERADMIN_EMAIL above. Deployments must set this
-    # explicitly; _seed_superadmin() refuses to create the account without it.
     DEFAULT_SUPERADMIN_PASSWORD: str = Field(default="")
 
     CODE_SANDBOX_PROVIDER: str = Field(default="judge0")
@@ -120,6 +147,7 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_ID: str = Field(default="")
     GOOGLE_OAUTH_CLIENT_SECRET: str = Field(default="")
     GOOGLE_OAUTH_REDIRECT_URI: str = Field(default="")
+    SSO_ALLOWED_EMAIL_DOMAINS: str = Field(default="")
 
     WEBHOOK_SIGNING_SECRET: str = Field(default="")
 
@@ -137,6 +165,8 @@ class Settings(BaseSettings):
     HRMS_AUTH_TOKEN: str = Field(default="")
     HRMS_AUTO_PUSH_ON_HIRE: bool = False
 
+    PERFORMANCE_REVIEW_EXPIRY_DAYS: int = 30
+
     class Config:
         env_file = str(_ENV_FILE)
         env_file_encoding = "utf-8"
@@ -150,30 +180,20 @@ _SANDBOX_PROVIDERS = ("judge0", "piston")
 
 
 def sandbox_provider() -> str:
-    """The active execution engine. An unrecognised value falls back to judge0
-    rather than disabling execution — a typo in one env var should not look
-    identical to "no sandbox configured"."""
     provider = (settings.CODE_SANDBOX_PROVIDER or "").strip().lower()
     return provider if provider in _SANDBOX_PROVIDERS else "judge0"
 
 
 def sandbox_url() -> str:
-    """Base URL of the active engine — blank when it is not configured."""
     return settings.PISTON_API_URL if sandbox_provider() == "piston" else settings.JUDGE0_API_URL
 
 
 def sandbox_not_configured_message() -> str:
-    """Names the one variable the operator actually has to set, rather than
-    whichever engine happens to be mentioned in the code."""
     var = "PISTON_API_URL" if sandbox_provider() == "piston" else "JUDGE0_API_URL"
-    return f"Code execution is not configured — set {var} in settings"
+    return f"Code execution is not configured: set {var} in settings"
 
 
 _INSECURE_DEFAULT_SECRET_KEY = "change-me-in-production-32-chars-min"
-
-# Superadmin passwords that shipped as a default in this repository's public
-# history. Deleting the default from the settings class does not un-publish
-# them, so they stay rejected by name for anyone who sets one back.
 _LEAKED_SUPERADMIN_PASSWORDS = {"qwerty@54321"}
 
 _PLACEHOLDER_MARKERS = ("change-me", "changeme", "change_me", "your-", "placeholder", "example", "todo", "xxx")
@@ -191,24 +211,6 @@ def _looks_like_placeholder(value: str) -> bool:
 
 
 def audit_security_config() -> tuple[list[str], list[str]]:
-    """Classify security-critical settings into (fatal, weak). Pure, no I/O.
-
-    `fatal` — values that are unambiguously "never configured at all": the two
-    exact shipped literals, and ALLOW_DEMO_AUTH left on outside DEBUG (a total
-    authentication bypass). These refuse to boot, as they already did.
-
-    `weak` — the class of values the old exact-literal check let straight
-    through, and the reason it was only a partial fix: anything carrying a
-    placeholder marker (so copying `.env.example` verbatim —
-    "change-me-generate-a-32-char-secret-key", "change-me-in-production" —
-    is now caught), a SECRET_KEY below the 32 chars its own name promises, and
-    a short or common-listed superadmin password.
-
-    `weak` findings are reported loudly but do NOT block startup by default:
-    these are heuristics, and a false positive that bricks a running deployment
-    is worse than one that shouts. Set STRICT_SECURITY_VALIDATION=true (do this
-    on any real deploy) to promote them to fatal.
-    """
     fatal: list[str] = []
     weak: list[str] = []
 
@@ -219,7 +221,7 @@ def audit_security_config() -> tuple[list[str], list[str]]:
         weak.append("SECRET_KEY looks like an unreplaced placeholder (e.g. copied from .env.example)")
     elif len(secret_key) < _MIN_SECRET_KEY_LENGTH:
         weak.append(
-            f"SECRET_KEY is only {len(secret_key)} characters — use at least "
+            f"SECRET_KEY is only {len(secret_key)} characters: use at least "
             f"{_MIN_SECRET_KEY_LENGTH} random characters for HS256 signing"
         )
 
@@ -240,26 +242,20 @@ def audit_security_config() -> tuple[list[str], list[str]]:
         weak.append("DEFAULT_SUPERADMIN_PASSWORD is a commonly-guessed password")
     elif len(password) < _MIN_SUPERADMIN_PASSWORD_LENGTH:
         weak.append(
-            f"DEFAULT_SUPERADMIN_PASSWORD is only {len(password)} characters — "
+            f"DEFAULT_SUPERADMIN_PASSWORD is only {len(password)} characters: "
             f"use at least {_MIN_SUPERADMIN_PASSWORD_LENGTH}"
         )
 
     if settings.ALLOW_DEMO_AUTH and not settings.DEBUG:
-        weak.append(
-            "ALLOW_DEMO_AUTH is on while DEBUG is off — 'Bearer demo-<role>-token' "
-            "grants any role with NO credentials. Set ALLOW_DEMO_AUTH=false."
+        fatal.append(
+            "ALLOW_DEMO_AUTH is on while DEBUG is off: 'Bearer demo-<role>-token' "
+            "grants a role with NO credentials. Set ALLOW_DEMO_AUTH=false."
         )
 
     return fatal, weak
 
 
 def validate_security_config() -> None:
-    """Fail fast (or warn under DEBUG) on unsafe security settings.
-
-    Called at import time from main.py so an unsafe production deploy refuses
-    to boot rather than degrading silently. See audit_security_config() for
-    what counts as fatal versus weak.
-    """
     import logging
 
     logger = logging.getLogger(__name__)
@@ -290,39 +286,59 @@ def validate_security_config() -> None:
 
 
 def validate_runtime_config() -> list[str]:
-    """Non-fatal startup audit of the settings the platform *degrades* without.
-
-    Deliberately separate from validate_security_config(): none of these are
-    security holes, so none of them should stop the app booting — but each one
-    silently disables a whole feature area, and "silently" is the problem
-    (§6.2 #11). Returns the list of warnings so main.py can log them and tests
-    can assert on them.
-    """
     warnings: list[str] = []
 
     if not settings.OPENAI_API_KEY and not settings.ANTHROPIC_API_KEY:
         warnings.append(
-            "No LLM provider key set (OPENAI_API_KEY / ANTHROPIC_API_KEY) — JD parsing, "
+            "No LLM provider key set (OPENAI_API_KEY / ANTHROPIC_API_KEY): JD parsing, "
             "resume classification, interview question generation and evaluation will all fail."
         )
     elif not settings.OPENAI_API_KEY:
         warnings.append(
-            "OPENAI_API_KEY is not set — embeddings, resume matching, TTS and transcription "
+            "OPENAI_API_KEY is not set: embeddings, resume matching, TTS and transcription "
             "have no other provider and will fail even though ANTHROPIC_API_KEY is present."
         )
+    elif not settings.ANTHROPIC_API_KEY:
+        if (settings.DEFAULT_LLM_MODEL or "").startswith("claude-"):
+            warnings.append(
+                f"ANTHROPIC_API_KEY is not set but the default model is {settings.DEFAULT_LLM_MODEL}: "
+                "JD parsing, resume classification, interview question generation, "
+                "evaluation and every other AI feature will fail until it is set."
+            )
+        else:
+            warnings.append(
+                "ANTHROPIC_API_KEY is not set: Claude models are listed in the model "
+                "picker but any request or admin override that selects one will fail "
+                "silently; OpenAI-backed features are unaffected."
+            )
 
     if not settings.PINECONE_API_KEY:
-        warnings.append("PINECONE_API_KEY is not set — resume↔JD vector matching is disabled.")
+        warnings.append("PINECONE_API_KEY is not set: resume↔JD vector matching is disabled.")
     if not settings.EMAIL_HOST and not settings.AWS_SES_ENABLED:
         warnings.append(
-            "Neither EMAIL_HOST nor AWS_SES_ENABLED is set — no invite, OTP, status or offer "
+            "Neither EMAIL_HOST nor AWS_SES_ENABLED is set: no invite, OTP, status or offer "
             "email will be delivered."
         )
     if not sandbox_url():
         var = "PISTON_API_URL" if sandbox_provider() == "piston" else "JUDGE0_API_URL"
         warnings.append(
-            f"{var} is not set (CODE_SANDBOX_PROVIDER={sandbox_provider()}) — "
+            f"{var} is not set (CODE_SANDBOX_PROVIDER={sandbox_provider()}): "
             "the AI coding assessment cannot execute code."
+        )
+
+    import os
+
+    if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) and not settings.CRON_SECRET:
+        warnings.append(
+            "CRON_SECRET is not set: the scheduled jobs (invite reminders, interview reminders for "
+            "other platforms, job-source sync) are disabled on this host."
+        )
+
+    weight_sum = sum((settings.SCORE_DIMENSION_WEIGHTS or {}).values())
+    if abs(weight_sum - 1.0) > 1e-6:
+        warnings.append(
+            f"SCORE_DIMENSION_WEIGHTS sums to {weight_sum:.4f}, not 1.0: "
+            "final_score will not be on a true 0-100 scale until this is corrected."
         )
 
     return warnings

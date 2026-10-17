@@ -1,19 +1,3 @@
-"""Tests for resume version history — hr_module (MVP2 §2.5).
-
-When a candidate re-uploads a resume whose extracted email matches an
-existing resume already in the system, the two are linked as versions of
-the same person's resume: the new document gets `previous_resume_id`
-pointing at the prior one and an incremented `version`; the prior document
-gets `superseded_by` pointing forward at the new one. A resume whose email
-matches nothing already in the system stays at version=1 /
-previous_resume_id=None — identical to pre-feature behaviour.
-
-Mirrors the mocked-db style already used by tests/unit/test_resume_metadata.py
-and tests/unit/test_dedup.py (patching services.hr_module.resume_intel.get_db /
-get_pinecone directly) rather than exercising the real HTTP upload pipeline —
-store_resume's LLM-backed neighbours (classify/embed) aren't relevant to this
-feature and this keeps the tests fast and fully deterministic.
-"""
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -21,7 +5,6 @@ pytestmark = pytest.mark.anyio
 
 
 def _cursor(docs: list[dict]):
-    """Mimic db.resumes.find(...).sort(...).limit(...).to_list(...)."""
     cursor = MagicMock()
     cursor.sort.return_value = cursor
     cursor.limit.return_value = cursor
@@ -52,8 +35,6 @@ def _make_state(resume_id: str, text: str, raw_bytes: bytes = b"raw-bytes") -> d
 class TestStoreResumeVersionLinking:
 
     async def test_first_upload_defaults_to_version_1(self):
-        """No prior resume anywhere with this email -> version=1, previous_resume_id=None,
-        superseded_by=None (identical to pre-feature behaviour)."""
         from services.hr_module.resume_intel import store_resume
 
         db = _mock_db(prior_doc=None)
@@ -69,9 +50,6 @@ class TestStoreResumeVersionLinking:
         assert db.resumes.update_one.call_count == 1
 
     async def test_second_upload_same_email_links_as_new_version(self):
-        """A second resume whose extracted email matches an existing resume links the two:
-        new doc gets previous_resume_id + version=prior.version+1; prior doc gets
-        superseded_by set to the new resume_id."""
         from services.hr_module.resume_intel import store_resume
 
         prior_doc = {"resume_id": "r1", "version": 1}
@@ -107,7 +85,6 @@ class TestStoreResumeVersionLinking:
         assert query["resume_id"] == {"$ne": "r9"}
 
     async def test_no_email_skips_version_lookup(self):
-        """No extractable email -> no lookup attempted at all, version stays 1."""
         from services.hr_module.resume_intel import store_resume
 
         db = _mock_db(prior_doc=None)
@@ -122,8 +99,6 @@ class TestStoreResumeVersionLinking:
         assert doc["previous_resume_id"] is None
 
     async def test_three_versions_chain_increments_correctly(self):
-        """Uploading a THIRD resume for the same email (prior already at version 2)
-        produces version=3 and links previous_resume_id to that v2 document."""
         from services.hr_module.resume_intel import store_resume
 
         prior_doc = {"resume_id": "r2", "version": 2}
@@ -138,8 +113,6 @@ class TestStoreResumeVersionLinking:
         assert new_doc["previous_resume_id"] == "r2"
 
     async def test_supersede_failure_is_non_fatal(self):
-        """A failure updating the prior doc's superseded_by must not raise —
-        the new resume's own upload has already succeeded by that point."""
         from services.hr_module.resume_intel import store_resume
 
         prior_doc = {"resume_id": "r1", "version": 1}
@@ -160,7 +133,6 @@ class TestStoreResumeVersionLinking:
 
 
 class TestResumeVersionsEndpoint:
-    """GET /resumes/{resume_id}/versions — routes/resumes.py."""
 
     @staticmethod
     def _docs_db(docs: dict[str, dict]):

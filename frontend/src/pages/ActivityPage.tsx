@@ -71,7 +71,7 @@ function BatchDetailModal({ batchId, onClose }: { batchId: string; onClose: () =
 
               <div className="act-cost">
                 <div className="act-cost-main">
-                  <span className="act-cost-label">OpenAI cost (this batch)</span>
+                  <span className="act-cost-label">AI cost (this batch)</span>
                   <span className="act-cost-val">${cost.toFixed(4)}</span>
                 </div>
                 <div className="act-cost-tokens">
@@ -147,12 +147,12 @@ function ResumesActivity({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   async function deleteBatch(e: React.MouseEvent, batchId: string) {
     e.stopPropagation()
     if (!confirm('Dismiss this batch notification? (Processed resumes are kept.)')) return
-    try { await intelApi.deleteBatch(batchId); setBatches(bs => bs.filter(b => b.batch_id !== batchId)) } catch {}
+    try { await intelApi.deleteBatch(batchId); setBatches(bs => bs.filter(b => b.batch_id !== batchId)) } catch { }
   }
 
   async function clearAll() {
     if (!confirm('Clear all batch notifications? (Processed resumes are kept.)')) return
-    try { await intelApi.clearBatches(); setBatches([]) } catch {}
+    try { await intelApi.clearBatches(); setBatches([]) } catch { }
   }
 
   async function handlePurge() {
@@ -222,7 +222,7 @@ function ResumesActivity({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             <button className="act-page-btn" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</button>
             <span className="act-page-info">
               Page {page} of {totalPages}
-              <span className="act-page-range"> · showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, batches.length)} of {batches.length}</span>
+              <span className="act-page-range"> · showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, batches.length)} of {batches.length}</span>
             </span>
             <button className="act-page-btn" disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next →</button>
           </div>
@@ -328,7 +328,7 @@ function JDActivity({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div className="act-loading">Loading…</div>
       ) : autoDelete ? (
         <div className="act-empty">
-          Auto-delete is <strong>on</strong> - expired JDs are removed automatically.
+          Auto-delete is <strong>on</strong>. Expired JDs are removed automatically.
           {autoDeleted > 0 && <> Just cleaned up {autoDeleted}.</>}
         </div>
       ) : expired.length === 0 ? (
@@ -366,7 +366,7 @@ function JDActivity({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <button className="act-page-btn" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</button>
               <span className="act-page-info">
                 Page {page} of {totalPages}
-                <span className="act-page-range"> · showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, expired.length)} of {expired.length}</span>
+                <span className="act-page-range"> · showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, expired.length)} of {expired.length}</span>
               </span>
               <button className="act-page-btn" disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next →</button>
             </div>

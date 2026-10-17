@@ -1,0 +1,78 @@
+.rf-form, .rf-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rf-field {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.rf-dim-desc {
+  font-size: .74rem;
+  color: var(--gray-500);
+  margin-top: -.15rem;
+}
+
+.rf-comments {
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.rf-empty {
+  font-size: .82rem;
+  color: var(--gray-500);
+  padding: .5rem 0;
+}
+
+.rf-error {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--danger);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+  padding: .6rem .85rem;
+}
+
+.rf-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rf-readonly-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .55rem .8rem;
+  background: var(--gray-50);
+  border-radius: var(--radius);
+}
+
+.rf-dim-name {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.rf-readonly-score {
+  font-size: .82rem;
+  font-weight: 800;
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-readonly-comments {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+
+.rf-readonly-comments p {
+  font-size: .85rem;
+  color: var(--gray-700);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}

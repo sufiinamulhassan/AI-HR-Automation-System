@@ -1,34 +1,23 @@
-"""
-Generic outbound webhook subscription routes — hr_module Integrations
-(MVP2 §2.19). Pure admin config: no reads for non-admins, no exceptions.
-
-    POST   /                    create a webhook subscription  (admin)
-    GET    /                    list webhook subscriptions     (admin)
-    GET    /{webhook_id}        get a single subscription      (admin)
-    PATCH  /{webhook_id}        update a subscription          (admin)
-    DELETE /{webhook_id}        delete a subscription          (admin)
-    POST   /{webhook_id}/test   fire a diagnostic test payload at one subscription (admin)
-"""
 import asyncio
-import hashlib
-import hmac
-import json
 import uuid
 from datetime import datetime, timezone
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from config.database import get_db
-from config.settings import settings
-from shared.auth import require_admin
+from shared.auth import require_admin, require_permission
+from services.hr_module.plan_service import require_feature
 from services.hr_module.audit_service import log_audit_event
-from services.hr_module.webhook_service import is_url_ssrf_safe, _build_delivery_body
+from services.hr_module.webhook_service import (
+    EVENT_TYPES,
+    is_url_ssrf_safe,
+    list_deliveries,
+    send_test_ping,
+    unknown_event_types,
+)
 
-router = APIRouter()
-
-_TEST_TIMEOUT = 5.0
+router = APIRouter(dependencies=[Depends(require_permission("webhooks:manage"))])
 
 _VALID_WEBHOOK_FORMATS = {"raw", "slack", "teams"}
 
@@ -49,16 +38,31 @@ class UpdateWebhookRequest(BaseModel):
     format: str | None = None
 
 
+def _check_event_types(event_types: list[str] | None) -> None:
+    unknown = unknown_event_types(event_types)
+    if unknown:
+        raise HTTPException(422, f"Unknown event type(s): {', '.join(unknown)}")
+
+
+def _public(subscription: dict | None) -> dict | None:
+    if subscription is None:
+        return None
+    shown = {k: v for k, v in subscription.items() if k != "secret"}
+    shown["has_secret"] = bool(subscription.get("secret"))
+    return shown
+
+
 @router.post("")
-async def create_webhook(body: CreateWebhookRequest, user: dict = Depends(require_admin)):
+async def create_webhook(body: CreateWebhookRequest, user: dict = Depends(require_admin), _plan: None = Depends(require_feature("webhooks"))):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
     if not is_url_ssrf_safe(body.url):
-        raise HTTPException(400, "Webhook URL must be a public http(s) address — loopback/private/link-local targets are not allowed")
+        raise HTTPException(400, "Webhook URL must be a public http(s) address: loopback/private/link-local targets are not allowed")
     fmt = (body.format or "raw").lower()
     if fmt not in _VALID_WEBHOOK_FORMATS:
         raise HTTPException(400, f"format must be one of {sorted(_VALID_WEBHOOK_FORMATS)}")
+    _check_event_types(body.event_types)
 
     doc = {
         "webhook_id": str(uuid.uuid4()),
@@ -77,32 +81,37 @@ async def create_webhook(body: CreateWebhookRequest, user: dict = Depends(requir
         action="webhook_created", resource_type="webhook_subscription", resource_id=doc["webhook_id"],
         details={"url": doc["url"], "event_types": doc["event_types"], "format": doc["format"]},
     ))
-    return doc
+    return _public(doc)
 
 
 @router.get("")
-async def list_webhooks(_: dict = Depends(require_admin)):
+async def list_webhooks(_: dict = Depends(require_admin), _plan: None = Depends(require_feature("webhooks"))):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
     cursor = db.webhook_subscriptions.find({}, {"_id": 0}).sort("created_at", -1)
     subscriptions = await cursor.to_list(length=None)
-    return {"webhooks": subscriptions}
+    return {"webhooks": [_public(s) for s in subscriptions]}
+
+
+@router.get("/event-types")
+async def list_event_types(_: dict = Depends(require_admin), _plan: None = Depends(require_feature("webhooks"))):
+    return {"event_types": [dict(e) for e in EVENT_TYPES]}
 
 
 @router.get("/{webhook_id}")
-async def get_webhook(webhook_id: str, _: dict = Depends(require_admin)):
+async def get_webhook(webhook_id: str, _: dict = Depends(require_admin), _plan: None = Depends(require_feature("webhooks"))):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
     sub = await db.webhook_subscriptions.find_one({"webhook_id": webhook_id}, {"_id": 0})
     if not sub:
         raise HTTPException(404, "Webhook subscription not found")
-    return sub
+    return _public(sub)
 
 
 @router.patch("/{webhook_id}")
-async def update_webhook(webhook_id: str, body: UpdateWebhookRequest, user: dict = Depends(require_admin)):
+async def update_webhook(webhook_id: str, body: UpdateWebhookRequest, user: dict = Depends(require_admin), _plan: None = Depends(require_feature("webhooks"))):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -112,12 +121,17 @@ async def update_webhook(webhook_id: str, body: UpdateWebhookRequest, user: dict
 
     updates = body.model_dump(exclude_unset=True)
     if updates.get("url") and not is_url_ssrf_safe(updates["url"]):
-        raise HTTPException(400, "Webhook URL must be a public http(s) address — loopback/private/link-local targets are not allowed")
+        raise HTTPException(400, "Webhook URL must be a public http(s) address: loopback/private/link-local targets are not allowed")
     if "format" in updates:
         fmt = (updates.get("format") or "raw").lower()
         if fmt not in _VALID_WEBHOOK_FORMATS:
             raise HTTPException(400, f"format must be one of {sorted(_VALID_WEBHOOK_FORMATS)}")
         updates["format"] = fmt
+    if "event_types" in updates:
+        if updates["event_types"] is None:
+            updates.pop("event_types")
+        else:
+            _check_event_types(updates["event_types"])
     if updates:
         await db.webhook_subscriptions.update_one({"webhook_id": webhook_id}, {"$set": updates})
     updated = await db.webhook_subscriptions.find_one({"webhook_id": webhook_id}, {"_id": 0})
@@ -126,11 +140,11 @@ async def update_webhook(webhook_id: str, body: UpdateWebhookRequest, user: dict
         action="webhook_updated", resource_type="webhook_subscription", resource_id=webhook_id,
         details={k: v for k, v in updates.items() if k != "secret"},
     ))
-    return updated
+    return _public(updated)
 
 
 @router.delete("/{webhook_id}")
-async def delete_webhook(webhook_id: str, user: dict = Depends(require_admin)):
+async def delete_webhook(webhook_id: str, user: dict = Depends(require_admin), _plan: None = Depends(require_feature("webhooks"))):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
@@ -145,42 +159,37 @@ async def delete_webhook(webhook_id: str, user: dict = Depends(require_admin)):
     return {"deleted": True, "webhook_id": webhook_id}
 
 
-@router.post("/{webhook_id}/test")
-async def test_webhook(webhook_id: str, _: dict = Depends(require_admin)):
-    """Fires a small diagnostic payload at this one subscription immediately
-    and reports whether the HTTP call itself succeeded (2xx response) — this
-    is NOT a real event, just a connectivity/signature check.
+@router.get("/{webhook_id}/deliveries")
+async def get_deliveries(
+    webhook_id: str,
+    limit: int = 50,
+    _: dict = Depends(require_admin),
+    _plan: None = Depends(require_feature("webhooks")),
+):
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+    if not await db.webhook_subscriptions.find_one({"webhook_id": webhook_id}, {"_id": 1}):
+        raise HTTPException(404, "Webhook subscription not found")
+    return {"deliveries": await list_deliveries(db, webhook_id, limit)}
 
-    Respects the subscription's `format` field (raw/slack/teams) so testing a
-    Slack/Teams-formatted subscription actually exercises the same body shape
-    it will receive for real events, not the raw shape."""
+
+@router.post("/{webhook_id}/test")
+async def test_webhook(webhook_id: str, user: dict = Depends(require_admin), _plan: None = Depends(require_feature("webhooks"))):
     db = get_db()
     if db is None:
         raise HTTPException(503, "Database unavailable")
     sub = await db.webhook_subscriptions.find_one({"webhook_id": webhook_id})
     if not sub:
         raise HTTPException(404, "Webhook subscription not found")
-    if not is_url_ssrf_safe(sub["url"]):
-        return {"success": False, "error": "Webhook URL is not a permitted public address"}
 
-    raw_payload = {"test": True, "timestamp": datetime.now(timezone.utc).isoformat()}
-    fmt = (sub.get("format") or "raw").lower()
-    payload = _build_delivery_body(fmt, "test", raw_payload)
-    payload_bytes = json.dumps(payload, default=str).encode("utf-8")
-    secret = sub.get("secret") or settings.WEBHOOK_SIGNING_SECRET
-    signature = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest() if secret else ""
-
-    try:
-        async with httpx.AsyncClient(timeout=_TEST_TIMEOUT) as client:
-            response = await client.post(
-                sub["url"],
-                content=payload_bytes,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Webhook-Signature": signature,
-                    "X-Webhook-Event": "test",
-                },
-            )
-        return {"success": 200 <= response.status_code < 300, "status_code": response.status_code}
-    except Exception as exc:
-        return {"success": False, "error": str(exc)}
+    result = await send_test_ping(sub)
+    await log_audit_event(
+        db, actor_email=user.get("email"), actor_role=user.get("role"),
+        action="webhook_tested", resource_type="webhook_subscription", resource_id=webhook_id,
+        details={"delivered": result["delivered"], "http_status": result["http_status"]},
+    )
+    legacy = {"success": result["delivered"], "status_code": result["http_status"]}
+    if not result["delivered"]:
+        legacy["error"] = result["detail"]
+    return {**result, **legacy}

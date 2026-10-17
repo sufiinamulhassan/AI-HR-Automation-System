@@ -28,7 +28,7 @@ export default function DeadlineBar({ createdAt, deadlineAt, compact }: {
   const hue = Math.round(120 * (1 - pct))
   const color = closed ? '#dc2626' : `hsl(${hue}, 72%, 42%)`
   const label = closed
-    ? 'Closed - not accepting candidates'
+    ? 'Closed, not accepting candidates'
     : daysLeft <= 0 ? 'Closes today'
     : `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
 

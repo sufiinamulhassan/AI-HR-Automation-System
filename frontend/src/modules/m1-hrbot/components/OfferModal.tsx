@@ -1,7 +1,27 @@
 import { useEffect, useState } from 'react'
-import { offersApi } from '../../../lib/api'
+import { authApi, offersApi } from '../../../lib/api'
 import { useAuthStore } from '../../../store/auth.store'
 import './OfferModal.css'
+
+function errorDetail(e: unknown, fallback: string): string {
+  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map(d => (d && typeof d === 'object' && 'msg' in d) ? String((d as { msg: unknown }).msg) : String(d))
+      .join('; ')
+  }
+  return fallback
+}
+
+interface OfferSignature {
+  typed_name: string
+  consented: boolean
+  ip_address?: string
+  user_agent?: string
+  signed_at: string
+  document_hash?: string
+}
 
 interface Offer {
   offer_id: string
@@ -18,6 +38,12 @@ interface Offer {
   decline_reason?: string
   created_at?: string
   updated_at?: string
+  signature?: OfferSignature
+  ai_letter_body?: string
+  ai_letter_source?: 'ai' | 'template_fallback'
+  ai_letter_approved?: boolean
+  ai_letter_approved_by?: string
+  ai_letter_approved_at?: string
 }
 
 interface Props {
@@ -52,9 +78,21 @@ export default function OfferModal({ candidateId, onClose }: Props) {
   const canApprove = role === 'admin' || role === 'superadmin'
   const canManage = canApprove
 
+  const [permissions, setPermissions] = useState<string[]>([])
+  useEffect(() => {
+    if (!canManage) { setPermissions([]); return }
+    authApi.myPermissions()
+      .then(r => setPermissions(r.data?.permissions ?? []))
+      .catch(() => setPermissions([]))
+  }, [canManage])
+  const canDraftLetter = canManage && permissions.includes('offers:draft_letter')
+  const canApproveLetter = canManage && permissions.includes('offers:approve_letter')
+
   const [offers, setOffers] = useState<Offer[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<Record<string, boolean>>({})
+  const [pdfBusy, setPdfBusy] = useState<Record<string, boolean>>({})
+  const [letterBusy, setLetterBusy] = useState<Record<string, boolean>>({})
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [creating, setCreating] = useState(false)
   const [toast, setToast] = useState('')
@@ -98,10 +136,37 @@ export default function OfferModal({ candidateId, onClose }: Props) {
       await offersApi.send(offerId)
       showToast('Offer sent to candidate')
       load()
-    } catch {
-      showToast('Failed to send offer')
+    } catch (e) {
+      showToast(errorDetail(e, 'Failed to send offer'))
     }
     endBusy(offerId)
+  }
+
+  function startLetterBusy(id: string) { setLetterBusy(b => ({ ...b, [id]: true })) }
+  function endLetterBusy(id: string)   { setLetterBusy(b => { const n = { ...b }; delete n[id]; return n }) }
+
+  async function handleDraftLetter(offerId: string) {
+    startLetterBusy(offerId)
+    try {
+      await offersApi.draftLetter(offerId)
+      showToast('AI letter drafted: review and approve before sending')
+      load()
+    } catch (e) {
+      showToast(errorDetail(e, 'Failed to draft AI letter'))
+    }
+    endLetterBusy(offerId)
+  }
+
+  async function handleApproveLetter(offerId: string) {
+    startLetterBusy(offerId)
+    try {
+      await offersApi.approveLetter(offerId)
+      showToast('AI letter approved')
+      load()
+    } catch (e) {
+      showToast(errorDetail(e, 'Failed to approve AI letter'))
+    }
+    endLetterBusy(offerId)
   }
 
   async function handleWithdraw(offerId: string) {
@@ -117,6 +182,32 @@ export default function OfferModal({ candidateId, onClose }: Props) {
     endBusy(offerId)
   }
 
+  async function handleDownloadPdf(offerId: string) {
+    setPdfBusy(b => ({ ...b, [offerId]: true }))
+    try {
+      const r = await offersApi.pdf(offerId)
+      const url = URL.createObjectURL(r.data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `offer_${offerId.slice(0, 8)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      showToast('Failed to download offer PDF')
+    } finally {
+      setPdfBusy(b => { const n = { ...b }; delete n[offerId]; return n })
+    }
+  }
+
+  function formatDateTime(iso?: string) {
+    if (!iso) return '-'
+    const parsed = new Date(iso)
+    if (isNaN(parsed.getTime())) return iso
+    return parsed.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })
+  }
+
   async function handleCreate() {
     if (!form.salary.trim()) return
     setCreating(true)
@@ -130,8 +221,8 @@ export default function OfferModal({ candidateId, onClose }: Props) {
       showToast('Offer created')
       setForm({ ...EMPTY_FORM })
       load()
-    } catch {
-      showToast('Failed to create offer')
+    } catch (e) {
+      showToast(errorDetail(e, 'Failed to create offer'))
     }
     setCreating(false)
   }
@@ -155,6 +246,7 @@ export default function OfferModal({ candidateId, onClose }: Props) {
             <div className="offer-modal-list">
               {offers.map(o => {
                 const isBusy = !!busy[o.offer_id]
+                const isPdfBusy = !!pdfBusy[o.offer_id]
                 const terminal = TERMINAL.has(o.status)
                 return (
                   <div className="offer-row" key={o.offer_id}>
@@ -167,38 +259,130 @@ export default function OfferModal({ candidateId, onClose }: Props) {
                         {o.benefits && <span>{o.benefits}</span>}
                         {o.joining_date && <span>Joins {o.joining_date}</span>}
                       </div>
+                      {o.signature && (
+                        <div className="offer-signature">
+                          <div className="offer-signature-row">
+                            <span className="offer-signature-label">Signed by</span>
+                            <span className="offer-signature-value">{o.signature.typed_name}</span>
+                          </div>
+                          <div className="offer-signature-row">
+                            <span className="offer-signature-label">Signed at</span>
+                            <span className="offer-signature-value">{formatDateTime(o.signature.signed_at)}</span>
+                          </div>
+                          {(o.signature.ip_address || o.signature.user_agent || o.signature.document_hash) && (
+                            <details className="offer-signature-details">
+                              <summary>Signature details</summary>
+                              {o.signature.ip_address && (
+                                <div className="offer-signature-row">
+                                  <span className="offer-signature-label">IP address</span>
+                                  <span className="offer-signature-value">{o.signature.ip_address}</span>
+                                </div>
+                              )}
+                              {o.signature.user_agent && (
+                                <div className="offer-signature-row">
+                                  <span className="offer-signature-label">User agent</span>
+                                  <span className="offer-signature-value offer-signature-ua">{o.signature.user_agent}</span>
+                                </div>
+                              )}
+                              {o.signature.document_hash && (
+                                <div className="offer-signature-row">
+                                  <span className="offer-signature-label">Document hash</span>
+                                  <span className="offer-signature-value offer-signature-ua">{o.signature.document_hash}</span>
+                                </div>
+                              )}
+                            </details>
+                          )}
+                        </div>
+                      )}
+
+                      {(canDraftLetter || o.ai_letter_body) && (
+                        <div className="offer-ai-letter">
+                          <div className="offer-ai-letter-header">
+                            <span className="offer-ai-letter-title">AI-Drafted Letter</span>
+                            {o.ai_letter_body && (
+                              <span className={`badge ${o.ai_letter_approved ? 'badge-green' : 'badge-yellow'}`}>
+                                {o.ai_letter_approved ? 'Approved' : 'Needs approval'}
+                              </span>
+                            )}
+                          </div>
+
+                          {o.ai_letter_body ? (
+                            <div className="offer-ai-letter-body">{o.ai_letter_body}</div>
+                          ) : (
+                            <p className="offer-ai-letter-empty">No AI-drafted letter content yet.</p>
+                          )}
+
+                          <div className="offer-ai-letter-actions">
+                            {canDraftLetter && !terminal && (
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                disabled={!!letterBusy[o.offer_id]}
+                                onClick={() => handleDraftLetter(o.offer_id)}
+                              >
+                                {letterBusy[o.offer_id] ? '…' : o.ai_letter_body ? 'Re-draft Letter' : 'Draft AI Letter'}
+                              </button>
+                            )}
+                            {canApproveLetter && o.ai_letter_body && (
+                              <button
+                                className="btn btn-primary btn-sm"
+                                disabled={!!letterBusy[o.offer_id] || o.ai_letter_approved === true}
+                                onClick={() => handleApproveLetter(o.offer_id)}
+                              >
+                                {letterBusy[o.offer_id] ? '…' : o.ai_letter_approved ? 'Approved' : 'Approve Letter'}
+                              </button>
+                            )}
+                          </div>
+                          {o.ai_letter_body && !o.ai_letter_approved && (
+                            <p className="offer-ai-letter-hint">
+                              Generated text: if it's wrong, re-draft it rather than editing it by hand.
+                              Sending is blocked until it's approved.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {!terminal && (
-                      <div className="offer-row-actions">
-                        {(o.status === 'draft' || o.status === 'pending_approval') && canApprove && (
-                          <button
-                            className="btn btn-primary btn-sm"
-                            disabled={isBusy}
-                            onClick={() => handleApprove(o.offer_id)}
-                          >
-                            {isBusy ? '…' : 'Approve'}
-                          </button>
-                        )}
-                        {o.status === 'approved' && canManage && (
-                          <button
-                            className="btn btn-primary btn-sm"
-                            disabled={isBusy}
-                            onClick={() => handleSend(o.offer_id)}
-                          >
-                            {isBusy ? '…' : 'Send'}
-                          </button>
-                        )}
-                        {canManage && (
-                          <button
-                            className="btn btn-ghost btn-sm offer-withdraw-btn"
-                            disabled={isBusy}
-                            onClick={() => handleWithdraw(o.offer_id)}
-                          >
-                            Withdraw
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    <div className="offer-row-actions">
+                      {canManage && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          disabled={isPdfBusy}
+                          onClick={() => handleDownloadPdf(o.offer_id)}
+                        >
+                          {isPdfBusy ? '…' : '⬇ PDF'}
+                        </button>
+                      )}
+                      {!terminal && (
+                        <>
+                          {(o.status === 'draft' || o.status === 'pending_approval') && canApprove && (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              disabled={isBusy}
+                              onClick={() => handleApprove(o.offer_id)}
+                            >
+                              {isBusy ? '…' : 'Approve'}
+                            </button>
+                          )}
+                          {o.status === 'approved' && canManage && (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              disabled={isBusy}
+                              onClick={() => handleSend(o.offer_id)}
+                            >
+                              {isBusy ? '…' : 'Send'}
+                            </button>
+                          )}
+                          {canManage && (
+                            <button
+                              className="btn btn-ghost btn-sm offer-withdraw-btn"
+                              disabled={isBusy}
+                              onClick={() => handleWithdraw(o.offer_id)}
+                            >
+                              Withdraw
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 )
               })}

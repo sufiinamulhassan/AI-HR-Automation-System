@@ -1,24 +1,3 @@
-"""Email Templates admin route — hr_module Admin Configuration (MVP2 §2.20 slice).
-
-Admin-only CRUD over email overrides for the 6 existing candidate-facing send
-functions in `services/hr_module/email_service.py` (send_invite_email,
-send_interview_status_email, send_assessment_invitation_email,
-send_offer_letter_email, send_rejection_email, send_reminder_email). See
-services/hr_module/email_template_service.py for the storage model, fallback
-contract, and the exact placeholder names each key supports.
-
-Every endpoint here — including the list/get reads — requires admin, same as
-routes/prompt_config.py, because these overrides directly control what every
-candidate receives by email.
-
-IMPORTANT: this route (and the service behind it) cannot enforce, at write
-time, that an admin doesn't type a score/recommendation/report content into a
-candidate-facing template — that's a content-authoring choice, not something
-safely regexable. The enforcement mechanism is the prominent warning banner
-shown above the editor in the admin UI
-(src/pages/admin/platform/EmailTemplatesPanel.tsx — the Email Templates tab of
-Platform Settings) for every candidate-facing key, not a backend content filter.
-"""
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException

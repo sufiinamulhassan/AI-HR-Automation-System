@@ -1,12 +1,12 @@
-"""Job Description parsing, targeting derivation, and embedding — hr_module."""
 import json
 import logging
 from datetime import datetime, timezone
 
-from config.llm import ask_llm, get_embedding
+from config.llm import ask_llm, embedding_model, get_embedding, model_for, require_vector
 from config.database import get_db, get_pinecone
-from config.settings import settings
 from services.hr_module.prompt_config_service import get_prompt_override
+from services.hr_module.prompt_guard import fence, with_guard
+from services.hr_module.vector_scope import vector_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,20 @@ SENIORITY_FLEX = {
     "director":  ["manager", "director", "executive"],
     "executive": ["director", "executive"],
 }
+
+
+def job_embedding_text(title: str, description: str) -> str:
+    return f"{title}\n{(description or '')[:2000]}"
+
+
+def job_vector_metadata(parsed: dict, level: str | None) -> dict:
+    return vector_metadata({
+        "doc_type": "job",
+        "job_domain": parsed.get("job_domain"),
+        "experience_level": level,
+        "skills": (parsed.get("skills") or [])[:20],
+    })
+
 
 INDUSTRIES = [
     "technology", "healthcare", "fintech", "banking_finance", "retail_ecommerce",
@@ -51,27 +65,28 @@ Return JSON:
 
 
 async def parse_jd(job_id: str, title: str, description: str, model: str | None = None) -> dict:
+    jd_text = fence("JOB DESCRIPTION", description[:4000])
     system = _SYSTEM
-    prompt = _PROMPT.format(jd=description[:4000], industries="|".join(INDUSTRIES))
+    prompt = _PROMPT.format(jd=jd_text, industries="|".join(INDUSTRIES))
     override = await get_prompt_override("jd_parse")
     if override and override.get("system_prompt") and override.get("user_prompt_template"):
         try:
             prompt = override["user_prompt_template"].format(
-                jd=description[:4000], industries="|".join(INDUSTRIES)
+                jd=jd_text, industries="|".join(INDUSTRIES)
             )
             system = override["system_prompt"]
-        except (KeyError, IndexError) as exc:
+        except (KeyError, IndexError, ValueError) as exc:
             logger.warning(
                 "jd_parse prompt override has a placeholder mismatch, falling back "
                 "to default: %s", exc,
             )
             system = _SYSTEM
-            prompt = _PROMPT.format(jd=description[:4000], industries="|".join(INDUSTRIES))
+            prompt = _PROMPT.format(jd=jd_text, industries="|".join(INDUSTRIES))
 
     raw = await ask_llm(
         prompt=prompt,
-        system=system,
-        model=model or settings.DEFAULT_LLM_MODEL,
+        system=with_guard(system),
+        model=model_for("job_description", model),
         max_tokens=800,
         temperature=0.0,
         json_mode=True,
@@ -102,8 +117,7 @@ async def parse_jd(job_id: str, title: str, description: str, model: str | None 
         "required_skills": parsed["skills"][:20],
     }
 
-    embedding_text = f"{title}\n{description[:2000]}"
-    embedding = await get_embedding(embedding_text)
+    embedding = require_vector(await get_embedding(job_embedding_text(title, description)))
 
     pinecone = get_pinecone()
     if pinecone is not None:
@@ -111,12 +125,7 @@ async def parse_jd(job_id: str, title: str, description: str, model: str | None 
             vectors=[{
                 "id": job_id,
                 "values": embedding,
-                "metadata": {
-                    "doc_type": "job",
-                    "job_domain": parsed["job_domain"],
-                    "experience_level": level,
-                    "skills": parsed["skills"][:20],
-                },
+                "metadata": job_vector_metadata(parsed, level),
             }],
             namespace="jobs",
         )
@@ -129,6 +138,7 @@ async def parse_jd(job_id: str, title: str, description: str, model: str | None 
                 "parsed_criteria": parsed,
                 "targeting": targeting,
                 "embedding": embedding,
+                "embedding_model": embedding_model(),
                 "updated_at": datetime.now(timezone.utc),
             }},
         )

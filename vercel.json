@@ -9,6 +9,9 @@
       "includeFiles": "backend/**"
     }
   },
+  "crons": [
+    { "path": "/api/v1/cron/daily", "schedule": "0 8 * * *" }
+  ],
   "rewrites": [
     { "source": "/health", "destination": "/api/index" },
     { "source": "/api/(.*)", "destination": "/api/index" },

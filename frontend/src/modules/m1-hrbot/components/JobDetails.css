@@ -246,3 +246,29 @@
   font-size: .78rem; font-weight: 600; color: var(--primary); text-decoration: none;
 }
 .jd-source-link:hover { text-decoration: underline; }
+
+.jd-careers-status { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
+.jd-careers-pill {
+  display: inline-block; padding: .15rem .6rem; border-radius: 20px;
+  font-size: .72rem; font-weight: 700;
+}
+.jd-careers-pill.is-public { background: #dcfce7; color: #15803d; }
+.jd-careers-pill.is-private { background: var(--gray-50); color: var(--gray-500); }
+.jd-careers-note { font-size: .8rem; color: var(--gray-500); }
+
+.jd-careers-link { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .85rem; }
+.jd-careers-url {
+  flex: 1 1 14rem; min-width: 0;
+  padding: .4rem .65rem; border: 1px solid var(--gray-300); border-radius: var(--radius);
+  background: var(--gray-100); color: var(--gray-700);
+  font-family: var(--font-mono); font-size: .78rem;
+}
+.jd-careers-url:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.jd-careers-btn {
+  display: inline-flex; align-items: center; padding: .4rem .85rem;
+  border: 1px solid var(--gray-300); border-radius: var(--radius);
+  background: var(--white); color: var(--gray-700);
+  font-size: .78rem; font-weight: 600; cursor: pointer; text-decoration: none;
+}
+.jd-careers-btn:hover { border-color: var(--primary); color: var(--primary-dark); text-decoration: none; }
+.jd-careers-copied { min-width: 5rem; font-size: .75rem; font-weight: 700; color: #15803d; }

@@ -1,0 +1,5 @@
+.pco-au-wrap { max-width: 34ch; overflow-wrap: anywhere; }
+.pco-au-more {
+  display: flex; align-items: center; justify-content: center; gap: .75rem; flex-wrap: wrap;
+  padding-top: .9rem;
+}

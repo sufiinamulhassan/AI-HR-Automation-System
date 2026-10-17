@@ -1,0 +1,39 @@
+.iv-camconsent { max-width: 520px; text-align: left; }
+.iv-camconsent h2 { text-align: center; }
+
+.iv-camconsent-icon {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--primary-light);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto .9rem;
+}
+
+.iv-camconsent-lead {
+  text-align: center; margin-bottom: .7rem;
+  color: var(--gray-500); font-size: .85rem; line-height: 1.6;
+}
+
+.iv-camconsent-choice {
+  text-align: center; margin-bottom: 1.1rem;
+  color: var(--gray-700); font-size: .8rem; font-weight: 700;
+}
+
+.iv-camconsent-actions { display: flex; gap: .6rem; }
+.iv-camconsent-actions button {
+  flex: 1;
+  border-radius: 999px; padding: .68rem 1rem; font-size: .85rem; font-weight: 800;
+  transition: background .15s, color .15s, box-shadow .15s, border-color .15s;
+}
+
+.iv-camconsent-decline { background: var(--white); color: var(--gray-600); border: 1px solid var(--gray-200); }
+.iv-camconsent-decline:hover { background: var(--gray-50); border-color: var(--gray-300); }
+
+.iv-camconsent-enable {
+  background: var(--secondary); color: #fff; border: none;
+  box-shadow: 0 4px 14px rgba(34, 32, 34, .3);
+}
+.iv-camconsent-enable:hover { background: var(--primary); color: #ffffff; box-shadow: 0 6px 20px rgba(71, 120, 243, .45); }
+
+@media (max-width: 720px) {
+  .iv-camconsent-actions { flex-direction: column; }
+}

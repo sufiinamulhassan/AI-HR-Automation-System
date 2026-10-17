@@ -1,8 +1,3 @@
-"""Minimal conftest for unit tests — no DB or network required.
-
-Overrides the autouse session fixtures from tests/conftest.py so these
-tests run without MongoDB or Pinecone.
-"""
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock
@@ -25,3 +20,17 @@ def client():
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db(client):
     yield MagicMock()
+
+
+@pytest.fixture(autouse=True)
+def careers_cache_off(monkeypatch):
+    from config.settings import settings
+
+    monkeypatch.setattr(settings, "CAREERS_CACHE_SECONDS", 0)
+
+
+@pytest.fixture(autouse=True)
+def demo_company_unset(monkeypatch):
+    from config.settings import settings
+
+    monkeypatch.setattr(settings, "DEMO_COMPANY_ID", "")

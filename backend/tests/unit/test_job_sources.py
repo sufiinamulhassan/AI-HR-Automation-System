@@ -1,4 +1,3 @@
-"""Tests for external JD source connectors — hr_module."""
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -27,28 +26,43 @@ def test_list_sources_marks_free_vs_keyed():
     assert by_id["linkedin"]["configured"] is False
 
 
-def test_list_sources_includes_dice_careerbuilder_indeed():
+def test_list_sources_includes_indeed():
     from services.hr_module.job_sources import SOURCES, list_sources
 
     by_source = {s["id"]: s for s in SOURCES}
-    assert by_source["dice"]["requires_key"] is True
-    assert by_source["dice"]["key"] == "DICE_API_KEY"
-    assert by_source["careerbuilder"]["requires_key"] is True
-    assert by_source["careerbuilder"]["key"] == "CAREERBUILDER_API_KEY"
     assert by_source["indeed"]["requires_key"] is True
     assert by_source["indeed"]["key"] == "INDEED_API_KEY"
 
     by_id = {s["id"]: s for s in list_sources()}
-    for source_id in ("dice", "careerbuilder", "indeed"):
-        assert by_id[source_id]["requires_key"] is True
-        assert by_id[source_id]["configured"] is False
+    assert by_id["indeed"]["requires_key"] is True
+    assert by_id["indeed"]["configured"] is False
 
 
-@pytest.mark.parametrize("source_id", ["dice", "careerbuilder", "indeed"])
-async def test_new_keyed_sources_not_configured_raise(source_id):
+def test_removed_sources_are_gone_everywhere():
+    from config.settings import settings
+    from services.hr_module import scheduler
+    from services.hr_module.job_sources import SOURCES, _KEYED_SOURCE_IDS
+
+    removed = {"naukri", "dice", "careerbuilder"}
+    assert removed.isdisjoint({s["id"] for s in SOURCES})
+    assert removed.isdisjoint(_KEYED_SOURCE_IDS)
+    assert removed.isdisjoint(scheduler._DEFAULT_QUERIES)
+    for name in ("NAUKRI_API_KEY", "DICE_API_KEY", "CAREERBUILDER_API_KEY"):
+        assert not hasattr(settings, name)
+
+
+async def test_indeed_not_configured_raises():
     from services.hr_module.job_sources import fetch_jobs, JobSourceNotConfigured
     with pytest.raises(JobSourceNotConfigured):
+        await fetch_jobs("indeed", query="engineer", limit=2)
+
+
+@pytest.mark.parametrize("source_id", ["naukri", "dice", "careerbuilder"])
+async def test_removed_source_is_not_a_known_source(source_id):
+    from services.hr_module.job_sources import fetch_jobs, JobSourceNotConfigured
+    with pytest.raises(Exception) as excinfo:
         await fetch_jobs(source_id, query="engineer", limit=2)
+    assert not isinstance(excinfo.value, JobSourceNotConfigured)
 
 
 def test_extract_salary_range_dollar_comma():

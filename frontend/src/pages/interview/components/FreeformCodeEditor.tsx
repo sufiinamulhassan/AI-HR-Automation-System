@@ -95,7 +95,7 @@ export default function FreeformCodeEditor({ onIntegrityEvent }: Props) {
           <div className="ca-console-body">
             <p className="ca-console-placeholder">
               This question isn't part of a graded coding assessment, so there's nothing to run
-              or submit here - it's a scratchpad only.
+              or submit here. It's a scratchpad only.
             </p>
           </div>
         )}
@@ -107,13 +107,13 @@ export default function FreeformCodeEditor({ onIntegrityEvent }: Props) {
       <div className="ca-editor-actions">
         <button
           type="button" className="btn-run-code" disabled
-          title="Not available - this question has no graded test cases"
+          title="Not available. This question has no graded test cases"
         >
           Run code
         </button>
         <button
           type="button" className="btn-submit-code" disabled
-          title="Not available - this question has no graded test cases"
+          title="Not available. This question has no graded test cases"
         >
           Run tests
         </button>

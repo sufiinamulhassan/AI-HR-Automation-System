@@ -1,4 +1,4 @@
-﻿.ar-page { padding: 0 0 3rem; animation: fadeIn .2s ease; }
+.ar-page { padding: 0 0 3rem; animation: fadeIn .2s ease; }
 
 .ar-header-meta {
   display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;

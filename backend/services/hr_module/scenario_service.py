@@ -1,10 +1,3 @@
-"""Scenario service — hr_module. Scenario-Based Interview (MVP2 §2.9).
-
-Scenarios are HR-authored situational prompts (e.g. "a production database is
-returning stale reads under load") that can be attached to a candidate's
-interview to steer question generation and post-interview scoring toward a
-fixed set of evaluation dimensions.
-"""
 import json
 import logging
 import random
@@ -12,7 +5,8 @@ import uuid
 from datetime import datetime, timezone
 
 from config.database import get_db
-from config.llm import ask_llm
+from config.llm import ask_llm, model_for
+from services.hr_module.prompt_guard import fence, with_guard
 from shared.utils import mongo_doc
 
 logger = logging.getLogger(__name__)
@@ -70,19 +64,6 @@ async def list_scenarios(is_active: bool | None = None, job_domain: str | None =
 
 
 async def pick_scenario_for_job(job: dict) -> str | None:
-    """Choose an active scenario matching the job's domain, else a generic one.
-
-    Auto-invited candidates previously never received a scenario at all:
-    `scenario_id` was only ever set by the manual admin create-candidate route,
-    so the automatic pipeline — the normal path — could not produce a
-    scenario-based interview. This closes that gap by selecting one at invite
-    time. Returns None when no active scenario exists, which leaves question
-    generation exactly as it was.
-
-    Picks RANDOMLY among domain matches rather than always the most-recently
-    created one (demo feedback: avoid handing every candidate on the same role
-    an identical scenario) — deliberate, since candidates otherwise share notes.
-    """
     domain = (job.get("parsed_criteria") or {}).get("job_domain") \
         or (job.get("targeting") or {}).get("required_domain")
 
@@ -108,7 +89,11 @@ async def update_scenario(scenario_id: str, updates: dict) -> bool:
     db = get_db()
     if db is None:
         return False
+    clears_domain = "job_domain" in updates
+    domain = updates.get("job_domain")
     updates = {k: v for k, v in updates.items() if v is not None}
+    if clears_domain:
+        updates["job_domain"] = (domain or "").strip() or None
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.scenarios.update_one({"scenario_id": scenario_id}, {"$set": updates})
     return result.matched_count > 0
@@ -122,12 +107,11 @@ async def delete_scenario(scenario_id: str) -> None:
 
 
 def build_scenario_prompt_addition(scenario: dict) -> str:
-    """Short text block to append into an interview question-generation prompt."""
     dims = ", ".join(scenario.get("evaluation_dimensions") or DEFAULT_EVALUATION_DIMENSIONS)
     name = scenario.get("name", "Scenario")
     prompt = scenario.get("prompt", "")
     return (
-        f"Scenario-based interview — \"{name}\": {prompt}\n"
+        f"Scenario-based interview \"{name}\": {prompt}\n"
         f"Walk the candidate through this scenario with follow-up questions that probe "
         f"their thinking. Focus your questions on evaluating: {dims}."
     )
@@ -151,12 +135,12 @@ async def score_scenario_response(transcript: list[dict], scenario: dict, model:
     raw = await ask_llm(
         prompt=_SCORE_PROMPT.format(
             scenario_prompt=scenario.get("prompt", ""),
-            transcript_text=transcript_text[:6000],
+            transcript_text=fence("TRANSCRIPT", transcript_text[:6000]),
             dimensions=", ".join(dimensions),
             example=example,
         ),
-        system=_SCORE_SYSTEM,
-        model=model,
+        system=with_guard(_SCORE_SYSTEM),
+        model=model_for("scenario", model),
         max_tokens=400,
         temperature=0.2,
         json_mode=True,

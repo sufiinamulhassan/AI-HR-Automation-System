@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { jobsApi, resumesApi } from '../../../lib/api'
-import { useModelStore } from '../../../store/model.store'
 import { useUploadStore } from '../../../store/upload.store'
 import './ResumeUpload.css'
-
 
 const UploadCloudIcon = () => (
   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5"
@@ -15,11 +13,11 @@ const UploadCloudIcon = () => (
 )
 
 const DocumentIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2"
     strokeLinecap="round" strokeLinejoin="round"
     style={{ display: 'inline-block', marginRight: '5px', verticalAlign: 'middle' }}>
     <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-    <polyline points="14 2 14 8 20 8" />
+    <polyline points="14 2 14 8 20 8" fill="none" />
   </svg>
 )
 
@@ -29,7 +27,7 @@ const ChevronIcon = () => (
 )
 
 const SearchIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2.2"
     strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="7" /><line x1="20" y1="20" x2="16.65" y2="16.65" />
   </svg>
@@ -52,11 +50,10 @@ type Outcome =
 
 function isValidResume(f: File) {
   const base = (f.name || '').replace(/\\/g, '/').split('/').pop() || ''
-  return /\.(pdf|docx)$/i.test(base) && !base.startsWith('~$') && !base.startsWith('._') && !base.startsWith('.')
+  return /\.(pdf|docx?)$/i.test(base) && !base.startsWith('~$') && !base.startsWith('._') && !base.startsWith('.')
 }
 
 export default function ResumeUpload({ onSubmitted }: Props) {
-  const activeModel = useModelStore(s => s.activeModel)
   const inputRef = useRef<HTMLInputElement>(null)
   const comboRef = useRef<HTMLDivElement>(null)
   const comboSearchRef = useRef<HTMLInputElement>(null)
@@ -133,7 +130,7 @@ export default function ResumeUpload({ onSubmitted }: Props) {
     if (willPin) {
       setPinning(true)
       try {
-        const r = await resumesApi.upload(files[0], jobId, activeModel || undefined)
+        const r = await resumesApi.upload(files[0], jobId)
         if (r.data?.status === 'duplicate') {
           setOutcome({
             kind: 'duplicate',
@@ -153,7 +150,7 @@ export default function ResumeUpload({ onSubmitted }: Props) {
       return
     }
 
-    const ok = await startUpload(files, activeModel || undefined)
+    const ok = await startUpload(files)
     if (ok) {
       setFiles([])
       if (inputRef.current) inputRef.current.value = ''
@@ -170,12 +167,6 @@ export default function ResumeUpload({ onSubmitted }: Props) {
 
   return (
     <div className="ru-panel">
-      <p className="ru-sub">
-        Drop up to 500 PDF or DOCX résumés - one or a whole folder. AI processing starts
-        automatically in the background. Legacy <strong>.doc</strong> files aren't supported -
-        save them as PDF or DOCX first.
-      </p>
-
       <div
         className="ru-drop"
         onDrop={handleDrop}
@@ -184,9 +175,9 @@ export default function ResumeUpload({ onSubmitted }: Props) {
       >
         <UploadCloudIcon />
         <span>Drag &amp; drop files here, or click to browse</span>
-        <span className="ru-drop-hint">PDF &amp; DOCX supported</span>
+        <span className="ru-drop-hint">PDF, DOC &amp; DOCX supported</span>
         <input
-          ref={inputRef} type="file" multiple accept=".pdf,.docx" hidden
+          ref={inputRef} type="file" multiple accept=".pdf,.doc,.docx" hidden
           onChange={e => addFiles(Array.from(e.target.files || []))}
         />
       </div>
@@ -276,7 +267,7 @@ export default function ResumeUpload({ onSubmitted }: Props) {
 
         <span className="ru-hint">
           {targetingLocked
-            ? 'Targeting applies to a single résumé - this batch will be matched against every open JD.'
+            ? 'Targeting applies to a single résumé. This batch will be matched against every open JD.'
             : "Choosing a job pins the résumé to that job's pipeline even if the matcher wouldn't have surfaced it. It still carries its real match score, so check the pipeline's score filter if it doesn't appear."}
         </span>
       </div>
@@ -285,7 +276,7 @@ export default function ResumeUpload({ onSubmitted }: Props) {
       {outcome?.kind === 'error' && <div className="ru-error">{outcome.message}</div>}
       {outcome?.kind === 'duplicate' && (
         <div className="ru-warn">
-          {outcome.message} Nothing was created - the existing record{' '}
+          {outcome.message} Nothing was created. The existing record{' '}
           <code>{outcome.resumeId?.slice(0, 8)}</code> already covers this file.
         </div>
       )}

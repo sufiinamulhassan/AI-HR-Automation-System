@@ -1,4 +1,3 @@
-
 const CANDIDATE_MIME_TYPES = [
   'audio/webm;codecs=opus',
   'audio/webm',

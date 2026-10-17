@@ -1,0 +1,82 @@
+.xv-contact-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.5rem; }
+
+.xv-form { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.xv-field { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.xv-field-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.xv-label {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+}
+.xv-optional { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+.xv-input, .xv-select, .xv-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(34, 32, 34, 0.25);
+  border-radius: var(--radius-chip);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.xv-textarea { resize: vertical; min-height: 9rem; }
+.xv-input:hover, .xv-select:hover, .xv-textarea:hover { border-color: rgba(34, 32, 34, 0.5); }
+.xv-input:focus, .xv-select:focus, .xv-textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(71, 120, 243, 0.25); }
+.xv-input[aria-invalid='true'], .xv-textarea[aria-invalid='true'] { border-color: #b42318; background: #fffafa; }
+.xv-help { font-size: 0.875rem; line-height: 1.5; color: var(--muted); }
+.xv-error { font-size: 0.875rem; line-height: 1.4; color: #b42318; }
+.xv-field-foot { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.xv-counter { margin-left: auto; font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.xv-counter.is-over { color: #b42318; font-weight: 700; }
+
+.xv-check { display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; font-size: 0.9375rem; line-height: 1.5; color: var(--ink-700); }
+.xv-check input { flex: none; width: 1.15rem; height: 1.15rem; margin-top: 0.2rem; accent-color: var(--accent); }
+.xv-check a { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
+
+.xv-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+.xv-form-error {
+  padding: 0.75rem 1rem;
+  border: 1px solid #f3b4ae;
+  border-radius: var(--radius-chip);
+  background: #fff4f2;
+  color: #912018;
+  font-size: 0.9375rem;
+}
+.xv-form-actions { display: flex; }
+
+.xv-contact-done { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; min-width: 0; }
+.xv-contact-done-icon {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+.xv-contact-done-icon svg { width: 1.6rem; height: 1.6rem; }
+.xv-contact-done-title { font-size: clamp(1.75rem, 1.4rem + 1.5vw, 2.5rem); font-weight: 500; outline: none; }
+.xv-contact-ref code { padding: 0.15rem 0.5rem; border-radius: 4px; background: rgba(34, 32, 34, 0.06); font-weight: 700; }
+.xv-contact-done-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+
+.xv-contact-side { display: flex; flex-direction: column; gap: 0.75rem; padding: 1.5rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); align-self: start; }
+.xv-contact-side-title { margin-top: 0.5rem; font-size: 1.125rem; font-weight: 500; color: var(--ink); }
+.xv-contact-side-title:first-child { margin-top: 0; }
+.xv-contact-steps { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.5rem; color: var(--ink-700); font-size: 0.95rem; line-height: 1.55; }
+.xv-contact-links { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.95rem; }
+.xv-contact-side a { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
+.xv-contact-side a:hover { color: var(--accent); text-decoration: underline; }
+.xv-contact-address { display: flex; flex-direction: column; gap: 0.3rem; font-style: normal; font-size: 0.95rem; color: var(--ink-700); overflow-wrap: anywhere; }
+
+@media (min-width: 640px) {
+  .xv-field-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1024px) {
+  .xv-contact-grid { grid-template-columns: minmax(0, 1fr) 20rem; gap: 4rem; }
+}

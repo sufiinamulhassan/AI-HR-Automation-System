@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { candidatesApi } from '../../../lib/api'
 import { useAuthStore } from '../../../store/auth.store'
+import { MAX_LOCATION, errorDetail, toLocalInput } from './externalInterview'
+import { nextBusinessDayAtTen } from './interviewPrefs'
 import './CommunicationModal.css'
 
 interface Props {
@@ -24,7 +26,10 @@ const TEMPLATES: { value: string; label: string }[] = [
   { value: 'offer_letter', label: 'Offer Letter' },
   { value: 'reminder', label: 'Reminder' },
   { value: 'follow_up', label: 'Follow-up' },
+  { value: 'physical_interview_call', label: 'Physical Interview Call' },
 ]
+
+const MAX_NOTES = 1000
 
 function templateLabel(t: string | null) {
   return TEMPLATES.find(x => x.value === t)?.label || t || '-'
@@ -45,6 +50,10 @@ export default function CommunicationModal({ candidateId, candidateName, onClose
   const [salary, setSalary] = useState('')
   const [joiningDate, setJoiningDate] = useState('')
   const [benefits, setBenefits] = useState('')
+  const [when, setWhen] = useState(() => nextBusinessDayAtTen())
+  const [duration, setDuration] = useState('45')
+  const [location, setLocation] = useState('')
+  const [notes, setNotes] = useState('')
   const [sending, setSending] = useState(false)
   const [lastResult, setLastResult] = useState<{ sent: boolean; template: string } | null>(null)
 
@@ -77,24 +86,37 @@ export default function CommunicationModal({ candidateId, candidateName, onClose
     setLoadingHistory(false)
   }
 
+  const inPerson = template === 'physical_interview_call'
+  const whenInFuture = when !== '' && new Date(when).getTime() > Date.now()
+  const minutes = Number(duration)
+  const durationOk = duration.trim() !== '' && Number.isInteger(minutes) && minutes >= 5 && minutes <= 480
+  const locationOk = location.trim().length > 0 && location.trim().length <= MAX_LOCATION
+  const canSendNow = !inPerson || (whenInFuture && durationOk && locationOk)
+
   async function handleSend() {
     setSending(true)
     setLastResult(null)
     try {
       const r = await candidatesApi.sendEmail(candidateId, {
         template,
+        ...(inPerson ? {
+          scheduled_start_at: new Date(when).toISOString(),
+          duration_minutes: minutes,
+          location: location.trim(),
+          notes: notes.trim() || undefined,
+          display_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        } : {}),
         salary: template === 'offer_letter' ? (salary.trim() || undefined) : undefined,
         joining_date: template === 'offer_letter' ? (joiningDate || undefined) : undefined,
         benefits: template === 'offer_letter' ? (benefits.trim() || undefined) : undefined,
       })
       const sent = !!r.data?.sent
       setLastResult({ sent, template })
-      showToast(sent ? `${templateLabel(template)} email sent` : 'Send failed - recorded in the log below')
+      showToast(sent ? `${templateLabel(template)} email sent` : 'Send failed, recorded in the log below')
       setHistoryLoaded(false)
       if (tab === 'history') loadHistory()
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } }
-      showToast(err?.response?.data?.detail || 'Failed to send email')
+      showToast(errorDetail(e) || 'Failed to send email')
     }
     setSending(false)
   }
@@ -103,7 +125,7 @@ export default function CommunicationModal({ candidateId, candidateName, onClose
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box cm-modal-box" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Communication Center{candidateName ? ` - ${candidateName}` : ''}</h2>
+          <h2>Communication Center{candidateName ? `, ${candidateName}` : ''}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -178,7 +200,61 @@ export default function CommunicationModal({ candidateId, candidateName, onClose
                     </div>
                   )}
 
-                  <button className="btn btn-primary cm-send-btn" disabled={sending} onClick={handleSend}>
+                  {inPerson && (
+                    <div className="cm-offer-fields">
+                      <label className="cm-field">
+                        <span className="form-label">Date and time</span>
+                        <input
+                          className="form-input"
+                          type="datetime-local"
+                          value={when}
+                          min={toLocalInput(new Date())}
+                          onChange={e => setWhen(e.target.value)}
+                        />
+                      </label>
+                      {when !== '' && !whenInFuture && (
+                        <div className="cm-send-error">Pick a date and time in the future.</div>
+                      )}
+                      <label className="cm-field">
+                        <span className="form-label">Duration (minutes)</span>
+                        <input
+                          className="form-input"
+                          type="number"
+                          inputMode="numeric"
+                          min={5}
+                          max={480}
+                          step={1}
+                          value={duration}
+                          onChange={e => setDuration(e.target.value)}
+                        />
+                      </label>
+                      {!durationOk && (
+                        <div className="cm-send-error">Duration must be between 5 and 480 minutes.</div>
+                      )}
+                      <label className="cm-field">
+                        <span className="form-label">Address</span>
+                        <input
+                          className="form-input"
+                          value={location}
+                          maxLength={MAX_LOCATION}
+                          onChange={e => setLocation(e.target.value)}
+                          placeholder="Building, street, floor and city"
+                        />
+                      </label>
+                      <label className="cm-field">
+                        <span className="form-label">Notes for the candidate (optional)</span>
+                        <textarea
+                          className="form-input"
+                          rows={3}
+                          maxLength={MAX_NOTES}
+                          value={notes}
+                          onChange={e => setNotes(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  <button className="btn btn-primary cm-send-btn" disabled={sending || !canSendNow} onClick={handleSend}>
                     {sending ? 'Sending…' : `Send ${templateLabel(template)}`}
                   </button>
 
@@ -186,7 +262,7 @@ export default function CommunicationModal({ candidateId, candidateName, onClose
                     <div className={lastResult.sent ? 'cm-confirm' : 'cm-send-error'}>
                       {lastResult.sent
                         ? `${templateLabel(lastResult.template)} email delivered successfully.`
-                        : `${templateLabel(lastResult.template)} email could not be delivered - see Email History for the failed log entry.`}
+                        : `${templateLabel(lastResult.template)} email could not be delivered. See Email History for the failed log entry.`}
                     </div>
                   )}
                 </>

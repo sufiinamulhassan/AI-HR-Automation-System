@@ -1,4 +1,4 @@
-# hr_module — API Documentation
+# hr_module, API Documentation
 
 ## Overview
 The hr_module handles the full recruitment lifecycle:
@@ -73,19 +73,19 @@ POST /api/v1/candidates/{id}/decision              # hire / reject / hold
 
 ## Interview
 ```
-GET  /api/v1/interview/session/{token}             # candidate — validate link, fetch questions
-POST /api/v1/interview/session/{token}/speak       # candidate — question text → MP3 (AI reads aloud)
-POST /api/v1/interview/session/{token}/transcribe  # candidate — recorded answer audio → text
-POST /api/v1/interview/session/{token}/followup    # candidate — adaptive probing follow-up
-POST /api/v1/interview/session/{token}/flag        # candidate — record an integrity event
-POST /api/v1/interview/session/{token}/submit      # candidate — final transcript, triggers eval
-PATCH /api/v1/interview/{candidate_id}/schedule    # ADMIN ONLY — set earliest start time
-GET  /api/v1/interview/{candidate_id}/schedule.ics # ADMIN ONLY — calendar invite download
-GET  /api/v1/interview/report/{token}              # ADMIN ONLY — full report + scores
-GET  /api/v1/interview/report/{token}/pdf          # ADMIN ONLY — PDF export
+GET  /api/v1/interview/session/{token}             # candidate, validate link, fetch questions
+POST /api/v1/interview/session/{token}/speak       # candidate, question text → MP3 (AI reads aloud)
+POST /api/v1/interview/session/{token}/transcribe  # candidate, recorded answer audio → text
+POST /api/v1/interview/session/{token}/followup    # candidate, adaptive probing follow-up
+POST /api/v1/interview/session/{token}/flag        # candidate, record an integrity event
+POST /api/v1/interview/session/{token}/submit      # candidate, final transcript, triggers eval
+PATCH /api/v1/interview/{candidate_id}/schedule    # ADMIN ONLY, set earliest start time
+GET  /api/v1/interview/{candidate_id}/schedule.ics # ADMIN ONLY, calendar invite download
+GET  /api/v1/interview/report/{token}              # ADMIN ONLY, full report + scores
+GET  /api/v1/interview/report/{token}/pdf          # ADMIN ONLY, PDF export
 ```
 
-The interview is a **live voice session driven client-side over plain HTTP** —
+The interview is a **live voice session driven client-side over plain HTTP**,
 there is no WebSocket. The backend runs on a Lambda Function URL, which is
 request/response only. Each turn: `/speak` synthesises the question, the browser
 records the spoken answer and posts it to `/transcribe`, and the confirmed text
@@ -101,7 +101,7 @@ is appended to the transcript that `/submit` finally sends for evaluation.
 }
 ```
 `coding_assigned` exists because the candidate interview screen hosts the coding
-workspace inline, on the same page and the **same token** —
+workspace inline, on the same page and the **same token**,
 `/coding/session/{token}` reuses `candidates.secure_token` rather than minting a
 separate invite. Without the flag the client would have to probe that endpoint
 and swallow a 400 for every candidate with nothing assigned. It leaks no
@@ -109,7 +109,7 @@ question text or test cases; it only says whether the Code tab should exist.
 
 ### Integrity flags
 `POST /flag` **appends** each event (`$push`); `POST /submit` also appends any
-final flags rather than replacing the array — the accumulated history from the
+final flags rather than replacing the array, the accumulated history from the
 session must survive submission or the recruiter sees a falsely clean score.
 
 | Event | Score weight |
@@ -132,13 +132,13 @@ session must survive submission or the recruiter sees a falsely clean score.
 
 Weights live in `services/hr_module/integrity.py`, shared by the interview and
 the coding assessment. The two keep **separate flag arrays** on the candidate
-(`integrity_flags` vs `coding_integrity_flags`) — merging them would let a
+(`integrity_flags` vs `coding_integrity_flags`), merging them would let a
 candidate's coding tab-switches silently lower their interview integrity score.
 
 **What screen lockdown can and cannot do:** a browser cannot lock the operating
 system. Fullscreen is enforced and its exit recorded, a second display is
 detected via `screen.isExtended`, and a screen capture *started from the page*
-is caught — but OS-level sharing (Zoom, OBS), a second machine, or a phone
+is caught, but OS-level sharing (Zoom, OBS), a second machine, or a phone
 camera are all invisible to it. The gaze and face signals are what cover those.
 
 ### Interview Email Flow
@@ -146,7 +146,7 @@ camera are all invisible to it. The gaze and face signals are what cover those.
 |-------|-------------------|---------|
 | Invited | ✅ | Interview link + instructions |
 | Interview completed | ✅ | "Thank you, we'll be in touch" |
-| Report / Scores | ❌ | Never sent — admin only |
+| Report / Scores | ❌ | Never sent, admin only |
 
 ## Invite Funnel (stats)
 ```json
@@ -181,7 +181,7 @@ best-effort: no `ANTHROPIC_API_KEY`, a provider error, or unparseable output
 leaves `quality` as `null` and the submission still scores on its pass rate.
 
 Judge0 alone cannot distinguish a clean solution from an unreadable one that
-passes the same tests — both score identically on `score`. That gap is what
+passes the same tests, both score identically on `score`. That gap is what
 `quality` exists to fill.
 
 The evaluator prompt is admin-editable via the `code_evaluation` key in
@@ -190,39 +190,39 @@ The evaluator prompt is admin-editable via the `code_evaluation` key in
 ### Static analysis: complexity and plagiarism
 
 Two more fields, both computed by `services/hr_module/code_analysis.py`. Pure
-text processing — no code execution, no LLM, no external service — so they run
+text processing, no code execution, no LLM, no external service, so they run
 on every submission at no cost and never fail one.
 
 | Field | Meaning |
 |-------|---------|
 | `complexity` | `cyclomatic_complexity`, `max_nesting_depth`, `lines_of_code`, `comment_ratio`, `function_count`, `complexity_band` (`low`/`moderate`/`high`/`very_high`) |
 | `plagiarism` | `max_similarity`, `flagged`, `threshold`, `checked_against`, `truncated`, and up to 5 `matches` naming the other candidate and submission |
-| `plagiarism_flagged` | Convenience boolean — `max_similarity >= PLAGIARISM_SIMILARITY_THRESHOLD` |
+| `plagiarism_flagged` | Convenience boolean, `max_similarity >= PLAGIARISM_SIMILARITY_THRESHOLD` |
 
 Similarity compares k-gram fingerprints of the **identifier-normalised** token
 stream: comments and string contents are stripped, identifiers become `V` and
 numbers `N`. Renaming variables or reformatting therefore does not lower the
 score, while independent solutions to the same short problem land well below the
-0.80 default threshold. Only *other* candidates' submissions are compared — a
+0.80 default threshold. Only *other* candidates' submissions are compared, a
 candidate resubmitting their own attempt is normal behaviour, not plagiarism.
 
 Complexity is advisory. High complexity on a genuinely hard problem is not a
 defect, and nothing in the platform gates a decision on it.
 
 **Redaction.** `plagiarism`, `plagiarism_flagged`, `complexity`, `quality_score`
-and `code` are admin-only — `GET /coding/submissions/{candidate_id}` returns
+and `code` are admin-only, `GET /coding/submissions/{candidate_id}` returns
 them, the candidate-facing `POST /coding/session/{token}/submit` never does.
 Of the AI review, a candidate receives only `feedback_for_candidate`; the
 recruiter-addressed narrative and the sub-scores stay internal.
 
-### Interview report — coding dimensions
+### Interview report, coding dimensions
 
 `evaluate_interview()` folds the candidate's latest completed coding submission
 into the interview report as `coding_score` (Judge0 pass rate) and
 `coding_quality_score` (AI review overall). Both are **additive**:
 `overall_score` is not recomputed, so nothing that already reads it changes
 meaning. A candidate who was never assigned a coding question leaves both keys
-absent, and every consumer renders an absent dimension as `—`/`N/A` rather than
+absent, and every consumer renders an absent dimension as `-`/`N/A` rather than
 as a zero.
 
 ### Video meetings on a scheduled interview

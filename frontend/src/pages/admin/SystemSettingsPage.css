@@ -76,3 +76,32 @@
   .ss-env-key { min-width: 0; }
   .ss-env-val { word-break: break-all; }
 }
+
+.ss-live-bar { display: flex; align-items: center; gap: .75rem; padding: .9rem 1.1rem; }
+
+.ss-live-checked { font-size: .75rem; color: var(--gray-500); }
+
+.ss-live-error {
+  margin: 0 1.1rem .9rem; padding: .55rem .75rem; border-radius: var(--radius);
+  color: var(--danger); font-size: .8rem; font-weight: 600;
+  background: color-mix(in srgb, var(--danger) 8%, var(--white));
+}
+
+.ss-live-list { list-style: none; margin: 0; padding: 0 1.1rem .5rem; }
+
+.ss-live-row {
+  display: grid; grid-template-columns: minmax(8rem, 12rem) auto 5rem 1fr;
+  align-items: center; gap: .75rem; padding: .55rem 0;
+  border-top: 1px solid var(--gray-100);
+}
+
+.ss-live-label { font-size: .8rem; font-weight: 600; color: var(--gray-800); }
+
+.ss-live-latency { font-size: .75rem; color: var(--gray-500); font-family: monospace; }
+
+.ss-live-detail { font-size: .78rem; color: var(--gray-600); word-break: break-word; }
+
+@media (max-width: 640px) {
+  .ss-live-row { grid-template-columns: 1fr auto; row-gap: .25rem; }
+  .ss-live-detail { grid-column: 1 / -1; }
+}

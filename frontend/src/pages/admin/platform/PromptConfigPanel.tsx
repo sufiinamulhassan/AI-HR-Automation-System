@@ -21,6 +21,17 @@ interface EditForm {
   user_prompt_template: string
 }
 
+function errorDetail(e: unknown, fallback: string): string {
+  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  return typeof detail === 'string' && detail.trim() ? detail : fallback
+}
+
+function inlineSaveError(e: unknown): string {
+  const status = (e as { response?: { status?: number } })?.response?.status
+  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  return status === 422 && typeof detail === 'string' && detail.trim() ? detail : ''
+}
+
 function missingPlaceholders(template: string, placeholders: string[]): string[] {
   return placeholders.filter(p => !template.includes(`{${p}}`))
 }
@@ -28,21 +39,26 @@ function missingPlaceholders(template: string, placeholders: string[]): string[]
 export default function PromptConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
   const [prompts, setPrompts] = useState<PromptTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
   const [resettingKey, setResettingKey] = useState<string | null>(null)
 
   const [editKey, setEditKey] = useState<string | null>(null)
   const [form, setForm] = useState<EditForm>({ system_prompt: '', user_prompt_template: '' })
   const [showDefault, setShowDefault] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       const r = await promptConfigApi.list()
       setPrompts(r.data.prompts ?? [])
-    } catch {}
+    } catch (e) {
+      setLoadError(errorDetail(e, 'Could not load the prompts.'))
+    }
     setLoading(false)
   }
 
@@ -52,6 +68,7 @@ export default function PromptConfigPanel({ showToast }: { showToast: (msg: stri
     setEditKey(p.key)
     setForm({ system_prompt: p.system_prompt, user_prompt_template: p.user_prompt_template })
     setShowDefault(false)
+    setSaveError('')
   }
 
   function closeEdit() {
@@ -61,6 +78,7 @@ export default function PromptConfigPanel({ showToast }: { showToast: (msg: stri
   async function save() {
     if (!editing) return
     setSaving(true)
+    setSaveError('')
     try {
       await promptConfigApi.update(editing.key, {
         system_prompt: form.system_prompt,
@@ -70,8 +88,9 @@ export default function PromptConfigPanel({ showToast }: { showToast: (msg: stri
       closeEdit()
       load()
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } }
-      showToast(err?.response?.data?.detail || 'Failed to save prompt')
+      const inline = inlineSaveError(e)
+      if (inline) setSaveError(inline)
+      else showToast(errorDetail(e, 'Failed to save prompt'))
     }
     setSaving(false)
   }
@@ -94,18 +113,17 @@ export default function PromptConfigPanel({ showToast }: { showToast: (msg: stri
 
   return (
     <>
-      <div className="ps-intro">
-        Customize the system and user prompts behind JD parsing and interview question
-        generation / evaluation - without a code deploy. Leave a prompt at its default
-        unless you have a specific reason to change it.
-      </div>
-
       <section className="pc-section ps-section card">
         <div className="card-header">
           <span className="card-title">Prompts</span>
         </div>
         {loading ? (
           <div className="pc-loading">Loading…</div>
+        ) : loadError ? (
+          <div className="pc-load-error">
+            <span role="alert">{loadError}</span>
+            <button className="btn btn-ghost btn-sm" onClick={load}>Retry</button>
+          </div>
         ) : (
           <table className="pc-table">
             <thead>
@@ -163,13 +181,13 @@ export default function PromptConfigPanel({ showToast }: { showToast: (msg: stri
         <div className="modal-overlay" onClick={closeEdit}>
           <div className="modal-box pc-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Edit - {editing.label}</h2>
+              <h2>Edit, {editing.label}</h2>
               <button className="modal-close" onClick={closeEdit}>✕</button>
             </div>
 
             <div className="pc-form">
               <div className="pc-hint">
-                <span className="pc-hint-label">Required placeholders - your User Prompt Template MUST include all of these exactly as written (curly braces included), or the save will silently fall back to the built-in default at run time:</span>
+                <span className="pc-hint-label">Required placeholders. The User Prompt Template must include all of these exactly as written (curly braces included), or the save is refused:</span>
                 <div className="pc-placeholders">
                   {editing.placeholders.map(p => (
                     <code key={p} className={`pc-pill ${missingUser.includes(p) ? 'pc-pill-missing' : ''}`}>
@@ -179,8 +197,7 @@ export default function PromptConfigPanel({ showToast }: { showToast: (msg: stri
                 </div>
                 {missingUser.length > 0 && (
                   <div className="pc-warning">
-                    Missing: {missingUser.map(p => `{${p}}`).join(', ')} - this template will not apply until every
-                    placeholder above is present.
+                    Missing: {missingUser.map(p => `{${p}}`).join(', ')}
                   </div>
                 )}
               </div>
@@ -191,11 +208,13 @@ export default function PromptConfigPanel({ showToast }: { showToast: (msg: stri
                   onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))} />
               </label>
 
-              <label className="pc-field">
-                <span className="form-label">User Prompt Template</span>
-                <textarea className="form-input pc-textarea pc-textarea-lg" rows={12} value={form.user_prompt_template}
-                  onChange={e => setForm(f => ({ ...f, user_prompt_template: e.target.value }))} />
-              </label>
+              <div className="pc-field">
+                <label className="form-label" htmlFor="pc-user-template">User Prompt Template</label>
+                <textarea id="pc-user-template" className="form-input pc-textarea pc-textarea-lg" rows={12}
+                  value={form.user_prompt_template}
+                  onChange={e => { setForm(f => ({ ...f, user_prompt_template: e.target.value })); setSaveError('') }} />
+                {saveError && <div className="pc-save-error" role="alert">{saveError}</div>}
+              </div>
 
               <div className="pc-default-toggle">
                 <button type="button" className="pc-link-btn" onClick={() => setShowDefault(s => !s)}>

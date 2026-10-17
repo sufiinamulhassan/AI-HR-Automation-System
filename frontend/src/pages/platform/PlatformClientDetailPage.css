@@ -1,0 +1,21 @@
+.pco-back {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .78rem; font-weight: 700; color: var(--gray-600);
+}
+.pco-back::before { content: '\2190'; font-size: .9rem; }
+.pco-back:hover { color: var(--gray-900); text-decoration: none; }
+
+.pco-detail-id { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; min-width: 0; }
+.pco-contact {
+  display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+  margin-top: -.4rem; font-size: .82rem; color: var(--gray-600);
+}
+
+.pco-admin { overflow-wrap: anywhere; margin-top: 0; }
+.pco-admin + .pco-admin { margin-top: .15rem; }
+
+.pco-billing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .9rem 1.2rem; margin: 0; }
+.pco-billing-grid dt { font-size: .72rem; font-weight: 700; color: var(--gray-500); }
+.pco-billing-grid dd { margin: .2rem 0 0; font-size: .86rem; font-weight: 600; color: var(--gray-900); }
+.pco-card > .pco-hint, .pco-card > .pco-form-error { margin-top: .8rem; }

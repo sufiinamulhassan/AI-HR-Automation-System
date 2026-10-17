@@ -1,0 +1,139 @@
+.resume-modal {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 72px rgba(0,0,0,.22);
+  width: 100%; max-width: 940px;
+  height: 92vh; max-height: 960px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.resume-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .75rem 1.1rem;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.resume-modal-title {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .88rem; font-weight: 700;
+  color: var(--gray-900);
+  min-width: 0;
+}
+
+.resume-filename {
+  font-size: .75rem; font-weight: 500;
+  color: var(--gray-500);
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px; padding: .15rem .45rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.resume-modal-actions {
+  display: flex; align-items: center; gap: .5rem; flex-shrink: 0;
+}
+
+.rm-btn {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .75rem; font-weight: 600;
+  padding: .35rem .75rem; border-radius: 8px;
+  cursor: pointer; text-decoration: none;
+  border: 1px solid transparent;
+  transition: background .15s;
+}
+.rm-btn-download { background: var(--primary-light); color: var(--gray-900); border-color: rgba(71, 120, 243,.3); }
+.rm-btn-download:hover { background: rgba(71, 120, 243,.35); text-decoration: none; }
+.rm-btn-open { background: #eff6ff; color: #1d4ed8; border-color: rgba(59,130,246,.2); }
+.rm-btn-open:hover { background: #dbeafe; text-decoration: none; }
+
+.rm-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: none; border: none; cursor: pointer;
+  color: var(--gray-500); transition: background .15s, color .15s;
+}
+.rm-close:hover { background: #fee2e2; color: #dc2626; }
+
+.resume-modal-body {
+  flex: 1; overflow: hidden; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--gray-200);
+}
+
+.resume-modal-loading {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: .6rem;
+  padding: 3rem; text-align: center; color: var(--gray-500); font-size: .875rem;
+}
+.rm-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--gray-300); border-top-color: var(--primary);
+  animation: rm-spin .7s linear infinite;
+}
+@keyframes rm-spin { to { transform: rotate(360deg); } }
+
+.rm-viewer {
+  flex: 1; min-height: 0; overflow-y: auto;
+  background: var(--gray-200);
+}
+.rm-viewer-pdf {
+  background: #525659; overflow: hidden; display: flex;
+}
+.resume-iframe {
+  width: 100%; height: 100%; flex: 1; min-height: 0;
+  border: none; display: block;
+}
+.rm-page {
+  background: #fff;
+  width: 100%; max-width: 816px;
+  min-height: 1040px;
+  margin: 1.75rem auto;
+  padding: 4rem 4.5rem;
+  box-shadow: 0 6px 24px rgba(0,0,0,.16);
+  border-radius: 2px;
+}
+
+.rm-docx-host {
+  flex: 1; min-height: 0; overflow-y: auto;
+  background: var(--gray-200);
+}
+.rm-docx-host .docx-wrapper { background: var(--gray-200); padding: 1.75rem 1rem; }
+.rm-docx-host .docx-wrapper > section.docx {
+  box-shadow: 0 6px 24px rgba(0,0,0,.16);
+  border-radius: 2px;
+  margin-bottom: 1.5rem;
+}
+
+.resume-no-preview {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1rem; padding: 2.5rem; text-align: center;
+}
+.resume-no-preview-icon { font-size: 3rem; line-height: 1; }
+.resume-no-preview p { color: var(--gray-500); font-size: .875rem; max-width: 320px; margin: 0; }
+
+.resume-meta-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .5rem; width: 100%; max-width: 360px; margin-top: .5rem;
+}
+.rm-meta-item {
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  border-radius: 8px; padding: .5rem .75rem;
+  font-size: .78rem; font-weight: 600; color: var(--gray-800);
+  display: flex; flex-direction: column; gap: .15rem;
+}
+.rm-meta-item span { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); }
+
+.resume-text-content {
+  font-size: .82rem; line-height: 1.7;
+  color: #333; white-space: pre-wrap;
+  word-break: break-word; font-family: 'SF Mono', Consolas, monospace;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .rm-page { padding: 2rem 1.5rem; min-height: 0; margin: 1rem auto; }
+}

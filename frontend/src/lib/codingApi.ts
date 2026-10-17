@@ -44,7 +44,7 @@ export interface CodingQuestionInput {
   description: string
   language_templates: Record<string, string>
   test_cases: CodingTestCase[]
-  job_domain?: string
+  job_domain?: string | null
   difficulty: string
 }
 
@@ -133,6 +133,24 @@ export interface CodingSubmission {
   question_difficulty?: string | null
 }
 
+export interface CodingLiveSession {
+  candidate_id: string
+  question_id: string | null
+  question_title: string | null
+  language: string | null
+  code: string | null
+  last_saved_at: string | null
+  status: 'not_assigned' | 'not_started' | 'in_progress' | 'submitted'
+}
+
+export interface CodingLiveSessionSummary {
+  candidate_id: string
+  candidate_name: string | null
+  question_title: string | null
+  language: string | null
+  last_saved_at: string | null
+}
+
 export interface ListSubmissionsParams {
   candidate_id?: string
   question_id?: string
@@ -157,6 +175,8 @@ export const codingApi = {
     axios.post(`${API_V1}/coding/session/${token}/submit`, d),
   listSubmissions: (params?: ListSubmissionsParams) => api.get('/coding/submissions', { params }),
   listSubmissionsForCandidate: (candidateId: string) => api.get(`/coding/submissions/${candidateId}`),
+  getLive: (candidateId: string) => api.get(`/coding/live/${candidateId}`),
+  listLiveSessions: () => api.get('/coding/live/sessions'),
 }
 
 export default codingApi

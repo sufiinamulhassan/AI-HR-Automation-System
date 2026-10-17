@@ -1,15 +1,3 @@
-"""
-Interview preparation and evaluation agents — hr_module.
-
-Two compiled graphs returned by build_interview_agent():
-  prepare_graph  → load_context → generate_questions → END
-  eval_graph     → evaluate → persist_report → send_status_email → END
-
-IMPORTANT — email policy:
-  send_status_email_node sends a short status-only notification to the candidate.
-  It NEVER includes scores, recommendations, or report content.
-  Those are admin-only and stored confidentially in MongoDB.
-"""
 from __future__ import annotations
 
 import logging
@@ -51,13 +39,15 @@ async def load_context_node(state: InterviewState) -> dict:
 
 @log_node("generate_questions")
 async def generate_questions_node(state: InterviewState) -> dict:
+    from config.llm import track_llm_cost
     from services.hr_module.interview_engine import generate_questions
     try:
-        questions = await generate_questions(
-            job=state.get("job", {}),
-            candidate=state.get("candidate", {}),
-            model=state.get("model_override"),
-        )
+        async with track_llm_cost("interview_question_gen", state.get("candidate", {}).get("candidate_id")):
+            questions = await generate_questions(
+                job=state.get("job", {}),
+                candidate=state.get("candidate", {}),
+                model=state.get("model_override"),
+            )
         return {"questions": questions, **append_trace(state, f"questions:{len(questions)}")}
     except Exception as exc:
         return {"error": str(exc)}
@@ -65,15 +55,17 @@ async def generate_questions_node(state: InterviewState) -> dict:
 
 @log_node("evaluate")
 async def evaluate_node(state: InterviewState) -> dict:
+    from config.llm import track_llm_cost
     from services.hr_module.interview_engine import evaluate_interview
     try:
-        score, report = await evaluate_interview(
-            transcript=state.get("transcript", []),
-            job=state.get("job", {}),
-            candidate=state.get("candidate", {}),
-            integrity_flags=state.get("integrity_flags", []),
-            model=state.get("model_override"),
-        )
+        async with track_llm_cost("interview_evaluation", state.get("candidate", {}).get("candidate_id")):
+            score, report = await evaluate_interview(
+                transcript=state.get("transcript", []),
+                job=state.get("job", {}),
+                candidate=state.get("candidate", {}),
+                integrity_flags=state.get("integrity_flags", []),
+                model=state.get("model_override"),
+            )
         return {"eval_score": score, "report": report, **append_trace(state, f"score:{score}")}
     except Exception as exc:
         return {"error": str(exc)}
@@ -81,26 +73,49 @@ async def evaluate_node(state: InterviewState) -> dict:
 
 @log_node("persist_report")
 async def persist_report_node(state: InterviewState) -> dict:
-    """Store full evaluation report in MongoDB. Admin-only — never sent to candidate."""
     import asyncio
 
     from config.database import get_db
     db = get_db()
     if db is None:
         return {"error": "db_unavailable"}
-    cand = await db.candidates.find_one({"secure_token": state["secure_token"]})
-    await db.candidates.update_one(
-        {"secure_token": state["secure_token"]},
-        {"$set": {
-            "report": state["report"],
-            "eval_score": state["eval_score"],
-            "status": "completed",
-        }},
-    )
+
+    try:
+        cand = await db.candidates.find_one({"secure_token": state["secure_token"]})
+        report = state.get("report") or {}
+        await db.candidates.update_one(
+            {"secure_token": state["secure_token"]},
+            {"$set": {
+                "report": report,
+                "eval_score": state["eval_score"],
+                "score_breakdown": report.get("score_breakdown"),
+                "final_score": report.get("final_score"),
+                "status": "completed",
+                "report_status": "ready",
+                "report_error": None,
+            }},
+        )
+    except Exception as exc:
+        logger.error(
+            "persist_report_node failed to write the report | token=%s error=%s",
+            state.get("secure_token"), exc,
+        )
+        try:
+            await db.candidates.update_one(
+                {"secure_token": state["secure_token"]},
+                {"$set": {"report_status": "failed", "report_error": str(exc)}},
+            )
+        except Exception as fallback_exc:
+            logger.error(
+                "persist_report_node best-effort failure marker ALSO failed | token=%s error=%s",
+                state.get("secure_token"), fallback_exc,
+            )
+        return {"error": str(exc)}
+
     if cand:
-        from services.hr_module.workflow_engine import evaluate_and_apply_rules
+        from services.hr_module.workflow_engine import TRIGGER_INTERVIEW_COMPLETED, evaluate_and_apply_rules
         asyncio.create_task(evaluate_and_apply_rules(
-            trigger_type="interview_completed",
+            trigger_type=TRIGGER_INTERVIEW_COMPLETED,
             context={
                 "candidate_id": cand.get("candidate_id"), "job_id": cand.get("job_id"),
                 "email": cand.get("email"), "candidate_name": cand.get("name"),
@@ -114,11 +129,6 @@ async def persist_report_node(state: InterviewState) -> dict:
 
 @log_node("send_status_email")
 async def send_status_email_node(state: InterviewState) -> dict:
-    """
-    Send a brief status notification to the candidate.
-    Contains ONLY: completion confirmation + 'we'll be in touch' message.
-    NO scores, NO recommendation, NO report content.
-    """
     from config.database import get_db
     from services.hr_module.email_service import send_interview_status_email
     cand = state.get("candidate", {})
@@ -144,7 +154,6 @@ def _route(state: InterviewState) -> str:
 
 
 def build_interview_agent():
-    """Return (prepare_graph, eval_graph) as compiled LangGraph executables."""
     prepare = StateGraph(InterviewState)
     prepare.add_node("load_context", load_context_node)
     prepare.add_node("generate_questions", generate_questions_node)

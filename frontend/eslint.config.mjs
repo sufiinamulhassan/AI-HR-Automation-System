@@ -12,9 +12,9 @@ const eslintConfig = defineConfig([
       "dist/",
       "build/",
       ".vite/",
+      "src/app/",
       "next-env.d.ts",
       ".env.local",
-      "src/app/",
       "public/mediapipe/",
       "public/models/"
     ]
@@ -49,8 +49,8 @@ const eslintConfig = defineConfig([
         argsIgnorePattern: "^_",
         varsIgnorePattern: "^_"
       }],
-      "no-empty": ["error", { allowEmptyCatch: true }],
-      "react/react-in-jsx-scope": "off"
+      "react/react-in-jsx-scope": "off",
+      "no-empty": ["error", { allowEmptyCatch: true }]
     }
   }
 ]);

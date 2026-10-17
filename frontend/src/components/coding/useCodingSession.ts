@@ -134,9 +134,18 @@ export function useCodingSession(token: string | undefined, enabled = true) {
     }).catch(() => {})
   }, [token])
 
+  const autosave = useCallback((language: string, code: string) => {
+    if (!token) return
+    fetch(`${API_V1}/coding/session/${token}/autosave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language, code }),
+    }).catch(() => {})
+  }, [token])
+
   return {
     session, status, errorMsg, result, submit,
     runStatus, runErrorMsg, runResult, run,
-    flag,
+    flag, autosave,
   }
 }

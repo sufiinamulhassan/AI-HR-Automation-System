@@ -1,18 +1,19 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import '../../styles/admin-tabs.css'
 import './PlatformSettingsPage.css'
 import SystemPanel from './platform/SystemPanel'
 import EmailTemplatesPanel from './platform/EmailTemplatesPanel'
-import PromptConfigPanel from './platform/PromptConfigPanel'
 import WebhooksPanel from './platform/WebhooksPanel'
-
+import SecurityPoliciesPanel from './platform/SecurityPoliciesPanel'
+import EmailDeliveryPanel from './platform/EmailDeliveryPanel'
 
 const TABS = [
   { key: 'system', label: 'System' },
   { key: 'email', label: 'Email Templates' },
-  { key: 'prompts', label: 'AI Prompts' },
   { key: 'webhooks', label: 'Webhooks' },
+  { key: 'security', label: 'Security Policies' },
+  { key: 'delivery', label: 'Email Delivery' },
 ] as const
 
 type TabKey = typeof TABS[number]['key']
@@ -29,10 +30,18 @@ export default function PlatformSettingsPage() {
   }
 
   const [toast, setToast] = useState('')
-  function showToast(msg: string) {
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showToast = useCallback((msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast(msg)
-    setTimeout(() => setToast(''), 3000)
-  }
+    toastTimer.current = setTimeout(() => {
+      toastTimer.current = null
+      setToast('')
+    }, 3000)
+  }, [])
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+  }, [])
 
   return (
     <div className="ps-page">
@@ -41,7 +50,6 @@ export default function PlatformSettingsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Platform Settings</div>
-          <div className="page-sub">AI models, email templates, prompt configuration, and outbound webhooks</div>
         </div>
       </div>
 
@@ -61,8 +69,9 @@ export default function PlatformSettingsPage() {
 
       {tab === 'system' && <SystemPanel showToast={showToast} />}
       {tab === 'email' && <EmailTemplatesPanel showToast={showToast} />}
-      {tab === 'prompts' && <PromptConfigPanel showToast={showToast} />}
       {tab === 'webhooks' && <WebhooksPanel showToast={showToast} />}
+      {tab === 'security' && <SecurityPoliciesPanel showToast={showToast} />}
+      {tab === 'delivery' && <EmailDeliveryPanel showToast={showToast} />}
     </div>
   )
 }

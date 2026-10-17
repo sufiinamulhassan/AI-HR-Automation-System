@@ -1,16 +1,3 @@
-"""Regression tests for MVP2 §2.1 audit-log coverage on the workflow and
-webhook route files (task C2).
-
-Each test performs a real mutation through the HTTP layer, then polls
-`audit_log` directly (bypassing the route/response) to confirm a matching
-entry was actually written — not just that the endpoint itself succeeded.
-
-The write is fire-and-forget (`asyncio.create_task(log_audit_event(...))`,
-never awaited inline — see services/hr_module/audit_service.py), so every
-test gives the task a brief moment to land before asserting, matching the
-existing pattern in tests/test_rbac.py (test_department_create_is_audit_logged
-/ test_user_create_is_audit_logged).
-"""
 import asyncio
 import uuid
 
@@ -22,7 +9,6 @@ pytestmark = pytest.mark.anyio
 
 
 async def _wait_for_audit_entry(db, query: dict, attempts: int = 20, delay: float = 0.15):
-    """Poll audit_log for up to ~3s for the fire-and-forget write to land."""
     for _ in range(attempts):
         entry = await db.audit_log.find_one(query)
         if entry is not None:
@@ -39,7 +25,7 @@ async def test_workflow_rule_create_update_delete_are_audit_logged(client, admin
         "/api/v1/workflows",
         json={
             "name": f"Audit rule {uuid.uuid4().hex[:8]}",
-            "trigger_type": "resume_processed",
+            "trigger_type": "candidate_invited",
             "conditions": [],
             "action_type": "fire_webhook",
             "action_params": {},

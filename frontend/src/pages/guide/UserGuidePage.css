@@ -1,4 +1,3 @@
-
 .guide-page {
   padding: 1.5rem;
   min-height: 100%;
@@ -311,3 +310,33 @@
   .guide-pager { grid-template-columns: 1fr; }
   .guide-pager-spacer { display: none; }
 }
+
+.guide-pager-prev:hover .guide-pager-arrow { transform: translateX(-2px); }
+
+.guide-pager-next:hover .guide-pager-arrow { transform: translateX(2px); }
+
+.guide-pager-btn.guide-pager-next {
+  background: var(--secondary);
+  border-color: var(--secondary);
+  box-shadow: 0 4px 14px rgba(34, 32, 34, .25);
+}
+
+.guide-pager-btn.guide-pager-next .guide-pager-dir { color: rgba(255, 255, 255, .55); }
+
+.guide-pager-btn.guide-pager-next .guide-pager-title { color: #ffffff; }
+
+.guide-pager-btn.guide-pager-next .guide-pager-arrow { background: rgba(255, 255, 255, .14); color: #ffffff; border-color: rgba(255, 255, 255, .18); }
+
+.guide-pager-btn.guide-pager-next:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 8px 20px rgba(71, 120, 243, .45);
+}
+
+.guide-pager-btn.guide-pager-next:hover .guide-pager-dir { color: rgba(34, 32, 34, .6); }
+
+.guide-pager-btn.guide-pager-next:hover .guide-pager-arrow { border-color: transparent; }
+
+.guide-pager-btn.guide-pager-next:hover .guide-pager-title { color: var(--secondary); }
+
+.guide-pager-btn.guide-pager-next:hover .guide-pager-arrow { background: rgba(34, 32, 34, .12); color: var(--secondary); }

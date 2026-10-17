@@ -1,30 +1,3 @@
-"""User Guide route — hr_module (in-app documentation).
-
-    GET    /user-guide          any authenticated user — every *stored* guide
-                                  the caller's role may read
-    GET    /user-guide/{role}   any authenticated user — one guide, 403 if the
-                                  role outranks the caller
-    PUT    /user-guide/{role}   superadmin-only — publish/replace that role's
-                                  guide, bumping its version
-    DELETE /user-guide/{role}   superadmin-only — drop the stored override so
-                                  the frontend's bundled copy takes over again
-
-See services/hr_module/user_guide_service.py for the storage model, the
-content models the `chapters` tree is validated against, and the
-override-with-fallback contract (no stored document is the normal state — the
-frontend ships a complete copy of every guide).
-
-ACCESS CONTROL LIVES HERE, NOT IN THE UI. The guide page hides the tabs a
-user may not read, but that is cosmetic — anyone can type a URL or curl the
-API. `readable_roles()` / `can_read()` are what actually decide what leaves
-the server: a `standard` user can only ever receive the standard guide, an
-`admin` the standard + admin guides, a `superadmin` all three. The reads are
-deliberately open to every authenticated user (not `require_admin` like
-prompt_config.py) because the standard guide exists precisely for
-non-administrators; the *writes* are superadmin-only, a higher bar than
-prompt/email templates, since this content is shown verbatim to every user in
-the product and nobody but a superadmin sees all three role guides anyway.
-"""
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -48,10 +21,6 @@ router = APIRouter()
 
 @router.get("")
 async def list_user_guides_route(user: dict = Depends(get_current_user)):
-    """Stored guides visible to the caller, plus the role list the server is
-    willing to serve them — the frontend uses `roles` to decide which tabs to
-    draw, so the tabs can never offer something a follow-up GET would 403 on.
-    """
     if get_db() is None:
         raise HTTPException(503, "Database unavailable")
     role = user.get("role")

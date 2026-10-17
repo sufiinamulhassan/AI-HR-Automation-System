@@ -1,13 +1,3 @@
-"""Tests for the candidate master profile (MVP2 §2.5) + candidate department
-scoping and audit logging (MVP2 §2.1) — routes/candidates.py +
-services/hr_module/candidate_profile_service.py.
-
-Cleanup convention: every test declares its job_id(s)/email(s) up front
-(before any network/DB call) and cleans up keyed off those pre-declared
-values in a `finally` block that wraps the entire body — never keyed off a
-candidate_id/profile_id that only exists if creation actually succeeded, so
-a failed assertion mid-test still leaves the shared test database clean.
-"""
 import asyncio
 import uuid
 from datetime import datetime, timezone
@@ -105,8 +95,6 @@ async def test_two_invites_same_email_share_one_profile(client, admin_headers):
 
 
 async def test_auto_invite_path_also_upserts_profile(client, admin_headers):
-    """services/hr_module/invite_service.py's _create_and_invite (auto-match
-    path) must also roll its candidate doc up into candidate_profiles."""
     from services.hr_module.invite_service import _create_and_invite
 
     db = get_db()
@@ -192,10 +180,6 @@ async def test_profile_by_id_404_for_unknown(client, admin_headers):
 
 
 async def test_profile_route_not_shadowed_by_candidate_id_catch_all(client, admin_headers):
-    """GET /candidates/profile/{x} and /candidates/profile/by-email/{x} must
-    resolve to the profile handlers, not be swallowed by the
-    '/{candidate_id}' catch-all (which would 404 with 'Candidate not found'
-    instead of 'Candidate profile not found')."""
     resp = await client.get(
         f"/api/v1/candidates/profile/{uuid.uuid4()}", headers=admin_headers
     )

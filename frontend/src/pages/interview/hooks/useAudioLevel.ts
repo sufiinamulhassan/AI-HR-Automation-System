@@ -69,8 +69,8 @@ export function useAudioLevel(stream: MediaStream | null, enabled = true) {
     return () => {
       stopped = true
       cancelAnimationFrame(raf)
-      try { source?.disconnect() } catch {}
-      try { analyser?.disconnect() } catch {}
+      try { source?.disconnect() } catch { }
+      try { analyser?.disconnect() } catch { }
       void ctx.close().catch(() => {})
       levelRef.current = 0
     }

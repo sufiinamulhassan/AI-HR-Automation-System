@@ -1,21 +1,9 @@
 #!/bin/bash
-# Installs every Piston package needed to back PISTON_LANGUAGES in
-# services/hr_module/coding_service.py, against a running self-hosted Piston
-# instance (see .env.example for how to start the container).
-#
-# Usage: ./scripts/install_piston_packages.sh [base-url]
-#   base-url defaults to http://localhost:2000 — pass the real host when
-#   running this against the AWS-hosted instance instead of local Docker.
 set -u
 
 HOST="${1:-http://localhost:2000}"
 BASE="$HOST/api/v2/packages"
 
-# name:version pairs — one package can back several runtime languages
-# (gcc -> c/c++/fortran/d, dotnet -> fsharp.net/basic.net/csharp.net/fsi).
-# Keep in step with PISTON_LANGUAGES in services/hr_module/coding_service.py;
-# versions picked to match what that map's comment verified against the live
-# public /runtimes list on 2026-08-13.
 PACKAGES=(
   "python:3.10.0"
   "node:18.15.0"

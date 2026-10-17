@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useHandsFreeTurn } from './useHandsFreeTurn'
 import type { TurnPhase } from '../useInterviewSession'
 
-
 const SILENT = 0
 const ROOM_TONE = 0.008
 const TALKING = 0.2

@@ -1,14 +1,3 @@
-"""
-Static code analysis — MVP2 §2.10's last two named gaps
-("plagiarism/complexity analysis").
-
-Pure text processing, so these are unit tests with no DB, no network and no
-LLM. The plagiarism assertions are the important ones: the whole point of
-normalising identifiers away is that a renamed/reformatted copy still scores
-high while an independent solution to the same problem scores low. If those
-two ever converge the detector is worthless, so both sides are asserted
-against the configured threshold rather than against a bare number.
-"""
 import pytest
 
 from config.settings import settings
@@ -81,7 +70,6 @@ def test_complexity_reports_expected_metrics():
 
 
 def test_complexity_excludes_comments_from_code_lines():
-    """A comment-heavy file must not read as more code than it is."""
     commented = "# c\n" * 20 + "x = 1\n"
     m = analyze_complexity(commented, "python")
     assert m["comment_lines"] >= 20
@@ -118,8 +106,6 @@ def test_apostrophe_in_a_comment_does_not_swallow_the_program():
 
 
 def test_apostrophes_do_not_make_unrelated_programs_look_identical():
-    """The dangerous consequence of the bug above: both programs normalised to
-    nothing, and nothing matches nothing perfectly — a false accusation."""
     other = """# it's a completely different approach
 import sys
 print(sum(int(t) for t in sys.stdin.read().split() if int(t) % 3 == 1))
@@ -128,12 +114,11 @@ print(sum(int(t) for t in sys.stdin.read().split() if int(t) % 3 == 1))
         fingerprint(_APOSTROPHE_IN_COMMENT, "python"), fingerprint(other, "python"),
     )
     assert score < settings.PLAGIARISM_SIMILARITY_THRESHOLD, (
-        f"two unrelated programs scored {score:.3f} — the comment scanner is erasing code"
+        f"two unrelated programs scored {score:.3f}, the comment scanner is erasing code"
     )
 
 
 def test_comment_markers_inside_a_string_are_not_treated_as_comments():
-    """The other half of the contract — fixing the above must not break this."""
     from services.hr_module.code_analysis import _strip_comments_and_strings
 
     assert "y = 2" in _strip_comments_and_strings('x = "# not a comment"\ny = 2', "python")
@@ -170,7 +155,6 @@ def test_complexity_bands_escalate():
 
 
 def test_identifier_renaming_does_not_defeat_the_fingerprint():
-    """The single most common way a copied submission is disguised."""
     score = similarity(fingerprint(PY_ORIGINAL, "python"), fingerprint(PY_RENAMED_COPY, "python"))
     assert score >= settings.PLAGIARISM_SIMILARITY_THRESHOLD, (
         f"renamed copy scored only {score:.3f}, below the "
@@ -179,18 +163,13 @@ def test_identifier_renaming_does_not_defeat_the_fingerprint():
 
 
 def test_independent_solution_scores_below_the_threshold():
-    """The other half of the contract — no use catching copies if honest
-    submissions to the same short problem also trip the flag."""
     score = similarity(fingerprint(PY_ORIGINAL, "python"), fingerprint(PY_INDEPENDENT, "python"))
     assert score < settings.PLAGIARISM_SIMILARITY_THRESHOLD, (
-        f"an independent solution scored {score:.3f} — false positives make the signal useless"
+        f"an independent solution scored {score:.3f}, false positives make the signal useless"
     )
 
 
 def test_identical_code_scores_one():
-    """Reformatted and re-commented, but the same program — must still be 1.0.
-    (Comparing a fingerprint to itself would be a tautology, so this compares
-    two genuinely different texts.)"""
     reformatted = PY_ORIGINAL.replace("    ", "\t").replace("# add up the even ones", "# sum evens")
     assert similarity(fingerprint(PY_ORIGINAL, "python"), fingerprint(reformatted, "python")) == 1.0
 
@@ -222,9 +201,6 @@ def test_containment_handles_empty_sets():
 
 
 def test_very_short_submissions_fall_below_the_comparability_floor():
-    """Two independent one-liners normalise to nearly the same token stream by
-    construction, so no similarity number is meaningful there. Such
-    submissions are still compared and reported, but must never be flagged."""
     a = fingerprint("n = int(input())\nprint(n * 2)\n", "python")
     b = fingerprint("x = int(input())\nprint(x + 5)\n", "python")
 
@@ -249,8 +225,6 @@ def test_comments_and_string_contents_do_not_affect_the_fingerprint():
 
 
 def test_short_submissions_still_compare():
-    """Below the k-gram window the shingle set would be empty, which would
-    match nothing — the whole-stream fallback keeps short answers comparable."""
     a, b = fingerprint("x=1", "python"), fingerprint("y=2", "python")
     assert a and b
     assert similarity(a, b) == 1.0

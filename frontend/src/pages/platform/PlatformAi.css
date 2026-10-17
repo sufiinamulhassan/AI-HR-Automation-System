@@ -1,0 +1,52 @@
+.pai-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.pai-key .pco-card-head { margin-bottom: .6rem; }
+.pai-key-id {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .45rem;
+  margin-bottom: .85rem; font-size: .78rem; font-weight: 600; color: var(--gray-500);
+}
+.pai-code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: .74rem;
+  padding: .1rem .4rem; border-radius: 6px; background: var(--gray-50); color: var(--gray-700);
+  border: 1px solid rgba(0, 0, 0, .06);
+}
+.pai-mask { letter-spacing: .04em; }
+.pai-key-stats { display: flex; gap: 1.6rem; flex-wrap: wrap; }
+.pai-stat { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+.pai-stat-value {
+  font-family: var(--font-display); font-size: 1.15rem; font-weight: 800;
+  letter-spacing: -.02em; color: var(--gray-900); font-variant-numeric: tabular-nums;
+}
+
+.pai-chips { list-style: none; display: flex; flex-wrap: wrap; gap: .3rem; margin: 0; padding: 0; }
+.pai-more { font-size: .72rem; font-weight: 600; color: var(--gray-500); align-self: center; }
+.pai-none { color: var(--gray-500); }
+
+.pai-table { min-width: 780px; }
+.pai-table tbody th { white-space: nowrap; min-width: 11rem; }
+.pai-flag { margin-left: .5rem; }
+.pai-code-cell { display: block; margin-top: .15rem; }
+
+.pai-sections { display: flex; flex-direction: column; gap: 1.15rem; }
+.pai-sections .pai-key { box-shadow: none; background: var(--gray-50); }
+.pai-subhead {
+  font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--gray-500); margin: 0 0 .5rem;
+}
+
+.pai-key-models { display: flex; flex-direction: column; gap: .4rem; margin-top: .85rem; }
+
+.pai-toolbar { display: flex; justify-content: flex-end; margin: -.4rem 0 .5rem; }
+.pai-company { display: flex; align-items: flex-start; gap: .5rem; }
+.pai-toggle {
+  flex: none; width: 1.5rem; height: 1.5rem; margin-top: -.05rem; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(0, 0, 0, .1); border-radius: 6px; background: var(--white);
+  color: var(--gray-700); font-size: .8rem; line-height: 1; cursor: pointer;
+}
+.pai-toggle:hover { background: var(--gray-50); color: var(--gray-900); }
+.pai-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.pai-row-open > th, .pai-row-open > td { border-bottom-color: transparent; }
+.pai-detail-row > td { background: var(--gray-50); padding: 1rem 1.1rem 1.2rem; }
+.pai-detail { display: flex; flex-direction: column; gap: 1.1rem; }
+.pai-detail .pai-table { min-width: 0; }
+.pai-detail .pco-table tbody td, .pai-detail .pco-table tbody th { background: var(--white); }

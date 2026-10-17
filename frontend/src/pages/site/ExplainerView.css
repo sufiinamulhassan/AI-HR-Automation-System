@@ -1,0 +1,8 @@
+.ex-page .xv-card-ink .xv-statsrow { padding-block: 0.5rem; }
+.ex-prose { max-width: 48rem; }
+.ex-prose p + p { margin-top: 0.75rem; }
+
+@media (max-width: 639px) {
+  .ex-page .xv-statsrow { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+  .ex-page .xv-statsrow-item { padding-left: 0; border-left: 0; }
+}

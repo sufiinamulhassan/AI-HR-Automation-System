@@ -1,17 +1,3 @@
-"""Tests for the in-app User Guide API (routes/user_guide.py).
-
-The load-bearing assertions here are the role filter and the lossless
-round-trip of the `chapters` tree:
-
-  * The frontend hides guide tabs a user may not read, but that is cosmetic —
-    anyone can curl the API. Every read test below therefore asserts on what
-    the *server* is willing to hand over, not on what the UI would draw.
-  * The guide is authored in the frontend against src/pages/guide/types.ts and
-    stored opaquely. `test_chapters_round_trip_losslessly` PUTs a deliberately
-    deep tree using every field in that file and asserts the GET response is
-    equal to it — if a future schema change starts dropping or defaulting a
-    key, that test fails rather than the content quietly degrading in prod.
-"""
 import asyncio
 import copy
 
@@ -20,22 +6,12 @@ import pytest
 import main as _main_module
 from routes import user_guide as _user_guide_routes
 from config.database import get_db
-from seed.seed_user_guides import _normalize_payload, validate_guides
+from scripts.seed_user_guides import _normalize_payload, validate_guides
 
 _PREFIX = "/api/v1/user-guide"
 
 
 def _is_registered() -> bool:
-    """True if the app already serves this feature's routes.
-
-    Two shapes to check: this FastAPI version keeps an included router lazy —
-    `app.routes` holds an `_IncludedRouter` carrying an `include_context`
-    rather than the flattened `APIRoute`s that older versions produced. The
-    guards in tests/test_company_settings.py and tests/test_security_policies.py
-    only look at `.path`, which silently misses the lazy shape and re-includes
-    an already-registered router (harmless — the first match wins — but not
-    something worth copying).
-    """
     for route in _main_module.app.routes:
         if getattr(route, "path", "").startswith(_PREFIX):
             return True
@@ -56,7 +32,6 @@ pytestmark = pytest.mark.anyio
 
 
 def _guide(role: str, label: str = "Test Guide") -> dict:
-    """Minimal but valid RoleGuide payload."""
     return {
         "role": role,
         "label": label,
@@ -110,10 +85,6 @@ _FULL_TREE = [{
 
 @pytest.fixture(autouse=True)
 async def _clean_user_guides():
-    """`user_guides` is a brand-new collection owned entirely by this feature —
-    safe to clear before and after each test (no shared conftest fixture data
-    lives here, unlike users/jobs/resumes/candidates). Clearing it up front
-    also means every test starts from the true "nothing published" state."""
     db = get_db()
     if db is not None:
         await db.user_guides.delete_many({})
@@ -132,8 +103,6 @@ async def _publish_all(client, superadmin_headers):
 
 
 async def _wait_for_audit_entry(db, query: dict, attempts: int = 20, delay: float = 0.15):
-    """Poll audit_log for the fire-and-forget write to land (same helper shape
-    as tests/test_audit_log_coverage.py)."""
     for _ in range(attempts):
         entry = await db.audit_log.find_one(query, sort=[("created_at", -1)])
         if entry is not None:
@@ -224,9 +193,6 @@ async def test_admin_can_read_its_own_and_lower_guides(client, admin_headers, su
 
 
 async def test_forbidden_beats_missing_for_a_higher_role(client, standard_headers):
-    """Nothing is published at all here — a standard user asking for the
-    superadmin guide must still get 403, not a 404 that confirms whether one
-    exists."""
     response = await client.get("/api/v1/user-guide/superadmin", headers=standard_headers)
     assert response.status_code == 403
 
@@ -314,11 +280,6 @@ async def test_chapters_round_trip_losslessly(client, superadmin_headers):
 
 
 async def test_republishing_a_fetched_guide_verbatim_works(client, superadmin_headers):
-    """Fetch → edit → PUT the whole object back is the obvious editing loop,
-    and the GET response carries server-owned fields (`version`, `created_at`,
-    …). Those must be stripped before the update: a `version` left in the
-    `$set` document collides with the `$inc` on the same path and MongoDB
-    rejects the entire write."""
     first = await client.put(
         "/api/v1/user-guide/admin", json=_guide("admin"), headers=superadmin_headers,
     )
@@ -331,15 +292,12 @@ async def test_republishing_a_fetched_guide_verbatim_works(client, superadmin_he
     second = await client.put("/api/v1/user-guide/admin", json=fetched, headers=superadmin_headers)
     assert second.status_code == 200, second.text
     body = second.json()
-    assert body["version"] == 2, "the server owns version — a client-supplied one must not stick"
+    assert body["version"] == 2, "the server owns version, a client-supplied one must not stick"
     assert body["label"] == "Edited in place"
     assert body["created_at"] == fetched["created_at"]
 
 
 async def test_unset_optional_fields_are_not_resurrected_as_nulls(client, superadmin_headers):
-    """TypeScript `undefined` is simply absent from JSON.stringify output; it
-    must stay absent rather than coming back as an explicit null, otherwise the
-    frontend's `subsection.body && …` checks start rendering empty blocks."""
     response = await client.put(
         "/api/v1/user-guide/standard", json=_guide("standard"), headers=superadmin_headers,
     )
@@ -349,8 +307,6 @@ async def test_unset_optional_fields_are_not_resurrected_as_nulls(client, supera
 
 
 async def test_unknown_content_fields_are_preserved(client, superadmin_headers):
-    """The tree is authored in the frontend; a key this backend has never heard
-    of must round-trip, not be silently dropped."""
     payload = _guide("standard")
     payload["chapters"][0]["sections"][0]["subsections"][0]["videoUrl"] = "https://example.com/v.mp4"
     payload["chapters"][0]["future_field"] = {"nested": [1, 2, 3]}

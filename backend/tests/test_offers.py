@@ -130,9 +130,22 @@ async def test_offer_full_lifecycle(client, admin_headers, standard_headers):
     assert public_data["job_title"] == JOB_PAYLOAD["title"]
     assert public_data["salary"] == OFFER_PAYLOAD["salary"]
 
-    accept_resp = await client.post(f"/api/v1/offers/public/{secure_token}/accept")
+    accept_resp = await client.post(
+        f"/api/v1/offers/public/{secure_token}/accept",
+        json={"typed_name": "Offer Candidate", "consent": True},
+    )
     assert accept_resp.status_code == 200
-    assert accept_resp.json()["status"] == "accepted"
+    accept_data = accept_resp.json()
+    assert accept_data["status"] == "accepted"
+    assert "signature" not in accept_data
 
     public_after_resp = await client.get(f"/api/v1/offers/public/{secure_token}")
     assert public_after_resp.status_code == 410
+
+    admin_view = await client.get(f"/api/v1/offers/{offer_id}", headers=admin_headers)
+    assert admin_view.status_code == 200
+    signature = admin_view.json()["signature"]
+    assert signature["typed_name"] == "Offer Candidate"
+    assert signature["consented"] is True
+    assert signature["ip_address"]
+    assert signature["document_hash"]

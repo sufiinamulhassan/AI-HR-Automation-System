@@ -1,4 +1,3 @@
-"""Tests for JD application-deadline handling — hr_module."""
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,7 +28,6 @@ def test_deadline_at_helper():
 
 
 async def test_match_jd_skips_expired_jd():
-    """An expired JD must not pull in new resumes (short-circuits before Pinecone)."""
     from services.hr_module import matcher
     db = MagicMock()
     db.jobs.find_one = AsyncMock(return_value={"deadline_at": _iso(-2)})
@@ -42,7 +40,6 @@ async def test_match_jd_skips_expired_jd():
 
 
 async def test_match_jd_runs_for_open_jd():
-    """An open JD proceeds to query Pinecone."""
     from services.hr_module import matcher
     db = MagicMock()
     db.jobs.find_one = AsyncMock(return_value={"deadline_at": _iso(10)})

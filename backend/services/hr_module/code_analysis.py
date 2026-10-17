@@ -1,31 +1,3 @@
-"""
-Static analysis of coding-assessment submissions — hr_module (MVP2 §2.10).
-
-Closes the two named gaps that survived every prior pass on §2.10:
-"plagiarism/complexity analysis".
-
-SECURITY-CRITICAL, same posture as coding_service.py: nothing in this module
-ever executes, compiles, imports, or `ast.parse`s candidate-submitted code.
-Everything here is pure text processing — tokenisation, normalisation, and set
-comparison. No subprocess, no exec/eval, no network calls, no LLM. That makes
-it safe to run on every submission inline, and it is why the metrics below are
-deliberately heuristic rather than AST-exact: one text-based implementation
-covers all eight languages Judge0 accepts instead of eight parsers, and being
-approximate is disclosed to the reader rather than hidden behind a number.
-
-Two independent outputs:
-
-  analyze_complexity()  — deterministic size/shape metrics for one submission
-                          (cyclomatic estimate, nesting depth, comment ratio).
-                          Distinct from the LLM's `efficiency_score`: this is
-                          reproducible and cites no opinion.
-
-  check_plagiarism()    — winnowing-style k-gram fingerprint comparison of one
-                          submission against every OTHER candidate's submission
-                          for the same question. Identifier names and literals
-                          are normalised away first, so renaming variables or
-                          reformatting does not defeat it.
-"""
 import hashlib
 import logging
 import re
@@ -52,30 +24,6 @@ _TRIPLE_QUOTES = ('"""', "'''")
 
 
 def _strip_comments_and_strings(code: str, language: str) -> str:
-    """Remove comments and replace string literals with a single placeholder.
-
-    String contents are replaced rather than deleted so a line of code still
-    reads as a line of code — deleting them would collapse `print("x")` to
-    `print()` and shift the token stream.
-
-    Deliberately a single left-to-right scan rather than a series of regex
-    substitutions. Regexes cannot do this correctly because comments and
-    strings are mutually exclusive contexts that can each contain the other's
-    delimiters, and applying them in either fixed order gets one case wrong:
-
-      - strings first  → an apostrophe in a comment (`# don't recurse`) opens a
-        "string" that runs to the next quote ANYWHERE later in the file,
-        deleting everything between. This is not hypothetical: it silently
-        reduced ordinary submissions to zero lines of code and an empty
-        plagiarism fingerprint, and an empty fingerprint compared against
-        another empty one scores a perfect match.
-      - comments first → a `#` or `//` inside a string literal
-        (`print("http://x")`) truncates the line.
-
-    A scanner that knows which context it is in handles both. Unterminated
-    quotes are bounded at the newline, so a stray apostrophe can damage at most
-    its own line instead of the rest of the file.
-    """
     py_like = language in ("python", "ruby")
     prefixes = _LINE_COMMENT_PREFIXES.get(language, _DEFAULT_LINE_COMMENT_PREFIXES)
 
@@ -127,7 +75,6 @@ _FUNCTION_RE = re.compile(
 
 
 def _max_nesting_depth(code: str, language: str) -> int:
-    """Brace depth for C-family languages, indentation depth for Python/Ruby."""
     if language in ("python", "ruby"):
         depth = 0
         for line in code.split("\n"):
@@ -150,21 +97,6 @@ def _max_nesting_depth(code: str, language: str) -> int:
 
 
 def analyze_complexity(code: str, language: str) -> dict:
-    """Deterministic static metrics for one submission. Never raises.
-
-    Returns a dict with:
-      lines_total / lines_of_code / comment_lines / comment_ratio
-      cyclomatic_complexity   estimated independent paths (decisions + 1)
-      max_nesting_depth       deepest block nesting
-      function_count          declared functions/methods detected
-      longest_line            characters in the longest line
-      complexity_band         'low' | 'moderate' | 'high' | 'very_high'
-
-    `complexity_band` exists so the admin UI has something to sort and colour
-    by without every reviewer inventing their own cutoffs. The band is
-    advisory: high complexity on a genuinely hard problem is not a defect, so
-    nothing in the platform gates a decision on it.
-    """
     try:
         raw_lines = code.split("\n")
         stripped = _strip_comments_and_strings(code, language)
@@ -205,7 +137,7 @@ def analyze_complexity(code: str, language: str) -> dict:
             "complexity_band": band,
             "method": "heuristic_token_scan",
         }
-    except Exception as exc:  # pragma: no cover — metrics must never fail a submission
+    except Exception as exc:
         logger.warning("Complexity analysis failed (language=%s): %s", language, exc)
         return {}
 
@@ -227,12 +159,6 @@ _TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+\.?\d*|[^\sA-Za-z0-9_]")
 
 
 def normalize_tokens(code: str, language: str) -> list[str]:
-    """Comments/strings removed, identifiers → 'V', numbers → 'N', keywords kept.
-
-    The result is a shape-of-the-program token stream: two submissions that
-    differ only in naming, spacing, or literal values normalise to the same
-    list.
-    """
     stripped = _strip_comments_and_strings(code, language)
     tokens: list[str] = []
     for tok in _TOKEN_RE.findall(stripped):
@@ -247,12 +173,6 @@ def normalize_tokens(code: str, language: str) -> list[str]:
 
 
 def fingerprint(code: str, language: str, k: int | None = None) -> set[str]:
-    """k-gram fingerprint set of the normalised token stream.
-
-    Overlapping k-grams (rather than whole-file hashing) are what let this
-    detect a partially-copied submission, not only a wholesale duplicate.
-    Each k-gram is hashed to keep the stored/compared set small.
-    """
     k = k or settings.PLAGIARISM_KGRAM_SIZE
     tokens = normalize_tokens(code, language)
     if len(tokens) < k:
@@ -266,28 +186,12 @@ def fingerprint(code: str, language: str, k: int | None = None) -> set[str]:
 
 
 def similarity(a: set[str], b: set[str]) -> float:
-    """Jaccard similarity — |A n B| / |A u B|, 0.0 to 1.0.
-
-    Answers "how much of the combined work is shared", which is the right
-    question for whole-file duplication and is deliberately unforgiving of
-    length differences. It is NOT sufficient on its own — see containment().
-    """
     if not a or not b:
         return 0.0
     return len(a & b) / len(a | b)
 
 
 def containment(a: set[str], b: set[str]) -> float:
-    """Containment (overlap coefficient) — |A n B| / min(|A|, |B|), 0.0 to 1.0.
-
-    Answers "is one submission wholly inside the other", which Jaccard cannot:
-    padding a verbatim copy with unrelated filler inflates the union and drags
-    Jaccard down. Measured on a real copy plus 25 throwaway helper functions,
-    Jaccard falls to 0.74 — under the 0.80 flag threshold — while containment
-    stays at 1.00. Copy-then-pad is the obvious evasion once a candidate knows
-    a similarity check exists, so both metrics are computed and the flag fires
-    on whichever is higher.
-    """
     if not a or not b:
         return 0.0
     return len(a & b) / min(len(a), len(b))
@@ -301,24 +205,6 @@ async def check_plagiarism(
     code: str,
     language: str,
 ) -> dict:
-    """Compare this submission against other candidates' submissions to the same question.
-
-    Only cross-candidate comparisons count: a candidate resubmitting their own
-    near-identical attempt is normal behaviour, not plagiarism, and flagging it
-    would make the signal useless.
-
-    Returns (always a dict, never raises):
-      checked_against    how many other submissions were compared
-      max_similarity     highest similarity found, 0.0–1.0
-      flagged            max_similarity >= threshold
-      threshold          the configured cutoff, echoed for the UI
-      matches            up to 5 highest matches, each with submission_id,
-                         candidate_id, similarity, identical_normalized
-      truncated          True if the comparison pool was capped
-
-    ADMIN-ONLY DATA: every match names another candidate. routes/coding.py
-    strips this key before any candidate-facing response.
-    """
     result: dict = {
         "checked_against": 0,
         "max_similarity": 0.0,
@@ -389,7 +275,7 @@ async def check_plagiarism(
                 comparable and top["score"] >= settings.PLAGIARISM_SIMILARITY_THRESHOLD
             )
         return result
-    except Exception as exc:  # pragma: no cover — never fail a valid submission
+    except Exception as exc:
         logger.warning("Plagiarism check failed for question=%s: %s", question_id, exc)
         return result
 

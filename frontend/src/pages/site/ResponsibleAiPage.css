@@ -1,0 +1,15 @@
+.ra-page .xv-info-body a,
+.ra-page .xv-info-list a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ra-page .xv-card-ink .xv-info-body a,
+.ra-page .xv-card-ink .xv-info-list a { color: #fff; }
+
+.ra-table { margin-top: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem); }
+.ra-table .xv-table { min-width: 52rem; }
+.ra-table .xv-table tbody th { width: 11rem; }
+
+.ra-body { margin-top: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem); }
+.ra-body > :last-child { margin-bottom: 0; }

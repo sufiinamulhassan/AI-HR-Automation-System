@@ -1,0 +1,44 @@
+.ts-card { overflow: hidden; }
+
+.ts-head {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid var(--gray-100);
+}
+.ts-title {
+  font-family: var(--font-display);
+  font-size: .85rem; font-weight: 800; color: var(--gray-900); letter-spacing: -.01em;
+}
+
+.ts-body { padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .9rem; }
+.ts-muted { font-size: .8rem; color: var(--gray-500); }
+.ts-error-row {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem;
+  font-size: .83rem; color: var(--danger);
+}
+
+.ts-row { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; }
+.ts-form { display: flex; flex-direction: column; gap: .9rem; }
+.ts-field { display: flex; flex-direction: column; gap: .4rem; }
+.ts-secret-row { display: flex; align-items: center; gap: .6rem; }
+.ts-secret-row .pw-input { padding-right: .9rem; }
+.ts-mono { font-family: var(--font-mono); letter-spacing: .04em; }
+.ts-link { font-size: .8rem; font-weight: 600; color: var(--primary); align-self: flex-start; }
+
+.ts-warning {
+  padding: .65rem .8rem; border-radius: var(--radius); font-size: .82rem; font-weight: 600; line-height: 1.45;
+  color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--white));
+}
+.ts-codes {
+  list-style: none; margin: 0; padding: .8rem;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem .9rem;
+  border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50);
+}
+.ts-code { font-family: var(--font-mono); font-size: .88rem; font-weight: 600; color: var(--gray-900); user-select: all; }
+.ts-check { display: flex; align-items: center; gap: .5rem; font-size: .83rem; color: var(--gray-700); cursor: pointer; }
+.ts-check input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--primary); }
+
+@media (max-width: 640px) {
+  .ts-head, .ts-body { padding: 1rem; }
+  .ts-codes { grid-template-columns: 1fr; }
+  .ts-secret-row { flex-direction: column; align-items: stretch; }
+}

@@ -48,7 +48,7 @@ export default function TurnControls({
             <span className={`listen-orb${hasSpoken ? ' listen-orb-live' : ''}`} />
             <div className="turn-listening-copy">
               <div className="turn-listening-title" role="status" aria-live="polite">
-                {hasSpoken ? 'Listening - take your time' : 'Go ahead, start speaking'}
+                {hasSpoken ? 'Listening, take your time' : 'Go ahead, start speaking'}
               </div>
               <div className="turn-listening-sub">
                 {hasSpoken
@@ -85,7 +85,7 @@ export default function TurnControls({
 
       {turnPhase === 'review' && (
         <div className="turn-review">
-          <div className="turn-review-label">Here's what we heard - is this right?</div>
+          <div className="turn-review-label">Here's what we heard, is this right?</div>
           <div className="turn-review-text">{draftAnswer}</div>
           <div className="turn-review-actions">
             <button className="btn-rerecord" onClick={onRerecord}>Record again</button>

@@ -40,7 +40,7 @@ export default function Dashboard() {
   const [decisionNote, setDecisionNote] = useState('');
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const [showJobForm, setShowJobForm] = useState(false);
   const [jobSearchTerm, setJobSearchTerm] = useState('');
   const [resumeSearchTerm, setResumeSearchTerm] = useState('');
@@ -158,7 +158,6 @@ export default function Dashboard() {
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setAppSettings(s => ({ ...s, ...data })); })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -194,7 +193,7 @@ export default function Dashboard() {
       if (vacancyCarouselRef.current) {
         const carousel = vacancyCarouselRef.current;
         const isAtEnd = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 10;
-        
+
         if (isAtEnd) {
           carousel.scrollTo({ left: 0, behavior: 'smooth' });
         } else {
@@ -533,17 +532,17 @@ export default function Dashboard() {
     try {
       const res = await fetch(`${API_BASE}/resumes/${jobId}`);
       let resumesData = await res.json();
-      
+
       try {
         const cRes = await fetch(`${API_BASE}/candidates/${jobId}`);
         const candidatesData = await cRes.json();
-        
+
         if (Array.isArray(candidatesData) && Array.isArray(resumesData)) {
           resumesData = resumesData.map((r: any) => {
             const relevantCandidates = candidatesData.filter((c: any) => c.resume_id === r.resume_id);
             if (relevantCandidates.length > 0) {
               const cand = relevantCandidates.find((c: any) => c.status === 'completed' || c.transcript) || relevantCandidates[relevantCandidates.length - 1];
-              
+
               if (cand.integrity_flags?.length > 0) {
                 r.integrity_flags = normalizeIntegrityFlags(cand.integrity_flags);
               }
@@ -569,7 +568,7 @@ export default function Dashboard() {
       } catch (ce) {
         console.error("Candidates fetch error", ce);
       }
-      
+
       if (Array.isArray(resumesData)) setResumes(resumesData);
       else setResumes([]);
     } catch (e) {
@@ -582,7 +581,7 @@ export default function Dashboard() {
     e.preventDefault();
     if (!files || files.length === 0 || !selectedJob) return;
     setIsLoading(true);
-    
+
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
@@ -596,7 +595,7 @@ export default function Dashboard() {
       if (res.ok) {
         const data = await res.json();
         showToast(data.message || 'Resumes uploaded! Automatically starting AI screening...');
-        
+
         await handleScreenResumes();
       }
       setFiles(null);
@@ -652,10 +651,10 @@ export default function Dashboard() {
       const data = await res.json();
       const link = `${window.location.origin}/interview/${data.secure_token}`;
       await navigator.clipboard.writeText(link).catch(() => {});
-      
+
       setCopiedId(resume.resume_id);
       setTimeout(() => setCopiedId(null), 3000);
-      
+
       await fetchResumes(selectedJob.job_id);
       await fetchJobs();
     } catch (e) {
@@ -685,7 +684,7 @@ export default function Dashboard() {
       if (!reportText) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
-        
+
         const reportUrl = `${API_BASE}/interview/report/${resume.secure_token}`;
         console.log('[DEBUG] Requesting Report URL:', reportUrl);
 
@@ -821,7 +820,7 @@ export default function Dashboard() {
         })
       });
       if (!res.ok) throw new Error('Failed to update status');
-      
+
       showToast(`Candidate marked as ${newStatus.toUpperCase()} by ${currentUser?.name || 'Admin'}`);
       if (selectedJob) fetchResumes(selectedJob.job_id);
       fetchStats();
@@ -851,7 +850,7 @@ export default function Dashboard() {
     try {
       const res = await fetch(`${API_BASE}/resumes/${resumeId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete resume');
-      
+
       setResumes(prev => prev.filter(r => r.resume_id !== resumeId));
       fetchStats();
       showToast('Candidate removed from pipeline.');
@@ -916,7 +915,6 @@ export default function Dashboard() {
     setIsSavingRemarks(false);
   };
 
-
   const dashboardMetrics = [
     { label: 'Total Job Openings', value: dashboardStats.total_openings, color: '#f97316', icon: <svg viewBox="0 0 24 24" fill="currentColor" width="34" height="34"><path d="M20 7h-4V5c0-1.103-.897-2-2-2h-4c-1.103 0-2 .897-2 2v2H4c-1.103 0-2 .897-2 2v10c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V9c0-1.103-.897-2-2-2zM10 5h4v2h-4V5z"/></svg> },
     { label: 'Total Application', value: dashboardStats.total_applications, color: '#facc15', icon: <svg viewBox="0 0 24 24" fill="currentColor" width="34" height="34"><path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6zm8 7h-5V7h5v2zm-5 4h8v2H9v-2zm0 4h8v2H9v-2z"/></svg> },
@@ -949,7 +947,7 @@ export default function Dashboard() {
   const handleCarouselScroll = () => {
     if (vacancyCarouselRef.current) {
       const scrollLeft = vacancyCarouselRef.current.scrollLeft;
-      const cardWidth = 320; 
+      const cardWidth = 320;
       const index = Math.round(scrollLeft / cardWidth);
       if (index !== activeCardIndex && index >= 0 && index < vacancyCards.length) {
         setActiveCardIndex(index);
@@ -1080,7 +1078,7 @@ export default function Dashboard() {
 
       {selectedCandidateResult && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)', zIndex: 2000,
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
@@ -1089,7 +1087,7 @@ export default function Dashboard() {
               <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Interview Results: {selectedCandidateResult.filename}</h3>
               <button onClick={() => setSelectedCandidateResult(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.5rem' }}>&times;</button>
             </div>
-            
+
             <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
               {selectedCandidateResult.integrity_flags && selectedCandidateResult.integrity_flags.length > 0 && (
                 <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
@@ -1106,7 +1104,7 @@ export default function Dashboard() {
               )}
 
               <h4 style={{ margin: '0 0 16px 0', fontSize: '1.1rem' }}>Interview Transcript</h4>
-              
+
               {selectedCandidateResult.transcript && selectedCandidateResult.transcript.length > 0 ? (
                 <div className="transcript-scroll-area" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '420px', overflowY: 'auto', paddingRight: '12px' }}>
                   {selectedCandidateResult.transcript.map((msg: any, i: number) => (
@@ -1201,19 +1199,19 @@ export default function Dashboard() {
 
       {reportModal && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)', zIndex: 2000,
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
           <div className="dashboard-vacancy-modal animate-slide-up" style={{ background: '#fff', borderRadius: '16px', border: '1px solid var(--glass-border)', width: '90%', maxWidth: '800px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0, boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}>
-            <div style={{ 
-              padding: '20px 24px', borderBottom: '1px solid var(--glass-border)', 
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid var(--glass-border)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               background: 'linear-gradient(135deg, rgba(185, 255, 102, 0.26), rgba(255, 255, 255, 0.85))'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ 
-                  width: '36px', height: '36px', borderRadius: '10px', 
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: '10px',
                   background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: 'white', fontSize: '1rem'
@@ -1230,7 +1228,7 @@ export default function Dashboard() {
               </div>
               <button onClick={() => setReportModal(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.5rem' }}>&times;</button>
             </div>
-            
+
             <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
               {reportModal.loading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', gap: '20px' }}>
@@ -1241,9 +1239,9 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <div style={{ 
-                  whiteSpace: 'pre-wrap', 
-                  lineHeight: '1.75', 
+                <div style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: '1.75',
                   fontSize: '0.95rem',
                   color: 'var(--text-primary)',
                   fontFamily: 'var(--font-body, inherit)'
@@ -1459,13 +1457,13 @@ export default function Dashboard() {
               </div>
               <button type="button" onClick={() => setShowJobForm(false)} aria-label="Close">×</button>
             </div>
-            
+
             <div style={{ overflowY: 'auto', padding: '24px', flex: 1, scrollbarWidth: 'none' }}>
               <form id="create-job-form" onSubmit={handleCreateJob} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <input 
-                  required placeholder="Job Title" className="input-field" value={jobTitle} onChange={e => setJobTitle(e.target.value)} 
+                <input
+                  required placeholder="Job Title" className="input-field" value={jobTitle} onChange={e => setJobTitle(e.target.value)}
                 />
-                <textarea 
+                <textarea
                   required placeholder="Job description" className="input-field" rows={5} value={jobDesc} onChange={e => setJobDesc(e.target.value)}
                   style={{ resize: 'vertical' }}
                 />
@@ -1492,9 +1490,9 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div className="dashboard-form-row-2" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: '10px' }}>
-                  <select 
-                    className="input-field" 
-                    value={jobCurrency} 
+                  <select
+                    className="input-field"
+                    value={jobCurrency}
                     onChange={e => setJobCurrency(e.target.value)}
                     style={{ padding: '0 8px' }}
                   >
@@ -1541,26 +1539,26 @@ export default function Dashboard() {
           <div className="dashboard-vacancy-modal animate-slide-up" style={{ background: '#fff', borderRadius: '16px', border: '1px solid var(--glass-border)', maxWidth: '800px', width: '90%', padding: 0, overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
               <h3 style={{ fontSize: '1.2rem', margin: 0, flex: 1 }}>{metricModal} Details</h3>
-              
+
               {metricModal !== 'Total Job Openings' && (
                 <div style={{ position: 'relative', width: '220px' }}>
                   <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <input 
-                    type="text" 
-                    placeholder="Search candidate..." 
+                  <input
+                    type="text"
+                    placeholder="Search candidate..."
                     value={metricModalSearch}
                     onChange={(e) => setMetricModalSearch(e.target.value)}
-                    style={{ 
-                      width: '100%', padding: '6px 12px 6px 30px', fontSize: '0.85rem', 
+                    style={{
+                      width: '100%', padding: '6px 12px 6px 30px', fontSize: '0.85rem',
                       borderRadius: '8px', border: '1px solid var(--glass-border)',
                       background: 'rgba(0,0,0,0.03)'
                     }}
                   />
                 </div>
               )}
-              <button 
-                type="button" 
-                onClick={() => { setMetricModal(null); setMetricModalSearch(''); }} 
+              <button
+                type="button"
+                onClick={() => { setMetricModal(null); setMetricModalSearch(''); }}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.5rem', lineHeight: 1 }}
               >
                 &times;
@@ -1570,7 +1568,7 @@ export default function Dashboard() {
               {metricModal === 'Total Job Openings' && (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {jobs.map(job => (
-                     <div key={job.job_id} 
+                     <div key={job.job_id}
                           onClick={() => { selectJob(job); setMetricModal(null); }}
                           style={{ padding: '16px 24px', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'background 0.2s', background: '#fff' }}
                           onMouseOver={(e) => e.currentTarget.style.background = '#f7f8f9'}
@@ -1590,10 +1588,10 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {(dashboardStats.all_resumes || []).filter(r => {
                       const searchStr = metricModalSearch.toLowerCase();
-                      const matchSearch = !searchStr || 
-                                          (r.filename && r.filename.toLowerCase().includes(searchStr)) || 
+                      const matchSearch = !searchStr ||
+                                          (r.filename && r.filename.toLowerCase().includes(searchStr)) ||
                                           (r.job_title && r.job_title.toLowerCase().includes(searchStr));
-                                          
+
                       if (!matchSearch) return false;
 
                       const status = r.status;
@@ -1650,10 +1648,10 @@ export default function Dashboard() {
                   ))}
                   {(dashboardStats.all_resumes || []).filter(r => {
                       const searchStr = metricModalSearch.toLowerCase();
-                      const matchSearch = !searchStr || 
-                                          (r.filename && r.filename.toLowerCase().includes(searchStr)) || 
+                      const matchSearch = !searchStr ||
+                                          (r.filename && r.filename.toLowerCase().includes(searchStr)) ||
                                           (r.job_title && r.job_title.toLowerCase().includes(searchStr));
-                                          
+
                       if (!matchSearch) return false;
 
                       const status = r.status;
@@ -1689,14 +1687,14 @@ export default function Dashboard() {
               </div>
               <button type="button" onClick={() => { setSelectedVacancy(null); setIsEditingJob(false); }} aria-label="Close" style={{ opacity: 0.6, fontSize: '1.8rem' }}>×</button>
             </div>
-            
+
             <div className="dashboard-vacancy-modal-body">
               {isEditingJob ? (
                 <form id="job-edit-form" onSubmit={handleEditJob} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <input 
-                    required placeholder="Job Title" className="input-field" value={jobTitle} onChange={e => setJobTitle(e.target.value)} 
+                  <input
+                    required placeholder="Job Title" className="input-field" value={jobTitle} onChange={e => setJobTitle(e.target.value)}
                   />
-                  <textarea 
+                  <textarea
                     required placeholder="Job description" className="input-field" rows={5} value={jobDesc} onChange={e => setJobDesc(e.target.value)}
                     style={{ resize: 'vertical' }}
                   />
@@ -1723,9 +1721,9 @@ export default function Dashboard() {
                     </select>
                   </div>
                   <div className="dashboard-form-row-2" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: '10px' }}>
-                    <select 
-                      className="input-field" 
-                      value={jobCurrency} 
+                    <select
+                      className="input-field"
+                      value={jobCurrency}
                       onChange={e => setJobCurrency(e.target.value)}
                       style={{ padding: '0 8px' }}
                     >

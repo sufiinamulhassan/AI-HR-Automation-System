@@ -1,16 +1,3 @@
-"""
-Offer-approval automation — MVP2 §2.18's last gap.
-
-§2.18 was PARTIAL only because "offer-approval-specific workflow automation
-remains manual": the rules engine could email/webhook/change-stage, but the
-offer lifecycle itself could only be advanced by an admin clicking through it.
-
-Adds an `offer_created` trigger and three lifecycle actions
-(approve_offer / send_offer / withdraw_offer), so a rule can express
-"auto-approve anything at or below X, then send it". The chain-depth guard
-matters as much as the feature: approve fires offer_status_changed, which can
-match another offer rule, which is a loop waiting to happen.
-"""
 import asyncio
 import uuid
 
@@ -40,7 +27,6 @@ async def _make_candidate(db) -> str:
 
 @pytest.fixture
 async def offer_env(setup_test_db):
-    """A candidate plus cleanup of everything a test here can create."""
     db = setup_test_db
     candidate_id = await _make_candidate(db)
     rule_ids: list[str] = []
@@ -72,8 +58,6 @@ async def test_new_trigger_and_actions_are_registered(setup_test_db):
 
 
 async def test_route_validator_accepts_the_new_values(client, admin_headers, setup_test_db):
-    """routes/workflows.py used to re-declare these sets, so the API rejected
-    rules the engine had just learned to run. It now imports them."""
     r = await client.post("/api/v1/workflows", json={
         "name": f"auto-approve-{uuid.uuid4().hex[:6]}",
         "trigger_type": "offer_created",
@@ -86,7 +70,6 @@ async def test_route_validator_accepts_the_new_values(client, admin_headers, set
 
 
 async def test_offer_created_trigger_fires_on_creation(offer_env):
-    """The hook an "auto-approve below X" rule attaches to."""
     db, candidate_id, rule_ids = offer_env
     from services.hr_module.offer_service import create_offer, get_offer
 
@@ -104,8 +87,6 @@ async def test_offer_created_trigger_fires_on_creation(offer_env):
 
 
 async def test_conditions_gate_the_action(offer_env):
-    """A salary above the rule's threshold must NOT be auto-approved —
-    otherwise the condition system is decorative."""
     db, candidate_id, rule_ids = offer_env
     from services.hr_module.offer_service import create_offer, get_offer
 
@@ -150,8 +131,6 @@ async def test_withdraw_action_works(offer_env):
 
 
 async def test_illegal_transition_is_swallowed_not_raised(offer_env):
-    """A rule authored against the wrong state is an authoring mistake, not a
-    system fault — it must never take down the request that triggered it."""
     db, candidate_id, rule_ids = offer_env
     from services.hr_module.offer_service import create_offer, get_offer
 
@@ -175,11 +154,6 @@ async def test_missing_offer_id_is_skipped_cleanly(offer_env):
 
 
 async def test_chain_depth_limit_stops_offer_action_recursion(offer_env):
-    """approve → offer_status_changed → approve → … must terminate.
-
-    At or past the limit the offer action is skipped, so a cyclic rule set
-    burns a bounded number of steps instead of spinning forever.
-    """
     db, candidate_id, rule_ids = offer_env
     from services.hr_module.offer_service import create_offer, get_offer
 
@@ -203,8 +177,6 @@ async def test_chain_depth_limit_stops_offer_action_recursion(offer_env):
 
 
 async def test_depth_limit_does_not_affect_non_offer_actions(offer_env):
-    """Only the offer actions can recurse — email/webhook rules must keep
-    firing regardless of the depth counter."""
     db, candidate_id, rule_ids = offer_env
     rule_id = await _add_rule(
         db, rule_ids, trigger="offer_status_changed", action="send_email",

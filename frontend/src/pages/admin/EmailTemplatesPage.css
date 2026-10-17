@@ -38,9 +38,16 @@
 }
 
 .et-warning {
-  display: flex; gap: .65rem; align-items: flex-start;
-  background: #fef2f2; border: 1.5px solid #fca5a5; color: #991b1b;
-  border-radius: var(--radius); padding: .8rem 1rem; font-size: .82rem; line-height: 1.55;
+  gap: .65rem;
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  color: #991b1b;
+  border-radius: var(--radius);
+  padding: .8rem 1rem;
+  font-size: .82rem;
+  line-height: 1.55;
+  display: flex;
+  align-items: center;
 }
 .et-warning-icon { font-size: 1.15rem; line-height: 1; flex-shrink: 0; }
 .et-warning strong { color: #7f1d1d; }
@@ -120,3 +127,44 @@
   }
   .et-table td.et-empty::before { content: none; }
 }
+
+.et-tag:hover { background: #eff6ff; border-color: #93c5fd; }
+
+.et-tag:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.et-field-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+
+.et-segment { display: inline-flex; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
+
+.et-segment-opt {
+  background: var(--white); border: 0; padding: .25rem .75rem; font-size: .74rem; font-weight: 600;
+  color: var(--gray-500); cursor: pointer;
+}
+
+.et-segment-opt + .et-segment-opt { border-left: 1px solid var(--gray-200); }
+
+.et-segment-on { background: var(--gray-900); color: var(--white); }
+
+.et-segment-opt:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+.et-preview { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; background: var(--white); }
+
+.et-preview-subject {
+  padding: .5rem .8rem; font-size: .8rem; font-weight: 600; color: var(--gray-800);
+  background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+}
+
+.et-preview-frame { display: block; width: 100%; height: 420px; border: 0; background: #f4f6f9; }
+
+.et-preview-empty {
+  border: 1px dashed var(--gray-200); border-radius: var(--radius); padding: 2rem 1rem;
+  text-align: center; color: var(--gray-400); font-size: .8rem;
+}
+
+.et-details { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: .5rem .8rem; }
+
+.et-details summary { cursor: pointer; font-size: .78rem; font-weight: 600; color: var(--gray-600); }
+
+.et-details[open] summary { margin-bottom: .6rem; }
+
+.et-sample-btn { margin-right: auto; }

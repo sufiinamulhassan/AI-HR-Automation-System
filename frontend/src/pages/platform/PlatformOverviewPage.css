@@ -1,0 +1,25 @@
+.pco-top-list { list-style: none; display: flex; flex-direction: column; gap: .8rem; }
+.pco-top-row { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) auto; align-items: center; gap: .7rem; }
+.pco-top-rank {
+  width: 1.6rem; height: 1.6rem; border-radius: 50%; display: grid; place-items: center;
+  background: var(--gray-100); color: var(--gray-600); font-size: .72rem; font-weight: 800;
+}
+.pco-top-main { min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
+.pco-top-main .pco-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pco-top-track { height: 6px; border-radius: 4px; background: var(--gray-100); overflow: hidden; margin-top: .25rem; }
+.pco-top-fill { height: 100%; border-radius: 4px; background: var(--primary); }
+.pco-top-activity {
+  font-family: var(--font-display); font-weight: 800; font-size: .95rem; color: var(--gray-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.pco-recent-list { list-style: none; display: flex; flex-direction: column; }
+.pco-recent-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  padding: .6rem 0; border-bottom: 1px solid rgba(0, 0, 0, .05);
+}
+.pco-recent-row:last-child { border-bottom: none; }
+.pco-recent-main, .pco-recent-who { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.pco-recent-who { align-items: flex-end; text-align: right; font-size: .76rem; color: var(--gray-600); }
+.pco-recent-who span { overflow-wrap: anywhere; }
+.pco-recent-action { font-size: .82rem; font-weight: 700; color: var(--gray-900); }

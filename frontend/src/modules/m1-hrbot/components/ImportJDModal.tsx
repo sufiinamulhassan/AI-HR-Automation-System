@@ -7,24 +7,23 @@ interface ImportResult { source: string; fetched: number; imported: number; skip
 interface Props { onClose: () => void; onImported?: () => void }
 
 const LinkedInGlyph = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
     <path d="M19 0h-14c-2.76 0-5 2.24-5 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5v-14c0-2.76-2.24-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.27c-.97 0-1.75-.79-1.75-1.76s.78-1.75 1.75-1.75 1.75.79 1.75 1.75-.78 1.76-1.75 1.76zm13.5 12.27h-3v-5.6c0-3.37-4-3.12-4 0v5.6h-3v-11h3v1.77c1.4-2.59 7-2.78 7 2.48v6.75z"/>
   </svg>
 )
 const BriefcaseGlyph = () => (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect width="20" height="14" x="2" y="7" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="20" height="14" x="2" y="7" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" fill="none" />
   </svg>
 )
 const GlobeGlyph = () => (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" fill="none" />
   </svg>
 )
 
 const SOURCE_META: Record<string, { color: string; glyph: ReactNode }> = {
   linkedin:  { color: '#0A66C2', glyph: <LinkedInGlyph /> },
-  naukri:    { color: '#1875E5', glyph: <BriefcaseGlyph /> },
   remotive:  { color: '#6C5CE7', glyph: <GlobeGlyph /> },
   arbeitnow: { color: '#0f172a', glyph: <BriefcaseGlyph /> },
   remoteok:  { color: '#ef4444', glyph: <GlobeGlyph /> },
@@ -89,8 +88,6 @@ export default function ImportJDModal({ onClose, onImported }: Props) {
         </div>
 
         <div className="ijd-body">
-          <p className="ijd-intro">Pull JDs from an external source. They're saved tagged with their origin and parsed &amp; matched automatically - just like a manual JD.</p>
-
           <div className="ijd-sources">
             {sources.map(s => {
               const meta = SOURCE_META[s.id] || { color: '#64748b', glyph: <BriefcaseGlyph /> }

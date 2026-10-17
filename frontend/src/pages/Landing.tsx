@@ -1,6 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import './Landing.css'
+import { Btn, CornerDots, Eyebrow, FaqList, Reveal, Section } from '../components/site/kit'
+import { usePageMeta } from '../lib/usePageMeta'
 
 import centerHeroImg from '../assets/images/center-hero.webp'
 import stepPostImg from '../assets/images/process-steps/discover.webp'
@@ -18,7 +17,6 @@ import ctaArrowRight from '../assets/graphics/icons/cta-arrow-right.svg'
 import aboutIcon01 from '../assets/graphics/icons/about-01.svg'
 import aboutIcon02 from '../assets/graphics/icons/about-02.svg'
 import aboutIcon03 from '../assets/graphics/icons/about-03.svg'
-
 
 const STACK = [
   { label: 'Python', logo: '/tech-logos/python.webp' },
@@ -49,8 +47,8 @@ const STACK = [
 
 const ABOUT_STATS = [
   { value: '500', label: 'Resumes per batch', icon: aboutIcon01 },
-  { value: '470', label: 'Backend tests passing', icon: aboutIcon02 },
-  { value: '23', label: 'Mounted API routers', icon: aboutIcon03 },
+  { value: '4,200+', label: 'Automated tests passing', icon: aboutIcon02 },
+  { value: '42', label: 'Mounted API routers', icon: aboutIcon03 },
 ]
 
 const PROCESS_STEPS = [
@@ -64,14 +62,14 @@ const PROCESS_STEPS = [
   {
     title: 'Ingest & score resumes',
     description:
-      'Drop up to 500 PDF or DOCX files at once. Each runs the ResumeAgent graph, is de-duplicated and classified, then scored against every open role.',
+      'Drop up to 500 PDF, DOC or DOCX files at once. Each runs the ResumeAgent graph, is de-duplicated and classified, then scored against every open role.',
     image: stepIngestImg,
     alt: '',
   },
   {
     title: 'Interview & screen',
     description:
-      'Strong matches are invited automatically. A voice interview runs from the candidate resume and the role, with proctoring, and a coding assessment screens their code in a sandbox.',
+      'Invite the strongest matches yourself. Automatic invitations exist, but they are off by default. A voice interview runs from the candidate resume and the role, with proctoring, and a coding assessment screens their code in a sandbox.',
     image: stepInterviewImg,
     alt: '',
   },
@@ -85,12 +83,12 @@ const PROCESS_STEPS = [
 ]
 
 const PIPELINE = [
-  { title: 'Extract', body: 'Text is pulled from the PDF or DOCX and normalised before anything else runs.' },
+  { title: 'Extract', body: 'Text is pulled from the PDF, DOC or DOCX and normalised before anything else runs.' },
   { title: 'Check duplicate', body: 'A content hash stops the same person being processed twice across batches.' },
   { title: 'Classify', body: 'The resume is structured into skills, seniority, domain and experience.' },
   { title: 'Embed', body: 'A 1536-dimension vector is written to Pinecone for similarity search.' },
   { title: 'Match JDs', body: 'The vector is scored against every open role, both directions.' },
-  { title: 'Auto invite', body: 'Anything over the threshold triggers an interview invite with no recruiter action.' },
+  { title: 'Auto invite', body: 'Off by default. If the deployment switches it on, anything over the threshold triggers an interview invite.' },
 ]
 
 const CAPABILITIES = [
@@ -123,90 +121,32 @@ const CAPABILITIES = [
 const WHY = [
   { title: 'It refuses to boot insecure', body: 'The API audits its own configuration at startup and will not start on a shipped default secret or admin password.' },
   { title: 'Nothing fails silently', body: 'Every disabled capability is logged by name at startup rather than surfacing as a confusing error on first use.' },
-  { title: 'Tested, not just demoed', body: '470 backend tests and 84 frontend tests run against the same code path the platform serves.' },
+  { title: 'Tested, not just demoed', body: 'More than 4,200 automated tests cover the backend and the frontend, including tenant isolation and plan limits.' },
   { title: 'Candidate data stays scoped', body: 'Candidate-facing email can never carry scores or report content, and department scoping limits who sees whom.' },
 ]
 
-const FOOTER_COLUMNS = [
+const LANDING_FAQ = [
   {
-    title: 'Platform',
-    links: ['Job descriptions', 'Resume pipeline', 'Candidate matching', 'Voice interviews', 'Coding assessment'],
+    q: 'Does Hirely.ai reject candidates automatically?',
+    a: 'No. The recruiter makes every decision. Auto-invite exists, but it is off by default and is switched on only in the deployment settings. See [Responsible AI](/responsible-ai).',
   },
   {
-    title: 'Administration',
-    links: ['Users and roles', 'Departments', 'Workflow rules', 'Email templates', 'Prompt configuration'],
+    q: 'Which resume formats can I upload?',
+    a: 'PDF, DOC (Word 97 to 2003) and DOCX, with up to 500 files in one bulk upload.',
   },
   {
-    title: 'Reporting',
-    links: ['Analytics overview', 'Candidate reports', 'Audit log', 'Activity feed', 'Saved filters'],
+    q: 'Is the candidate recorded on video?',
+    a: "No. Face analysis runs in the candidate's browser, and Hirely.ai does not record or store video. Answers are recorded as audio and transcribed.",
+  },
+  {
+    q: 'How are companies kept apart?',
+    a: 'Every record is tied to a company, and every query is scoped to that company in the data layer. See [Security](/security).',
+  },
+  {
+    q: 'Where do I see plans and limits?',
+    a: 'On the [pricing page](/pricing), which reads the live plan limits.',
   },
 ]
-
-function Btn({
-  to, href, variant = 'primary', size = 'md', children,
-}: {
-  to?: string
-  href?: string
-  variant?: 'primary' | 'outline' | 'white' | 'ghost'
-  size?: 'sm' | 'md' | 'lg'
-  children: React.ReactNode
-}) {
-  const cls = `xv-btn xv-btn-${variant} xv-btn-${size}`
-  const inner = (
-    <>
-      <span className="xv-btn-label">{children}</span>
-      <span className="xv-btn-chip" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M5 12h14M12 5l7 7-7 7" />
-        </svg>
-      </span>
-    </>
-  )
-  if (to) return <Link to={to} className={cls}>{inner}</Link>
-  return <a href={href} className={cls}>{inner}</a>
-}
-
-function Reveal({
-  children, delay = 0, className = '', as: Tag = 'div',
-}: {
-  children: React.ReactNode
-  delay?: number
-  className?: string
-  as?: 'div' | 'li' | 'article' | 'section'
-}) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [shown, setShown] = useState(
-    typeof window === 'undefined' || typeof IntersectionObserver === 'undefined'
-  )
-
-  useEffect(() => {
-    if (shown) return
-    const el = ref.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      entries => {
-        if (entries.some(e => e.isIntersecting)) {
-          setShown(true)
-          io.disconnect()
-        }
-      },
-      { threshold: 0.01 }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [shown])
-
-  return (
-    <Tag
-      ref={ref as React.Ref<never>}
-      className={`xv-reveal ${shown ? 'is-visible' : ''} ${className}`.trim()}
-      style={delay ? { transitionDelay: `${delay}s` } : undefined}
-    >
-      {children}
-    </Tag>
-  )
-}
-
 
 function CheckerCluster({ src, className }: { src: string; className: string }) {
   return <img aria-hidden="true" alt="" src={src} className={`xv-checker ${className}`} />
@@ -232,90 +172,13 @@ function ArrowTrack({ edge, src }: { edge: 'top' | 'bottom'; src: string }) {
   )
 }
 
-function Eyebrow({ children, dark = false }: { children: React.ReactNode; dark?: boolean }) {
-  return (
-    <span className={`xv-eyebrow ${dark ? 'is-dark' : ''}`}>
-      <span aria-hidden="true" className="xv-eyebrow-dot" />
-      {children}
-    </span>
-  )
-}
+export default function Landing() {
+  usePageMeta({
+    description: 'Upload job descriptions and resumes, let Hirely.ai match and rank candidates, run an AI voice interview with proctoring, and review a scored report.',
+  })
 
-function CornerDots() {
   return (
     <>
-      <span aria-hidden="true" className="xv-corner xv-corner-tl" />
-      <span aria-hidden="true" className="xv-corner xv-corner-tr" />
-      <span aria-hidden="true" className="xv-corner xv-corner-bl" />
-      <span aria-hidden="true" className="xv-corner xv-corner-br" />
-    </>
-  )
-}
-
-export default function Landing() {
-  const [navOpen, setNavOpen] = useState(false)
-  const close = () => setNavOpen(false)
-  const year = new Date().getFullYear()
-
-  return (
-    <div className="xv">
-      <header className="xv-nav">
-        <span aria-hidden="true" className="xv-nav-dot xv-nav-dot-tl" />
-        <span aria-hidden="true" className="xv-nav-dot xv-nav-dot-bl" />
-        <span aria-hidden="true" className="xv-nav-dot xv-nav-dot-tr" />
-        <span aria-hidden="true" className="xv-nav-dot xv-nav-dot-br" />
-
-        <div className="xv-shell xv-nav-inner">
-          <Link to="/" className="xv-brand" onClick={close} aria-label="Hirely.ai home">
-            <span aria-hidden="true" className="xv-cell-dot xv-cell-dot-t" />
-            <span aria-hidden="true" className="xv-cell-dot xv-cell-dot-b" />
-            <span className="xv-brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2" />
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="m16 11 2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span className="xv-brand-text">
-              <span className="xv-brand-name">Hirely.ai</span>
-            </span>
-          </Link>
-
-          <nav className={`xv-nav-links ${navOpen ? 'is-open' : ''}`}>
-            <a href="#capabilities" onClick={close}><span className="xv-nav-label">Capabilities</span></a>
-            <a href="#process" onClick={close}><span className="xv-nav-label">Process</span></a>
-            <a href="#pipeline" onClick={close}><span className="xv-nav-label">Pipeline</span></a>
-            <Link to="/login" className="xv-btn xv-btn-primary xv-btn-sm xv-nav-cta" onClick={close}>Launch Demo</Link>
-          </nav>
-
-          <div className="xv-nav-actions">
-            <span aria-hidden="true" className="xv-cell-dot xv-cell-dot-tl" />
-            <span aria-hidden="true" className="xv-cell-dot xv-cell-dot-bl" />
-            <Link to="/login" className="xv-btn xv-btn-primary xv-btn-nav">
-              <span className="xv-btn-label">Launch Demo</span>
-              <span className="xv-btn-chip" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </span>
-            </Link>
-            <button
-              type="button"
-              className="xv-burger"
-              aria-label={navOpen ? 'Close menu' : 'Open menu'}
-              aria-expanded={navOpen}
-              onClick={() => setNavOpen(v => !v)}
-            >
-              {navOpen ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
-              )}
-            </button>
-          </div>
-        </div>
-      </header>
-
       <section className="xv-hero">
         <div aria-hidden="true" className="xv-grid-overlay" />
         <CheckerCluster src={bannerShape01} className="xv-checker-tl" />
@@ -327,27 +190,27 @@ export default function Landing() {
             <ArrowTrack edge="top" src={bannerArrowLeft} />
             <ArrowTrack edge="bottom" src={bannerArrowRight} />
 
-            <span className="xv-hero-title-mobile">Screen Fast, Hire Right</span>
+            <span className="xv-hero-title-mobile"><span>We Rank</span> <span>You Hire</span></span>
 
-            <span className="xv-hero-word xv-hero-word-left"><span>Screen Fast</span></span>
+            <span className="xv-hero-word xv-hero-word-left"><span>We Rank</span></span>
             <img
               src={centerHeroImg}
               alt=""
               aria-hidden="true"
-              fetchPriority="high"
+              {...{ fetchpriority: 'high' }}
               className="xv-hero-img"
             />
-            <span className="xv-hero-word xv-hero-word-right"><span>Hire Right</span></span>
+            <span className="xv-hero-word xv-hero-word-right"><span>You Hire</span></span>
           </h1>
 
           <p className="xv-hero-lead">
-            Hirely.ai reads every resume, matches it against every open role, invites the
+            Hirely.ai reads every resume, matches it against every open role,
             <br />
-            strongest candidates, and hands you a scored report.
+            and hands you a ranked list and a scored report.
           </p>
 
           <div className="xv-hero-cta">
-            <Btn href="#process" variant="outline">See how it works</Btn>
+            <Btn to="/candidates" variant="outline">Candidate help</Btn>
             <Btn to="/login" variant="primary">Sign in to the platform</Btn>
           </div>
         </div>
@@ -555,6 +418,13 @@ export default function Landing() {
         </div>
       </section>
 
+      <Section id="faq" eyebrow="FAQ" title="Questions people ask first" center>
+        <FaqList items={LANDING_FAQ} />
+        <div className="xv-section-actions">
+          <Btn to="/faq" variant="outline">All questions</Btn>
+        </div>
+      </Section>
+
       <section className="xv-card-section">
         <div className="xv-cta">
           <div aria-hidden="true" className="xv-grid-overlay" />
@@ -572,7 +442,10 @@ export default function Landing() {
 
           <Reveal className="xv-cta-inner">
             <h2 className="xv-cta-title">Run your first pipeline</h2>
-            <Btn to="/login" variant="outline" size="lg">Sign in to Hirely.ai</Btn>
+            <div className="xv-cta-actions">
+              <Btn to="/contact?topic=sales" variant="primary" size="lg">Talk to sales</Btn>
+              <Btn to="/login" variant="outline" size="lg">Sign in to Hirely.ai</Btn>
+            </div>
           </Reveal>
 
           <svg aria-hidden="true" className="xv-step-graphic" viewBox="0 0 1408 356" preserveAspectRatio="none" fill="currentColor">
@@ -589,48 +462,6 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="xv-foot">
-        <div className="xv-foot-top">
-          <div className="xv-shell xv-foot-grid">
-            <div className="xv-foot-contact">
-              <h3 className="xv-foot-h"><span aria-hidden="true" className="xv-foot-dot" />Platform</h3>
-              <p className="xv-foot-lead">AI recruitment, end to end</p>
-              <p className="xv-foot-sub">
-                Job descriptions, resume screening, candidate matching, AI voice interviews,
-                coding assessment and scored reports in one product.
-              </p>
-
-            </div>
-
-            <div className="xv-foot-cols">
-              {FOOTER_COLUMNS.map(col => (
-                <div key={col.title}>
-                  <h3 className="xv-foot-h"><span aria-hidden="true" className="xv-foot-dot" />{col.title}</h3>
-                  <ul className="xv-foot-list">
-                    {col.links.map(l => (
-                      <li key={l}><span aria-hidden="true" className="xv-foot-bullet" />{l}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="xv-foot-mark">
-          <span aria-hidden="true" className="xv-foot-mark-dot xv-foot-mark-tl" />
-          <span aria-hidden="true" className="xv-foot-mark-dot xv-foot-mark-bl" />
-          <span aria-hidden="true" className="xv-foot-mark-dot xv-foot-mark-br" />
-          <Link to="/" className="xv-foot-wordmark">HIRELY.AI</Link>
-        </div>
-
-        <div className="xv-foot-bottom">
-          <div className="xv-shell xv-foot-bottom-inner">
-            <span>A XOVO Technologies product</span>
-            <span>&copy; {year} Hirely.ai. All rights reserved.</span>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </>
   )
 }

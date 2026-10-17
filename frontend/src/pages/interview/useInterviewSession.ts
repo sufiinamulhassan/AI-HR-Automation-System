@@ -129,7 +129,6 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [token])
 
-
   const sendFlag = useCallback((event: string) => {
     if (!token) return
     fetch(`${API_V1}/interview/session/${token}/flag`, {
@@ -143,7 +142,7 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
     void exitFullscreen()
     if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null }
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      try { recorderRef.current.stop() } catch {}
+      try { recorderRef.current.stop() } catch { }
     }
     isRecordingRef.current = false
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
@@ -169,7 +168,7 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
           termination_reason: terminationReason ?? null,
         }),
       })
-    } catch {}
+    } catch { }
   }, [token, stopAllMedia])
 
   const registerViolation = useCallback((rawEvent: string) => {
@@ -261,7 +260,6 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
 
   useEffect(() => stopAllMedia, [stopAllMedia])
 
-
   async function grantMediaAndStart() {
     setRequestingMedia(true)
     setMediaError('')
@@ -330,20 +328,19 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
         }
         audio.onerror = () => {
           isPlayingRef.current = false
-          if (!cancelled) enterReady('Audio playback failed - please read the question above.')
+          if (!cancelled) enterReady('Audio playback failed. Please read the question above.')
         }
         await audio.play()
       } catch {
         if (!cancelled) {
           isPlayingRef.current = false
-          enterReady('Could not play the question aloud - please read it above.')
+          enterReady('Could not play the question aloud. Please read it above.')
         }
       }
     })()
 
     return () => { cancelled = true }
   }, [status, qIndex, questions, token])
-
 
   function startRecording() {
     if (isPlayingRef.current || isRecordingRef.current) return
@@ -387,7 +384,7 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
       try {
         recorder = buildRecorder(stream, mimeType, options)
         break
-      } catch {}
+      } catch { }
     }
     if (!recorder) {
       recorderRef.current = null
@@ -410,7 +407,7 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
   function stopRecording() {
     if (!isRecordingRef.current) return
     setTurnPhase('transcribing')
-    try { recorderRef.current?.stop() } catch {}
+    try { recorderRef.current?.stop() } catch { }
   }
 
   async function uploadAnswer(blob: Blob, ext: string) {
@@ -452,7 +449,6 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
       isUploadingRef.current = false
     }
   }
-
 
   async function advance(text: string) {
     const answeredQuestion = questions[qIndex]
@@ -510,7 +506,6 @@ export function useInterviewSession(token: string | undefined, opts: SessionOpti
     if (turnPhase === 'thinking' || turnPhase === 'transcribing') return
     doSubmit()
   }
-
 
   const messages = useMemo<ChatMessage[]>(() => {
     const msgs: ChatMessage[] = []

@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { scenariosApi, workflowsApi } from '../../lib/api'
-import { codingApi, type CodingQuestion, type CodingSubmission, type CodingTestCase } from '../../lib/codingApi'
+import { cronApi, scenariosApi, workflowsApi } from '../../lib/api'
+import {
+  codingApi, type CodingLiveSession, type CodingLiveSessionSummary, type CodingQuestion,
+  type CodingSubmission, type CodingTestCase,
+} from '../../lib/codingApi'
+import { relativeTime } from '../../lib/relativeTime'
 import '../../styles/admin-tabs.css'
 import './InterviewAutomationPage.css'
-
 
 function errorMessage(e: unknown, fallback: string): string {
   const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -23,6 +26,21 @@ interface TabProps {
   showToast: ShowToast
 }
 
+interface ListTabProps extends TabProps {
+  loading: boolean
+  error: string
+  reload: () => void
+  retry: () => void
+}
+
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="ia-load-error">
+      <span role="alert">{message}</span>
+      <button className="btn btn-ghost btn-sm" onClick={onRetry}>Retry</button>
+    </div>
+  )
+}
 
 interface Scenario {
   scenario_id: string
@@ -57,10 +75,8 @@ function emptyScenarioForm(): ScenarioForm {
   return { name: '', prompt: '', job_domain: '', evaluation_dimensions: [...DEFAULT_DIMENSIONS], is_active: true }
 }
 
-function ScenariosTab({ scenarios, loading, reload, showToast }: TabProps & {
+function ScenariosTab({ scenarios, loading, error, reload, retry, showToast }: ListTabProps & {
   scenarios: Scenario[]
-  loading: boolean
-  reload: () => void
 }) {
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<Scenario | null>(null)
@@ -102,7 +118,7 @@ function ScenariosTab({ scenarios, loading, reload, showToast }: TabProps & {
           name: form.name,
           prompt: form.prompt,
           evaluation_dimensions: form.evaluation_dimensions,
-          job_domain: form.job_domain || undefined,
+          job_domain: form.job_domain.trim() || undefined,
         })
         showToast('Scenario created')
       } else if (selected) {
@@ -110,7 +126,7 @@ function ScenariosTab({ scenarios, loading, reload, showToast }: TabProps & {
           name: form.name,
           prompt: form.prompt,
           evaluation_dimensions: form.evaluation_dimensions,
-          job_domain: form.job_domain || undefined,
+          job_domain: form.job_domain.trim() || null,
           is_active: form.is_active,
         })
         showToast('Scenario updated')
@@ -140,6 +156,8 @@ function ScenariosTab({ scenarios, loading, reload, showToast }: TabProps & {
         </div>
         {loading ? (
           <div className="ia-loading">Loading…</div>
+        ) : error ? (
+          <LoadError message={error} onRetry={retry} />
         ) : (
           <div className="ia-table-wrap">
             <table className="ia-table">
@@ -189,7 +207,7 @@ function ScenariosTab({ scenarios, loading, reload, showToast }: TabProps & {
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal-box ia-modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{modal === 'create' ? 'Add Scenario' : `Edit - ${selected?.name}`}</h2>
+              <h2>{modal === 'create' ? 'Add Scenario' : `Edit, ${selected?.name}`}</h2>
               <button className="modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="ia-form">
@@ -209,7 +227,7 @@ function ScenariosTab({ scenarios, loading, reload, showToast }: TabProps & {
                 <span className="form-label">Job Domain</span>
                 <input className="form-input" value={form.job_domain}
                   onChange={e => setForm(f => ({ ...f, job_domain: e.target.value }))}
-                  placeholder="e.g. software_engineering - optional" />
+                  placeholder="e.g. software_engineering, optional" />
               </label>
               <div className="ia-field">
                 <span className="form-label">Evaluation Dimensions</span>
@@ -246,7 +264,6 @@ function ScenariosTab({ scenarios, loading, reload, showToast }: TabProps & {
   )
 }
 
-
 interface Condition { field: string; operator: string; value: string }
 
 interface WorkflowRule {
@@ -259,10 +276,30 @@ interface WorkflowRule {
   is_active: boolean
 }
 
-const TRIGGER_TYPES = [
-  'resume_processed', 'candidate_invited', 'candidate_status_changed',
-  'interview_completed', 'offer_created', 'offer_status_changed',
-]
+interface TriggerType {
+  key: string
+  label: string
+}
+
+interface CronJob {
+  key: string
+  label: string
+  last_run_at: string | null
+  last_status: string | null
+  last_detail: string | null
+}
+
+interface CronStatus {
+  enabled: boolean
+  jobs: CronJob[]
+}
+
+function cronStatusBadge(status: string | null): string {
+  if (!status) return 'badge-gray'
+  if (/fail|error/i.test(status)) return 'badge-red'
+  if (/^(ok|success|succeeded|sent|done|completed)$/i.test(status)) return 'badge-green'
+  return 'badge-gray'
+}
 
 const ACTION_TYPES = [
   'send_email', 'change_pipeline_stage', 'fire_webhook',
@@ -296,10 +333,10 @@ function emptyCondition(): Condition {
   return { field: '', operator: 'eq', value: '' }
 }
 
-function emptyRuleForm(): RuleForm {
+function emptyRuleForm(trigger_type = ''): RuleForm {
   return {
     name: '',
-    trigger_type: TRIGGER_TYPES[0],
+    trigger_type,
     conditions: [emptyCondition()],
     action_type: ACTION_TYPES[0],
     action_params_text: '{}',
@@ -307,10 +344,8 @@ function emptyRuleForm(): RuleForm {
   }
 }
 
-function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
+function WorkflowRulesTab({ rules, loading, error, reload, retry, showToast }: ListTabProps & {
   rules: WorkflowRule[]
-  loading: boolean
-  reload: () => void
 }) {
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<WorkflowRule | null>(null)
@@ -325,8 +360,36 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
   const [testError, setTestError] = useState('')
   const [testing, setTesting] = useState(false)
 
+  const [triggers, setTriggers] = useState<TriggerType[] | null>(null)
+  const [triggersError, setTriggersError] = useState('')
+  const [cron, setCron] = useState<CronStatus | null | 'error'>(null)
+
+  const loadTriggers = useCallback(async () => {
+    setTriggersError('')
+    try {
+      const r = await workflowsApi.triggers()
+      setTriggers(r.data.triggers ?? [])
+    } catch (e) {
+      setTriggersError(errorMessage(e, 'Could not load the triggers.'))
+    }
+  }, [])
+
+  const loadCron = useCallback(async () => {
+    try {
+      const r = await cronApi.status()
+      setCron({ enabled: r.data.enabled === true, jobs: r.data.jobs ?? [] })
+    } catch {
+      setCron('error')
+    }
+  }, [])
+
+  useEffect(() => { loadTriggers(); loadCron() }, [loadTriggers, loadCron])
+
+  const triggerKeys = (triggers ?? []).map(t => t.key)
+  const neverFires = (key: string) => triggers !== null && !triggerKeys.includes(key)
+
   function openCreate() {
-    setForm(emptyRuleForm())
+    setForm(emptyRuleForm(triggerKeys[0] ?? ''))
     setSelected(null)
     setJsonError('')
     setModal('create')
@@ -440,6 +503,7 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
     try {
       const r = await workflowsApi.runReminders()
       showToast(`Reminders sent: ${r.data.sent ?? 0}`)
+      loadCron()
     } catch (e) { showToast(errorMessage(e, 'Failed to send reminders')) }
     setRemindersLoading(false)
   }
@@ -453,11 +517,32 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
             <button className="btn btn-secondary" onClick={sendReminders} disabled={remindersLoading}>
               {remindersLoading ? 'Sending…' : 'Send Pending Reminders Now'}
             </button>
-            <button className="btn btn-primary" onClick={openCreate}>+ Add Rule</button>
+            <button className="btn btn-primary" onClick={openCreate} disabled={triggers === null}>+ Add Rule</button>
           </div>
         </div>
+        {cron === 'error' ? (
+          <div className="ia-cron ia-cron-off">Scheduled run status is unavailable.</div>
+        ) : cron && !cron.enabled ? (
+          <div className="ia-cron ia-cron-off">Scheduled runs are off because the cron secret is not set.</div>
+        ) : cron && cron.jobs.length > 0 ? (
+          <ul className="ia-cron">
+            {cron.jobs.map(j => (
+              <li key={j.key} className="ia-cron-row">
+                <span className="ia-cron-label">{j.label}</span>
+                <span className="ia-cron-when" title={j.last_run_at ? new Date(j.last_run_at).toLocaleString() : undefined}>
+                  {j.last_run_at ? relativeTime(j.last_run_at) : 'Never run'}
+                </span>
+                {j.last_status && <span className={`badge ${cronStatusBadge(j.last_status)}`}>{j.last_status}</span>}
+                {j.last_detail && <span className="ia-cron-detail">{j.last_detail}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {triggersError && <LoadError message={triggersError} onRetry={loadTriggers} />}
         {loading ? (
           <div className="ia-loading">Loading…</div>
+        ) : error ? (
+          <LoadError message={error} onRetry={retry} />
         ) : (
           <div className="ia-table-wrap">
             <table className="ia-table">
@@ -476,7 +561,10 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
                 ) : rules.map(r => (
                   <tr key={r.rule_id}>
                     <td className="ia-name" data-label="Name">{r.name}</td>
-                    <td className="ia-mono" data-label="Trigger">{r.trigger_type}</td>
+                    <td className="ia-mono" data-label="Trigger">
+                      {r.trigger_type}
+                      {neverFires(r.trigger_type) && <span className="badge badge-yellow ia-never-fires">Never fires</span>}
+                    </td>
                     <td className="ia-mono" data-label="Action">{r.action_type}</td>
                     <td data-label="Status">
                       <span className={`badge ${r.is_active ? 'badge-green' : 'badge-gray'}`}>
@@ -502,7 +590,7 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal-box ia-modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{modal === 'create' ? 'Add Rule' : `Edit - ${selected?.name}`}</h2>
+              <h2>{modal === 'create' ? 'Add Rule' : `Edit, ${selected?.name}`}</h2>
               <button className="modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="ia-form">
@@ -517,7 +605,12 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
                 <span className="form-label">Trigger Type</span>
                 <select className="form-input" value={form.trigger_type}
                   onChange={e => setForm(f => ({ ...f, trigger_type: e.target.value }))}>
-                  {TRIGGER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {(triggers ?? []).map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                  {form.trigger_type && !triggerKeys.includes(form.trigger_type) && (
+                    <option value={form.trigger_type}>
+                      {neverFires(form.trigger_type) ? `${form.trigger_type} (never fires)` : form.trigger_type}
+                    </option>
+                  )}
                 </select>
               </label>
 
@@ -584,7 +677,7 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={save}
-                disabled={saving || !form.name.trim() || !!jsonError}>
+                disabled={saving || !form.name.trim() || !!jsonError || !form.trigger_type}>
                 {saving ? 'Saving…' : modal === 'create' ? 'Create' : 'Save Changes'}
               </button>
             </div>
@@ -596,7 +689,7 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
         <div className="modal-overlay" onClick={() => setTestFor(null)}>
           <div className="modal-box ia-modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Test Rule - {testFor.name}</h2>
+              <h2>Test Rule, {testFor.name}</h2>
               <button className="modal-close" onClick={() => setTestFor(null)}>✕</button>
             </div>
             <div className="ia-form">
@@ -621,7 +714,6 @@ function WorkflowRulesTab({ rules, loading, reload, showToast }: TabProps & {
     </>
   )
 }
-
 
 const LANGUAGE_KEYS = ['python', 'javascript'] as const
 
@@ -653,10 +745,9 @@ function emptyQuestionForm(): QuestionForm {
 const difficultyBadge = (d: string) =>
   d === 'easy' ? 'badge-green' : d === 'hard' ? 'badge-red' : 'badge-yellow'
 
-function CodingQuestionsTab({ questions, loading, reload, showToast }: TabProps & {
+function CodingQuestionsTab({ questions, total, loading, error, reload, retry, showToast }: ListTabProps & {
   questions: CodingQuestion[]
-  loading: boolean
-  reload: () => void
+  total: number
 }) {
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<CodingQuestion | null>(null)
@@ -709,16 +800,16 @@ function CodingQuestionsTab({ questions, loading, reload, showToast }: TabProps 
       const payload = {
         title: form.title,
         description: form.description,
-        job_domain: form.job_domain || undefined,
         difficulty: form.difficulty,
         language_templates: form.language_templates,
         test_cases: form.test_cases,
       }
+      const jobDomain = form.job_domain.trim()
       if (modal === 'create') {
-        await codingApi.createQuestion(payload)
+        await codingApi.createQuestion({ ...payload, job_domain: jobDomain || undefined })
         showToast('Coding question created')
       } else if (selected) {
-        await codingApi.updateQuestion(selected.question_id, payload)
+        await codingApi.updateQuestion(selected.question_id, { ...payload, job_domain: jobDomain || null })
         showToast('Coding question updated')
       }
       setModal(null); reload()
@@ -742,10 +833,17 @@ function CodingQuestionsTab({ questions, loading, reload, showToast }: TabProps 
       <section className="ia-section card">
         <div className="card-header">
           <span className="card-title">Questions</span>
-          <button className="btn btn-primary" onClick={openCreate}>+ Add Question</button>
+          <div className="ia-actions">
+            {!loading && !error && total > questions.length && (
+              <span className="ia-muted ia-count">Showing {questions.length} of {total}</span>
+            )}
+            <button className="btn btn-primary" onClick={openCreate}>+ Add Question</button>
+          </div>
         </div>
         {loading ? (
           <div className="ia-loading">Loading…</div>
+        ) : error ? (
+          <LoadError message={error} onRetry={retry} />
         ) : (
           <div className="ia-table-wrap">
             <table className="ia-table">
@@ -787,7 +885,7 @@ function CodingQuestionsTab({ questions, loading, reload, showToast }: TabProps 
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal-box ia-modal-box-wide" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{modal === 'create' ? 'Add Coding Question' : `Edit - ${selected?.title}`}</h2>
+              <h2>{modal === 'create' ? 'Add Coding Question' : `Edit, ${selected?.title}`}</h2>
               <button className="modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="ia-form">
@@ -810,7 +908,7 @@ function CodingQuestionsTab({ questions, loading, reload, showToast }: TabProps 
                   <span className="form-label">Job Domain</span>
                   <input className="form-input" value={form.job_domain}
                     onChange={e => setForm(f => ({ ...f, job_domain: e.target.value }))}
-                    placeholder="e.g. software_engineering - optional" />
+                    placeholder="e.g. software_engineering, optional" />
                 </label>
                 <label className="ia-field">
                   <span className="form-label">Difficulty</span>
@@ -894,7 +992,6 @@ function CodingQuestionsTab({ questions, loading, reload, showToast }: TabProps 
   )
 }
 
-
 const PAGE_SIZE = 25
 
 function scoreBadge(score: number) {
@@ -971,7 +1068,7 @@ function SubmissionsTab({ candidateIdParam, onCandidateIdChange }: {
             className="form-input"
             value={candidateIdInput}
             onChange={e => setCandidateIdInput(e.target.value)}
-            placeholder="Filter by candidate_id - leave blank for all"
+            placeholder="Filter by candidate_id, leave blank for all"
           />
           <button className="btn btn-primary" type="submit">Apply</button>
           {candidateIdParam && (
@@ -1057,7 +1154,7 @@ function SubmissionsTab({ candidateIdParam, onCandidateIdChange }: {
                             <div className="ia-results-label">
                               Similarity check
                               <span className="ia-analysis-sub">
-                                {' '}- compared against {s.plagiarism.checked_against} other candidate
+                                ,{' '}compared against {s.plagiarism.checked_against} other candidate
                                 {s.plagiarism.checked_against === 1 ? '' : 's'} on this question
                                 {s.plagiarism.truncated ? ' (most recent only)' : ''}
                               </span>
@@ -1104,8 +1201,8 @@ function SubmissionsTab({ candidateIdParam, onCandidateIdChange }: {
                             )}
                             {s.plagiarism.comparable === false && (
                               <p className="ia-analysis-note">
-                                This submission is too short for a similarity score to mean anything -
-                                short answers converge by construction - so it is reported but never flagged.
+                                This submission is too short for a similarity score to mean anything.
+                                Short answers converge by construction, so it is reported but never flagged.
                               </p>
                             )}
                             <p className="ia-analysis-note">
@@ -1214,7 +1311,7 @@ function SubmissionsTab({ candidateIdParam, onCandidateIdChange }: {
 
                         <div className="ia-results-block">
                           <div className="ia-results-label">
-                            Hidden Test Cases - {hiddenPassed} of {hiddenResults.length} passed
+                            Hidden Test Cases, {hiddenPassed} of {hiddenResults.length} passed
                           </div>
                           {hiddenResults.map(r => (
                             <div key={r.test_case_index} className={`ia-result-row ${r.passed ? 'ia-pass' : 'ia-fail'}`}>
@@ -1249,22 +1346,253 @@ function SubmissionsTab({ candidateIdParam, onCandidateIdChange }: {
   )
 }
 
+const LIVE_POLL_INTERVAL_MS = 5000
 
-const TABS = ['scenarios', 'workflows', 'questions', 'submissions'] as const
+function useVisiblePolling(
+  poll: () => void | Promise<void>,
+  intervalMs: number,
+  enabled: boolean,
+  restartKey: string,
+) {
+  const latest = useRef(poll)
+  useEffect(() => { latest.current = poll })
+
+  useEffect(() => {
+    if (!enabled) return
+    let timer: ReturnType<typeof setInterval> | null = null
+    const run = () => { void latest.current() }
+    const start = () => { if (timer === null) timer = setInterval(run, intervalMs) }
+    const stop = () => { if (timer !== null) { clearInterval(timer); timer = null } }
+    function onVisibility() {
+      if (document.hidden) {
+        stop()
+      } else {
+        run()
+        start()
+      }
+    }
+    if (!document.hidden) {
+      run()
+      start()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [intervalMs, enabled, restartKey])
+}
+
+const LIVE_STATUS_LABEL: Record<CodingLiveSession['status'], string> = {
+  not_assigned: 'Not assigned',
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  submitted: 'Submitted',
+}
+
+const LIVE_STATUS_BADGE: Record<CodingLiveSession['status'], string> = {
+  not_assigned: 'badge-gray',
+  not_started: 'badge-yellow',
+  in_progress: 'badge-blue',
+  submitted: 'badge-green',
+}
+
+function LiveSessionTab({ candidateIdParam, onCandidateIdChange, onViewSubmissions }: {
+  candidateIdParam: string
+  onCandidateIdChange: (id: string) => void
+  onViewSubmissions: (id: string) => void
+}) {
+  const [sessions, setSessions] = useState<CodingLiveSessionSummary[] | null>(null)
+  const [sessionsError, setSessionsError] = useState('')
+
+  const [live, setLive] = useState<CodingLiveSession | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [notFound, setNotFound] = useState(false)
+
+  const sessionsRequest = useRef(0)
+  const liveRequest = useRef(0)
+  useEffect(() => () => { sessionsRequest.current++; liveRequest.current++ }, [])
+
+  const pollSessions = useCallback(async () => {
+    const request = ++sessionsRequest.current
+    try {
+      const r = await codingApi.listLiveSessions()
+      if (request !== sessionsRequest.current) return
+      setSessions(r.data.sessions ?? [])
+      setSessionsError('')
+    } catch (e) {
+      if (request !== sessionsRequest.current) return
+      setSessionsError(errorMessage(e, 'Could not load live sessions.'))
+    }
+  }, [])
+
+  useVisiblePolling(pollSessions, LIVE_POLL_INTERVAL_MS, true, '')
+
+  useEffect(() => {
+    liveRequest.current++
+    setLive(null)
+    setError('')
+    setNotFound(false)
+    setLoading(!!candidateIdParam)
+  }, [candidateIdParam])
+
+  const pollLive = useCallback(async () => {
+    if (!candidateIdParam) return
+    const request = ++liveRequest.current
+    try {
+      const r = await codingApi.getLive(candidateIdParam)
+      if (request !== liveRequest.current) return
+      setLive(r.data as CodingLiveSession)
+      setError('')
+    } catch (e) {
+      if (request !== liveRequest.current) return
+      const missing = (e as { response?: { status?: number } })?.response?.status === 404
+      setLive(null)
+      setError(missing ? 'No candidate found with that ID.' : 'Failed to load live session status.')
+      if (missing) setNotFound(true)
+    }
+    if (request === liveRequest.current) setLoading(false)
+  }, [candidateIdParam])
+
+  useVisiblePolling(pollLive, LIVE_POLL_INTERVAL_MS, !!candidateIdParam && !notFound, candidateIdParam)
+
+  const watched = sessions?.find(s => s.candidate_id === candidateIdParam)
+
+  return (
+    <>
+      <section className="ia-section card">
+        <div className="card-header">
+          <span className="card-title">Active sessions</span>
+        </div>
+        {sessionsError && (
+          <LoadError message={sessionsError} onRetry={pollSessions} />
+        )}
+        {sessions === null ? (
+          sessionsError ? null : <div className="ia-loading">Loading…</div>
+        ) : sessions.length === 0 ? (
+          <div className="ia-empty">No one is coding right now.</div>
+        ) : (
+          <ul className="ia-sessions">
+            {sessions.map(s => {
+              const isWatched = s.candidate_id === candidateIdParam
+              return (
+                <li key={s.candidate_id}>
+                  <button
+                    type="button"
+                    className={`ia-session${isWatched ? ' ia-session-active' : ''}`}
+                    aria-current={isWatched ? 'true' : undefined}
+                    onClick={() => onCandidateIdChange(s.candidate_id)}
+                  >
+                    <span className="ia-session-main">
+                      <span className="ia-session-name">{s.candidate_name || s.candidate_id}</span>
+                      <span className="ia-session-sub">
+                        {s.question_title || '-'}
+                        {s.language ? ` · ${s.language}` : ''}
+                      </span>
+                    </span>
+                    <span className="ia-session-saved">{relativeTime(s.last_saved_at)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+
+      {candidateIdParam && (
+      <section className="ia-section card">
+        <div className="card-header">
+          <span className="card-title">
+            {`Live session, ${watched?.candidate_name || candidateIdParam}`}
+          </span>
+          <div className="ia-actions">
+            {live && (
+              <span className={`badge ${LIVE_STATUS_BADGE[live.status]}`}>
+                {live.status === 'in_progress' && <span className="ia-live-dot" aria-hidden="true" />}
+                {LIVE_STATUS_LABEL[live.status]}
+              </span>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onCandidateIdChange('')}>
+              Close
+            </button>
+          </div>
+        </div>
+
+        {loading && !live && !error ? (
+          <div className="ia-loading">Loading…</div>
+        ) : error ? (
+          <div className="ia-empty">{error}</div>
+        ) : !live ? null : (
+          <div className="ia-live-body">
+            {live.status === 'not_assigned' && (
+              <div className="ia-empty">No coding question has been assigned to this candidate yet.</div>
+            )}
+
+            {live.status === 'not_started' && (
+              <div className="ia-empty">
+                {live.question_title ? `"${live.question_title}" is assigned, but the` : 'A question is assigned, but the'}
+                {' '}candidate hasn't started writing code yet.
+              </div>
+            )}
+
+            {live.status === 'in_progress' && (
+              <>
+                <div className="ia-metric-row">
+                  {live.question_title && (
+                    <span className="ia-metric">
+                      <span className="ia-metric-val">{live.question_title}</span>
+                      <span className="ia-metric-label">question</span>
+                    </span>
+                  )}
+                  {live.language && (
+                    <span className="ia-metric">
+                      <span className="ia-metric-val">{live.language}</span>
+                      <span className="ia-metric-label">language</span>
+                    </span>
+                  )}
+                  {live.last_saved_at && (
+                    <span className="ia-metric">
+                      <span className="ia-metric-val">{new Date(live.last_saved_at).toLocaleTimeString()}</span>
+                      <span className="ia-metric-label">last saved</span>
+                    </span>
+                  )}
+                </div>
+                <div className="ia-code-block">
+                  <div className="ia-code-label">Live Code (read-only)</div>
+                  <pre className="ia-code">{live.code || '(nothing typed yet)'}</pre>
+                </div>
+              </>
+            )}
+
+            {live.status === 'submitted' && (
+              <div className="ia-live-submitted">
+                <p>
+                  {live.question_title ? `"${live.question_title}" has` : 'This question has'} already been
+                  submitted: the live draft above is no longer tracked once a graded result exists.
+                </p>
+                <button type="button" className="adm-link" onClick={() => onViewSubmissions(candidateIdParam)}>
+                  View full results in Submissions →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+      )}
+    </>
+  )
+}
+
+const TABS = ['scenarios', 'workflows', 'questions', 'live', 'submissions'] as const
 type Tab = typeof TABS[number]
 
 const TAB_LABELS: Record<Tab, string> = {
   scenarios: 'Scenarios',
   workflows: 'Workflow Rules',
   questions: 'Coding Questions',
+  live: 'Live Sessions',
   submissions: 'Submissions',
-}
-
-const TAB_SUBTITLES: Record<Tab, string> = {
-  scenarios: 'Scenario-based interview prompts and the dimensions each one is evaluated on',
-  workflows: 'Automate actions based on recruitment pipeline events',
-  questions: 'The AI coding assessment question bank - starter code, test cases, and difficulty',
-  submissions: 'Candidate coding submissions with hidden-test detail, similarity and AI quality review',
 }
 
 function isTab(value: string | null): value is Tab {
@@ -1279,12 +1607,18 @@ export default function InterviewAutomationPage() {
 
   function setTab(next: Tab) {
     const params: Record<string, string> = next === 'scenarios' ? {} : { tab: next }
-    if (next === 'submissions' && candidateIdParam) params.candidate_id = candidateIdParam
+    if ((next === 'live' || next === 'submissions') && candidateIdParam) params.candidate_id = candidateIdParam
     setSearchParams(params, { replace: true })
   }
 
   function setCandidateId(id: string) {
     const params: Record<string, string> = { tab: 'submissions' }
+    if (id) params.candidate_id = id
+    setSearchParams(params, { replace: true })
+  }
+
+  function setLiveCandidateId(id: string) {
+    const params: Record<string, string> = { tab: 'live' }
     if (id) params.candidate_id = id
     setSearchParams(params, { replace: true })
   }
@@ -1298,27 +1632,42 @@ export default function InterviewAutomationPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [rules, setRules] = useState<WorkflowRule[]>([])
   const [questions, setQuestions] = useState<CodingQuestion[]>([])
+  const [questionsTotal, setQuestionsTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [scenariosError, setScenariosError] = useState('')
+  const [rulesError, setRulesError] = useState('')
+  const [questionsError, setQuestionsError] = useState('')
 
   const loadScenarios = useCallback(async () => {
     try {
       const r = await scenariosApi.list()
       setScenarios(r.data.scenarios ?? [])
-    } catch {}
+      setScenariosError('')
+    } catch (e) {
+      setScenariosError(errorMessage(e, 'Could not load scenarios.'))
+    }
   }, [])
 
   const loadRules = useCallback(async () => {
     try {
       const r = await workflowsApi.list()
       setRules(r.data.rules || r.data.results || [])
-    } catch {}
+      setRulesError('')
+    } catch (e) {
+      setRulesError(errorMessage(e, 'Could not load workflow rules.'))
+    }
   }, [])
 
   const loadQuestions = useCallback(async () => {
     try {
-      const r = await codingApi.listQuestions()
-      setQuestions(r.data.questions ?? [])
-    } catch {}
+      const r = await codingApi.listQuestions({ limit: 100 })
+      const rows: CodingQuestion[] = r.data.questions ?? []
+      setQuestions(rows)
+      setQuestionsTotal(typeof r.data.total === 'number' ? r.data.total : rows.length)
+      setQuestionsError('')
+    } catch (e) {
+      setQuestionsError(errorMessage(e, 'Could not load coding questions.'))
+    }
   }, [])
 
   useEffect(() => {
@@ -1329,9 +1678,21 @@ export default function InterviewAutomationPage() {
     return () => { cancelled = true }
   }, [loadScenarios, loadRules, loadQuestions])
 
+  function retryWith(load: () => Promise<void>) {
+    return async () => {
+      setLoading(true)
+      await load()
+      setLoading(false)
+    }
+  }
+
   const counts: Partial<Record<Tab, number>> = loading
     ? {}
-    : { scenarios: scenarios.length, workflows: rules.length, questions: questions.length }
+    : {
+        ...(scenariosError ? {} : { scenarios: scenarios.length }),
+        ...(rulesError ? {} : { workflows: rules.length }),
+        ...(questionsError ? {} : { questions: questionsTotal }),
+      }
 
   return (
     <div className="ia-page">
@@ -1340,7 +1701,6 @@ export default function InterviewAutomationPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Interview &amp; Automation</div>
-          <div className="page-sub">{TAB_SUBTITLES[tab]}</div>
         </div>
       </div>
 
@@ -1361,13 +1721,29 @@ export default function InterviewAutomationPage() {
 
       <div className="ia-body">
         {tab === 'scenarios' && (
-          <ScenariosTab scenarios={scenarios} loading={loading} reload={loadScenarios} showToast={showToast} />
+          <ScenariosTab
+            scenarios={scenarios} loading={loading} error={scenariosError}
+            reload={loadScenarios} retry={retryWith(loadScenarios)} showToast={showToast}
+          />
         )}
         {tab === 'workflows' && (
-          <WorkflowRulesTab rules={rules} loading={loading} reload={loadRules} showToast={showToast} />
+          <WorkflowRulesTab
+            rules={rules} loading={loading} error={rulesError}
+            reload={loadRules} retry={retryWith(loadRules)} showToast={showToast}
+          />
         )}
         {tab === 'questions' && (
-          <CodingQuestionsTab questions={questions} loading={loading} reload={loadQuestions} showToast={showToast} />
+          <CodingQuestionsTab
+            questions={questions} total={questionsTotal} loading={loading} error={questionsError}
+            reload={loadQuestions} retry={retryWith(loadQuestions)} showToast={showToast}
+          />
+        )}
+        {tab === 'live' && (
+          <LiveSessionTab
+            candidateIdParam={candidateIdParam}
+            onCandidateIdChange={setLiveCandidateId}
+            onViewSubmissions={setCandidateId}
+          />
         )}
         {tab === 'submissions' && (
           <SubmissionsTab candidateIdParam={candidateIdParam} onCandidateIdChange={setCandidateId} />
