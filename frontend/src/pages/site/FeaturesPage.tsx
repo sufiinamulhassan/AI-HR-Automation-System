@@ -6,17 +6,17 @@ import './FeaturesPage.css'
 const INCLUDED = '**Included**'
 const NOT_INCLUDED = 'Not included'
 
-const PLAN_HEAD = ['Feature', 'Starter', 'Growth', 'Enterprise']
+const PLAN_HEAD = ['Feature', 'Starter', 'Growth', 'Max', 'Enterprise']
 
 const PLAN_ROWS: string[][] = [
-  ['Coding assessments', NOT_INCLUDED, INCLUDED, INCLUDED],
-  ['Performance reviews', NOT_INCLUDED, INCLUDED, INCLUDED],
-  ['Outbound webhooks', NOT_INCLUDED, INCLUDED, INCLUDED],
-  ['Workflow automation', NOT_INCLUDED, INCLUDED, INCLUDED],
-  ['Custom SMTP', NOT_INCLUDED, INCLUDED, INCLUDED],
-  ['SSO with your own identity provider', NOT_INCLUDED, NOT_INCLUDED, INCLUDED],
-  ['Custom domain', NOT_INCLUDED, NOT_INCLUDED, INCLUDED],
-  ['HRMS, Zoom and Teams integrations', NOT_INCLUDED, INCLUDED, INCLUDED],
+  ['Coding assessments', INCLUDED, INCLUDED, INCLUDED, INCLUDED],
+  ['Performance reviews', NOT_INCLUDED, NOT_INCLUDED, INCLUDED, INCLUDED],
+  ['Outbound webhooks', NOT_INCLUDED, INCLUDED, INCLUDED, INCLUDED],
+  ['Workflow automation', NOT_INCLUDED, INCLUDED, INCLUDED, INCLUDED],
+  ['Custom SMTP', NOT_INCLUDED, INCLUDED, INCLUDED, INCLUDED],
+  ['SSO with your own identity provider', NOT_INCLUDED, NOT_INCLUDED, NOT_INCLUDED, INCLUDED],
+  ['Custom domain', NOT_INCLUDED, NOT_INCLUDED, NOT_INCLUDED, INCLUDED],
+  ['HRMS, Zoom and Teams integrations', NOT_INCLUDED, INCLUDED, INCLUDED, INCLUDED],
 ]
 
 const FAQ = [
@@ -159,7 +159,7 @@ export default function FeaturesPage() {
         id="coding"
         eyebrow="Coding assessments"
         title="Test code, and check how it was written"
-        lead="Coding assessments are not part of the Starter plan."
+        lead="Coding assessments are part of every plan, with one coding test per AI interview."
       >
         <InfoGrid columns={2}>
           <InfoCard
@@ -205,7 +205,7 @@ export default function FeaturesPage() {
             items={['PDF letters with an optional .docx letterhead template', 'An emailed offer link', 'A candidate acceptance page']}
           />
           <InfoCard tag="Reviews" title="Performance reviews">
-            Run review cycles with review links. Performance reviews are not part of the Starter plan.
+            Run review cycles with review links. Performance reviews are on the Max and Enterprise plans.
           </InfoCard>
         </InfoGrid>
       </Section>

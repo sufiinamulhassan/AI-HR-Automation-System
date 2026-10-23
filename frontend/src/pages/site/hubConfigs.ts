@@ -18,7 +18,7 @@ export const INTEGRATIONS_HUB: HubConfig = {
     eyebrow: 'Availability',
     title: 'Which plans include them',
     blocks: [
-      p('Zoom, Microsoft Teams, HR system integrations, webhooks and custom SMTP are on the Growth and Enterprise plans.'),
+      p('Zoom, Microsoft Teams, HR system integrations, webhooks and custom SMTP are on the Growth, Max and Enterprise plans.'),
       p('Single sign-on with your own identity provider is on the Enterprise plan. Google sign-in is also supported. Limits and features by plan are on the [pricing page](/pricing).'),
     ],
   },

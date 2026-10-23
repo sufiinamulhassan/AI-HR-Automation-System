@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from config.database import get_platform_db
 from config.settings import settings
 from config.tenancy import namespaced_id
+from services.hr_module.job_capacity import is_full
 from services.hr_module.workspace_service import list_active_companies
 
 SUMMARY_CHARS = 240
@@ -19,7 +20,7 @@ PLACEHOLDER_NAMES = {"", "default", "platform", "platform operations", "workspac
 LIST_FIELDS = {
     "_id": 0, "job_id": 1, "title": 1, "description": 1, "location": 1, "employment_type": 1,
     "is_remote": 1, "company_name": 1, "company_id": 1, "created_at": 1, "deadline_at": 1,
-    "targeting": 1, "parsed_criteria": 1, "job_grade": 1,
+    "targeting": 1, "parsed_criteria": 1, "job_grade": 1, "max_resumes": 1, "candidate_pipeline": 1,
 }
 
 
@@ -160,6 +161,7 @@ def list_view(job: dict, info: dict) -> dict:
         "skills": skills_of(job),
         "posted_at": job.get("created_at"),
         "deadline_at": job.get("deadline_at"),
+        "accepting": not is_full(job),
         "company": _company_view(info, job),
     }
 
@@ -172,7 +174,6 @@ def detail_view(job: dict, info: dict) -> dict:
         "job_grade": _plain(job.get("job_grade")) or None,
         "experience_level": _plain(criteria.get("experience_level")) or None,
         "industry": _plain(criteria.get("industry")) or None,
-        "accepting": True,
         "company": {
             **view["company"],
             "website": info["website"],
@@ -319,7 +320,7 @@ async def find_public_job(job_id: str) -> tuple[dict, dict] | None:
         return None
     row = await raw.jobs.find_one(
         {"$and": [{"job_id": str(job_id)}, *public_job_clauses(list(index), _now_iso())]},
-        {"_id": 0, "embedding": 0, "candidate_pipeline": 0},
+        {"_id": 0, "embedding": 0, "removed_candidates": 0},
     )
     if not row or row.get("company_id") not in index:
         return None

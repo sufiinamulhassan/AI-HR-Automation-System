@@ -123,7 +123,7 @@ export const INTEGRATIONS: Explainer[] = [
         ],
       },
     ],
-    plan: 'Zoom is included in the Growth and Enterprise plans, and not in Starter.',
+    plan: 'Zoom is included in the Growth, Max and Enterprise plans, and not in Starter.',
     faqs: [
       {
         q: 'Who can connect Zoom?',
@@ -256,7 +256,7 @@ export const INTEGRATIONS: Explainer[] = [
         ],
       },
     ],
-    plan: 'Microsoft Teams is included in the Growth and Enterprise plans, and not in Starter.',
+    plan: 'Microsoft Teams is included in the Growth, Max and Enterprise plans, and not in Starter.',
     faqs: [
       {
         q: 'What is the organizer?',
@@ -413,7 +413,7 @@ export const INTEGRATIONS: Explainer[] = [
         ],
       },
     ],
-    plan: 'The HR system integration is included in the Growth and Enterprise plans, and not in Starter.',
+    plan: 'The HR system integration is included in the Growth, Max and Enterprise plans, and not in Starter.',
     faqs: [
       {
         q: 'Which HR systems does it work with?',
@@ -728,7 +728,7 @@ export const INTEGRATIONS: Explainer[] = [
         ],
       },
     ],
-    plan: 'Webhooks are included in the Growth and Enterprise plans, and not in Starter.',
+    plan: 'Webhooks are included in the Growth, Max and Enterprise plans, and not in Starter.',
     faqs: [
       {
         q: 'Can I send events to Slack or Teams?',
@@ -765,7 +765,7 @@ export const INTEGRATIONS: Explainer[] = [
     eyebrow: 'Email delivery',
     headline: 'Send from the platform',
     accent: 'or from your own domain',
-    lead: 'Invitations, interview links, offers and status updates are sent by email. By default they go through the platform sender, and on Growth and Enterprise a Super Admin can switch to your own SMTP server.',
+    lead: 'Invitations, interview links, offers and status updates are sent by email. By default they go through the platform sender, and on Growth, Max and Enterprise a Super Admin can switch to your own SMTP server.',
     stats: [
       { value: '4', label: 'SMTP ports accepted: 25, 465, 587 and 2525' },
       { value: '7', label: 'days of sent and failed counts on the delivery tab' },
@@ -870,7 +870,7 @@ export const INTEGRATIONS: Explainer[] = [
         ],
       },
     ],
-    plan: 'Sending through your own mail server is included in the Growth and Enterprise plans, and every plan can send through the platform sender.',
+    plan: 'Sending through your own mail server is included in the Growth, Max and Enterprise plans, and every plan can send through the platform sender.',
     faqs: [
       {
         q: 'Can we use Amazon SES?',

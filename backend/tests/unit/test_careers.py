@@ -152,8 +152,9 @@ async def test_a_job_shows_only_a_safe_public_view_of_it(world):
     (job,) = body["jobs"]
     assert set(job) == {
         "job_id", "title", "summary", "location", "employment_type", "is_remote", "skills", "posted_at",
-        "deadline_at", "company",
+        "deadline_at", "accepting", "company",
     }
+    assert job["accepting"] is True
     assert job["skills"] == ["Python", "FastAPI", "MongoDB"]
     assert job["company"] == {"slug": "acme", "name": "Acme Corp", "logo_url": "/api/v1/branding/logo/cmp_a?v=1"}
     dumped = str(body)
@@ -457,3 +458,36 @@ def test_a_new_job_is_public_by_default_and_an_update_without_the_flag_leaves_it
     assert HRJobCreate(title="T", description="D", is_public=False).is_public is False
     assert HRJobUpdate().model_dump()["is_public"] is None
     assert HRJobUpdate(is_public=False).model_dump()["is_public"] is False
+
+
+def fill(world, job_id, cap, taken):
+    job = next(j for j in world.raw["jobs"].docs if j["job_id"] == job_id)
+    job["max_resumes"] = cap
+    job["candidate_pipeline"] = [
+        {"resume_id": f"r{i}", "similarity_score": 0.5, "pipeline_stage": "matched"} for i in range(taken)
+    ]
+    careers_service.clear_cache()
+
+
+async def test_a_job_that_reached_its_resume_limit_says_no_more_candidates_are_accepted(world):
+    fill(world, "a-new", 2, 2)
+    detail = (await world.client.get(f"{API}/jobs/a-new")).json()
+    assert detail["accepting"] is False
+    listed = {j["job_id"]: j for j in (await world.client.get(f"{API}/jobs?limit=50")).json()["jobs"]}
+    assert listed["a-new"]["accepting"] is False and listed["a-old"]["accepting"] is True
+    assert "candidate_pipeline" not in str(detail) and "max_resumes" not in str(detail)
+
+
+async def test_an_application_to_a_full_job_is_refused_and_nothing_is_stored(world):
+    fill(world, "a-new", 1, 1)
+    response = await world.client.post(f"{API}/jobs/a-new/apply", data=form(), files=files())
+    assert response.status_code == 409
+    assert response.json()["detail"] == application_service.NO_MORE_CANDIDATES
+    assert world.raw["applications"].docs == [] and world.started == []
+
+
+async def test_a_job_below_its_limit_still_takes_applications(world):
+    fill(world, "a-new", 3, 2)
+    assert (await world.client.get(f"{API}/jobs/a-new")).json()["accepting"] is True
+    response = await world.client.post(f"{API}/jobs/a-new/apply", data=form(), files=files())
+    assert response.status_code == 200, response.text

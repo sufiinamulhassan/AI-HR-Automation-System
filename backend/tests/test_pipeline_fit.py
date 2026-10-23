@@ -12,8 +12,8 @@ from services.hr_module.permissions import DEFAULT_ROLE_PERMISSIONS
 
 pytestmark = pytest.mark.anyio
 
-EM_DASH = "-"
-EN_DASH = "–"
+EM_DASH = chr(0x2014)
+EN_DASH = chr(0x2013)
 
 
 @pytest.fixture

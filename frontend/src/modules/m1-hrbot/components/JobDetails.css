@@ -272,3 +272,11 @@
 }
 .jd-careers-btn:hover { border-color: var(--primary); color: var(--primary-dark); text-decoration: none; }
 .jd-careers-copied { min-width: 5rem; font-size: .75rem; font-weight: 700; color: #15803d; }
+
+.jd-careers-pill.is-full { background: rgba(220, 38, 38, 0.1); color: #b91c1c; }
+.jd-capacity-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.jd-capacity-count { font-size: 0.88rem; font-weight: 600; color: var(--gray-800); }
+.jd-capacity-bar { margin-top: 0.5rem; height: 8px; border-radius: 999px; background: var(--gray-100); overflow: hidden; }
+.jd-capacity-fill { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width .3s ease; }
+.jd-capacity-fill.is-full { background: var(--danger); }
+.jd-capacity-note { margin-top: 0.45rem; font-size: 0.8rem; color: var(--gray-500); line-height: 1.45; }

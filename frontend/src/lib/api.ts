@@ -388,6 +388,45 @@ export interface JobComparison {
   stats: { count: number; average: number | null; highest: number | null }
 }
 
+export type PruneMode = 'job' | 'system'
+
+export interface PruneCandidate {
+  resume_id: string
+  name: string
+  similarity_score: number
+  pipeline_stage: string
+}
+
+export interface PruneResult {
+  job_id: string
+  mode: PruneMode
+  min_score: number
+  matched: number
+  protected: number
+  candidates: PruneCandidate[]
+  dry_run: boolean
+  removed: number
+  in_progress: string[]
+}
+
+export interface ResumeJobScore {
+  job_id: string
+  title: string
+  score: number | null
+  stage: string | null
+  status: 'active' | 'removed'
+  added_at?: string | null
+  removed_at?: string | null
+  min_match_score?: number | null
+}
+
+export interface ResumeJobScores {
+  resume_id: string
+  candidate_name: string
+  jobs: ResumeJobScore[]
+  total: number
+}
+
 export const jobsApi = {
   list: (params?: { page?: number; limit?: number; search?: string }) =>
     api.get('/jobs', { params }),
@@ -407,6 +446,8 @@ export const jobsApi = {
     api.post<PipelineAiOpinion>(`/jobs/${jobId}/pipeline/${resumeId}/fit/ai-opinion`),
   bulkUpdateStage: (jobId: string, resumeIds: string[], stage: string) =>
     api.post<BulkStageResult>(`/jobs/${jobId}/pipeline/bulk-stage`, { resume_ids: resumeIds, stage }),
+  pruneLowMatches: (jobId: string, d: { min_score: number; mode: PruneMode; dry_run?: boolean }) =>
+    api.post<PruneResult>(`/jobs/${jobId}/pipeline/prune`, d),
   comparison: (jobId: string, params?: { stage?: string; include_rejected?: boolean }) =>
     api.get<JobComparison>(`/jobs/${jobId}/comparison`, { params }),
   rematchAll: (invite = false) => api.post('/jobs/rematch-all', null, { params: { invite } }),
@@ -463,6 +504,7 @@ export const resumesApi = {
       '/resumes/bulk-delete', { resume_ids: resumeIds },
     ),
   getVersions: (id: string) => api.get(`/resumes/${id}/versions`),
+  jobScores: (id: string) => api.get<ResumeJobScores>(`/resumes/${id}/jobs`),
 }
 
 export const intelApi = {
@@ -1068,7 +1110,7 @@ export interface CheckResult {
 
 export interface MailTestResult {
   delivered: boolean
-  via: 'company' | 'platform'
+  via: 'company' | 'platform' | 'default'
   detail: string
 }
 
@@ -1237,6 +1279,33 @@ export const notificationSettingsApi = {
   test: () => api.post<{ sent: boolean; to: string | null; detail: string }>('/notification-settings/test'),
 }
 
+export const hrmsApi = {
+  overview: () => api.get('/hrms/overview'),
+  employees: (params?: { q?: string; department?: string; status?: string }) => api.get('/hrms/employees', { params }),
+  employee: (id: string, year?: number) => api.get(`/hrms/employees/${id}`, { params: year ? { year } : undefined }),
+  createEmployee: (d: object) => api.post('/hrms/employees', d),
+  updateEmployee: (id: string, d: object) => api.patch(`/hrms/employees/${id}`, d),
+  offboard: (id: string, d: { exited_on: string; reason?: string }) => api.post(`/hrms/employees/${id}/offboard`, d),
+  leaveTypes: () => api.get('/hrms/leave-types'),
+  createLeaveType: (d: { name: string; annual_allowance: number }) => api.post('/hrms/leave-types', d),
+  updateLeaveType: (id: string, d: { name?: string; annual_allowance?: number; active?: boolean }) => api.patch(`/hrms/leave-types/${id}`, d),
+  leaveRequests: (params?: { status?: string; employee_id?: string; year?: number; q?: string; page?: number; limit?: number }) => api.get('/hrms/leave-requests', { params }),
+  analytics: (months = 12) => api.get('/hrms/analytics', { params: { months } }),
+  requestLeave: (d: object) => api.post('/hrms/leave-requests', d),
+  approveLeave: (id: string, note?: string) => api.post(`/hrms/leave-requests/${id}/approve`, { note }),
+  rejectLeave: (id: string, note?: string) => api.post(`/hrms/leave-requests/${id}/reject`, { note }),
+  cancelLeave: (id: string) => api.post(`/hrms/leave-requests/${id}/cancel`),
+  attendance: (date: string) => api.get('/hrms/attendance', { params: { date } }),
+  markAttendance: (d: object) => api.put('/hrms/attendance', d),
+  attendanceSummary: (year: number, month: number) => api.get('/hrms/attendance/summary', { params: { year, month } }),
+  holidays: (year?: number) => api.get('/hrms/holidays', { params: year ? { year } : undefined }),
+  addHoliday: (d: { date: string; name: string; optional?: boolean }) => api.post('/hrms/holidays', d),
+  deleteHoliday: (id: string) => api.delete(`/hrms/holidays/${id}`),
+  requestCoverage: (id: string) => api.get(`/hrms/leave-requests/${id}/coverage`),
+  hireQuality: () => api.get('/hrms/insights/hire-quality'),
+  riskRadar: () => api.get('/hrms/insights/risk'),
+}
+
 export const performanceApi = {
   ratingConfig: () => api.get('/performance/rating-config'),
   ratingDimensions: {
@@ -1362,6 +1431,11 @@ export const platformApi = {
     api.post<{ admin: { email: string; name: string }; email_sent?: boolean }>(`/platform/companies/${enc(companyId)}/admins`, d),
   resetAdminPassword: (companyId: string, email: string, newPassword: string) =>
     api.post(`/platform/companies/${enc(companyId)}/admins/${enc(email)}/reset-password`, { new_password: newPassword }),
+
+  getMail: () => api.get<CompanyMail>('/platform/mail'),
+  updateMail: (d: CompanyMailInput) => api.put<CompanyMail>('/platform/mail', d),
+  verifyMail: () => api.post<CheckResult>('/platform/mail/verify'),
+  testMail: (to: string) => api.post<MailTestResult>('/platform/mail/test-send', { to }),
 
   listOwners: () => api.get<{ owners: PlatformOwner[] }>('/platform/owners'),
   createOwner: (d: OwnerInput) => api.post<{ owner?: PlatformOwner }>('/platform/owners', d),

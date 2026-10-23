@@ -62,26 +62,45 @@ TIERS: dict[str, dict] = {
     "starter": {
         "label": "Starter", "name": "starter",
         "max_companies": 1, "max_users_per_company": 5, "monthly_ai_budget_usd": 25.0,
-        "max_storage_mb": 1024,
+        "max_storage_mb": 20480,
         "features": _flags(
-            coding=False, performance=False, webhooks=False, workflows=False,
+            performance=False, webhooks=False, workflows=False,
             custom_smtp=False, oidc_sso=False, custom_domain=False, integrations=False,
         ),
-        "price_monthly_usd": 49.0,
+        "price_monthly_usd": 109.0,
+        "allowances": {
+            "positions_per_month": 10, "resumes_per_position": 500, "interviews_per_position": 10, "resumes_kept": 60000,
+        },
     },
     "growth": {
         "label": "Growth", "name": "growth",
-        "max_companies": 3, "max_users_per_company": 25, "monthly_ai_budget_usd": 150.0,
-        "max_storage_mb": 10240,
-        "features": _flags(oidc_sso=False, custom_domain=False),
+        "max_companies": 3, "max_users_per_company": 25, "monthly_ai_budget_usd": 70.0,
+        "max_storage_mb": 61440,
+        "features": _flags(performance=False, oidc_sso=False, custom_domain=False),
         "price_monthly_usd": 199.0,
+        "allowances": {
+            "positions_per_month": 15, "resumes_per_position": 750, "interviews_per_position": 15, "resumes_kept": 135000,
+        },
+    },
+    "max": {
+        "label": "Max", "name": "max",
+        "max_companies": 10, "max_users_per_company": 100, "monthly_ai_budget_usd": 170.0,
+        "max_storage_mb": 153600,
+        "features": _flags(oidc_sso=False, custom_domain=False),
+        "price_monthly_usd": 379.0,
+        "allowances": {
+            "positions_per_month": 25, "resumes_per_position": 1000, "interviews_per_position": 20, "resumes_kept": 300000,
+        },
     },
     "enterprise": {
         "label": "Enterprise", "name": "enterprise",
-        "max_companies": 25, "max_users_per_company": 500, "monthly_ai_budget_usd": 1000.0,
-        "max_storage_mb": 102400,
+        "max_companies": 25, "max_users_per_company": 500, "monthly_ai_budget_usd": None,
+        "max_storage_mb": None,
         "features": _flags(),
-        "price_monthly_usd": 799.0,
+        "price_monthly_usd": None,
+        "allowances": {
+            "positions_per_month": None, "resumes_per_position": None, "interviews_per_position": None, "resumes_kept": None,
+        },
     },
 }
 DEFAULT_TIER = "standard"

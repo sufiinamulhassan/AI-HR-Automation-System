@@ -7,7 +7,7 @@ import re
 import socket
 from datetime import datetime, timezone
 
-from config.database import get_db
+from config.database import get_db, get_platform_db
 from shared import secrets
 from shared.safe_http import UnsafeTarget, resolve_public
 from shared.utils import strip_em_dashes
@@ -15,6 +15,7 @@ from shared.utils import strip_em_dashes
 logger = logging.getLogger(__name__)
 
 SINGLETON_ID = "singleton"
+PLATFORM_MAIL_ID = "platform_mail"
 MODES = ("platform", "smtp")
 ALLOWED_PORTS = (25, 465, 587, 2525)
 DEFAULT_PORT = 587
@@ -215,42 +216,73 @@ async def get_view() -> dict:
     return view(await load_mail())
 
 
-async def save_mail(changes: dict, *, updated_by: str | None = None) -> tuple[dict, dict]:
-    db = get_db()
-    if db is None:
-        raise MailSettingsError("The database is unavailable. Try again shortly.")
-    existing = await load_mail()
+def _prepare(existing: dict | None, changes: dict, updated_by: str | None) -> dict:
     merged = merge_changes(existing, changes)
     if merged["mode"] == "smtp":
         check_ready_for_smtp(merged)
-        await assert_public_host(merged["host"], merged["port"])
     merged["updated_at"] = datetime.now(timezone.utc).isoformat()
     if updated_by:
         merged["updated_by"] = updated_by
+    return merged
 
-    from services.hr_module.company_settings_service import get_company_settings
 
-    await get_company_settings()
-    await db.company_settings.update_one({"_id": SINGLETON_ID}, {"$set": {"mail": merged}}, upsert=True)
-    summary = {
+def _summary(merged: dict, changes: dict) -> dict:
+    return {
         "mode": merged["mode"], "host": merged["host"], "port": merged["port"],
         "from_address": merged["from_address"], "username_set": bool(merged["username"]),
         "use_tls": bool(merged["use_tls"]),
         "password_changed": bool(changes.get("password")) or bool(changes.get("clear_password")),
     }
-    return view(merged), summary
 
 
-def smtp_settings(mail: dict | None) -> dict | None:
+async def save_mail(changes: dict, *, updated_by: str | None = None) -> tuple[dict, dict]:
+    db = get_db()
+    if db is None:
+        raise MailSettingsError("The database is unavailable. Try again shortly.")
+    merged = _prepare(await load_mail(), changes, updated_by)
+    if merged["mode"] == "smtp":
+        await assert_public_host(merged["host"], merged["port"])
+
+    from services.hr_module.company_settings_service import get_company_settings
+
+    await get_company_settings()
+    await db.company_settings.update_one({"_id": SINGLETON_ID}, {"$set": {"mail": merged}}, upsert=True)
+    return view(merged), _summary(merged, changes)
+
+
+async def load_platform_mail() -> dict | None:
+    raw = get_platform_db()
+    if raw is None:
+        return None
+    row = await raw.settings.find_one({"_id": PLATFORM_MAIL_ID}, {"mail": 1})
+    return (row or {}).get("mail") or None
+
+
+async def get_platform_view() -> dict:
+    return view(await load_platform_mail())
+
+
+async def save_platform_mail(changes: dict, *, updated_by: str | None = None) -> tuple[dict, dict]:
+    raw = get_platform_db()
+    if raw is None:
+        raise MailSettingsError("The database is unavailable. Try again shortly.")
+    merged = _prepare(await load_platform_mail(), changes, updated_by)
+    if merged["mode"] == "smtp":
+        await assert_public_host(merged["host"], merged["port"])
+    await raw.settings.update_one({"_id": PLATFORM_MAIL_ID}, {"$set": {"mail": merged}}, upsert=True)
+    return view(merged), _summary(merged, changes)
+
+
+def smtp_settings(mail: dict | None, *, owner: str = "company") -> dict | None:
     if not mail or mail.get("mode") != "smtp":
         return None
     from services.hr_module.email_service import valid_email_address
 
     m = _with_defaults(mail)
     if not (m["host"] and m["from_address"] and m["port"] in ALLOWED_PORTS):
-        raise MailConfigUnusable("The company's mail server settings are incomplete.")
+        raise MailConfigUnusable(f"The {owner}'s mail server settings are incomplete.")
     if valid_email_address(m["from_address"]) is None:
-        raise MailConfigUnusable("The company's sender address is not a valid email address.")
+        raise MailConfigUnusable(f"The {owner}'s sender address is not a valid email address.")
     password = secrets.decrypt(m["password"]) or ""
     if m["username"] and not password:
         raise MailConfigUnusable("The saved mail server password cannot be read. Enter it again in the mail settings.")

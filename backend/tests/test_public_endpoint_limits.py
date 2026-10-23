@@ -27,6 +27,7 @@ NO_CREDENTIAL = {
     "GET /health": "liveness probe, no data",
     "GET /health/ready": "readiness probe: one database ping and the word ready or unavailable, no data",
     "GET /api/v1/branding/public": "logo and colours for the login page, by design public",
+    "GET /api/v1/branding/logo/{company_id}": "the company logo image shown on the public careers pages, cached, no personal data",
     "GET /api/v1/performance/rating-config": "dimension names and the scale, no personal data",
 }
 
@@ -64,6 +65,12 @@ EXPECTED_THROTTLED = {
     "GET /api/v1/cron/job-sync",
     "GET /api/v1/cron/retention",
     "POST /api/v1/billing/webhook/stripe",
+    "GET /api/v1/careers/jobs",
+    "GET /api/v1/careers/filters",
+    "GET /api/v1/careers/jobs/{job_id}",
+    "POST /api/v1/careers/jobs/{job_id}/apply",
+    "GET /api/v1/site/plans",
+    "POST /api/v1/site/contact",
 }
 
 

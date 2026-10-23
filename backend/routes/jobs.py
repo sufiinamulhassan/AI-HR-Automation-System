@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from shared.auth import get_current_user, require_admin, require_permission, require_superadmin
 from shared.quotas import ai_action, check_ai_action
@@ -129,6 +129,8 @@ async def create_job(
         "is_public": body.is_public,
         "deadline_days": body.deadline_days,
         "deadline_at": _deadline_at(now, body.deadline_days),
+        "max_resumes": body.max_resumes or None,
+        "min_match_score": None,
         "parsed_criteria": {},
         "targeting": {},
         "embedding": [],
@@ -512,7 +514,8 @@ async def get_job(job_id: str, _: dict = Depends(get_current_user)):
     job = await db.jobs.find_one({"job_id": job_id}, {"_id": 0, "embedding": 0})
     if not job:
         raise HTTPException(404, "Job not found")
-    return job
+    from services.hr_module.job_capacity import capacity_view
+    return {**job, **capacity_view(job)}
 
 
 @router.get("/{job_id}/sourcing")
@@ -553,6 +556,8 @@ async def update_job(
             raise HTTPException(400, str(exc))
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if "max_resumes" in update:
+        update["max_resumes"] = update["max_resumes"] or None
     if "deadline_days" in update:
         existing = await db.jobs.find_one({"job_id": job_id}, {"created_at": 1})
         created = (existing or {}).get("created_at") or update["updated_at"]
@@ -694,6 +699,97 @@ async def get_pipeline_fit_ai_opinion(
         return await generate_second_opinion(job, resume, fit, resume_id)
     except SecondOpinionError as exc:
         raise HTTPException(502, f"AI second opinion unavailable: {exc}. Please try again shortly.")
+
+
+class PruneRequest(BaseModel):
+    min_score: float = Field(ge=1, le=100)
+    mode: str
+    dry_run: bool = False
+
+
+_PRUNE_PREVIEW_LIMIT = 200
+
+
+@router.post("/{job_id}/pipeline/prune")
+async def prune_low_matches(
+    job_id: str,
+    body: PruneRequest,
+    user: dict = Depends(require_admin),
+    _perm: dict = Depends(require_permission("jobs:update")),
+):
+    from services.hr_module import job_capacity
+    from services.hr_module.department_access import job_in_scope
+    from services.hr_module.permissions import resolve_permissions
+
+    if body.mode not in job_capacity.PRUNE_MODES:
+        raise HTTPException(422, "mode must be one of: job, system")
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+    job = await db.jobs.find_one({"job_id": job_id}, {"_id": 0, "embedding": 0})
+    if not job or not job_in_scope(job, await get_department_scope(user)):
+        raise HTTPException(404, "Job not found")
+
+    min_score = round(float(body.min_score), 2)
+    targets, protected = job_capacity.prune_targets(job, min_score)
+    ids = [t["resume_id"] for t in targets]
+    names = {
+        doc["resume_id"]: doc.get("candidate_name") or doc.get("filename") or ""
+        for doc in await db.resumes.find(
+            {"resume_id": {"$in": ids}}, {"_id": 0, "resume_id": 1, "candidate_name": 1, "filename": 1},
+        ).to_list(length=len(ids) or 1)
+    } if ids else {}
+    summary = {
+        "job_id": job_id,
+        "mode": body.mode,
+        "min_score": min_score,
+        "matched": len(targets),
+        "protected": len(protected),
+        "candidates": [
+            {**t, "name": names.get(t["resume_id"], "")} for t in targets[:_PRUNE_PREVIEW_LIMIT]
+        ],
+    }
+    if body.dry_run:
+        return {**summary, "dry_run": True, "removed": 0, "in_progress": []}
+
+    if body.mode == "system" and "resumes:delete" not in await resolve_permissions(user.get("role")):
+        raise HTTPException(403, "Missing required permission: resumes:delete")
+
+    now = datetime.now(timezone.utc).isoformat()
+    in_progress: list[str] = []
+    if body.mode == "job":
+        removed = ids
+        if ids:
+            await db.jobs.update_one(
+                {"job_id": job_id},
+                {"$pull": {"candidate_pipeline": {"resume_id": {"$in": ids}}}},
+            )
+            await db.jobs.update_one(
+                {"job_id": job_id},
+                {"$pull": {"removed_candidates": {"resume_id": {"$in": ids}}}},
+            )
+            await db.jobs.update_one(
+                {"job_id": job_id},
+                {"$push": {"removed_candidates": {"$each": job_capacity.removal_records(
+                    targets, min_percent=min_score, actor=user["email"],
+                )}}},
+            )
+    else:
+        from routes.resumes import _audit_resume_deletes, _delete_resumes
+
+        result = await _delete_resumes(db, ids) if ids else {"deleted": [], "in_progress": [], "not_found": []}
+        removed = result["deleted"]
+        in_progress = result["in_progress"]
+        if removed:
+            asyncio.create_task(_audit_resume_deletes(db, user, removed))
+    await db.jobs.update_one({"job_id": job_id}, {"$set": {"min_match_score": min_score, "updated_at": now}})
+
+    asyncio.create_task(log_audit_event(
+        db, actor_email=user["email"], actor_role=user.get("role"),
+        action="pipeline_prune_low_matches", resource_type="job", resource_id=job_id,
+        details={"mode": body.mode, "min_score": min_score, "removed": len(removed), "resume_ids": removed},
+    ))
+    return {**summary, "dry_run": False, "removed": len(removed), "in_progress": in_progress}
 
 
 class BulkStageRequest(BaseModel):

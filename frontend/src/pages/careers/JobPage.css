@@ -134,3 +134,4 @@
   .cr-job-jump { display: none; }
   .cr-job-grid { grid-template-columns: minmax(0, 1fr) 24rem; align-items: stretch; gap: 1.5rem; }
 }
+.cr-apply-closed .cr-apply-closed-link { margin-top: 1rem; display: inline-flex; }

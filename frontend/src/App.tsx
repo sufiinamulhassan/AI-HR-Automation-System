@@ -42,6 +42,7 @@ import PlatformLayout from './components/layout/PlatformLayout'
 import DashboardOverview from './modules/m1-hrbot/pages/DashboardOverview'
 import HRBotDashboard from './modules/m1-hrbot/pages/HRBotDashboard'
 import ResumesPage from './modules/m1-hrbot/pages/ResumesPage'
+import HrmsPage from './pages/hrms/HrmsPage'
 import ActivityPage from './pages/ActivityPage'
 import UsersRolesPage from './pages/admin/UsersRolesPage'
 import PlatformSettingsPage from './pages/admin/PlatformSettingsPage'
@@ -81,6 +82,7 @@ const PlatformOwnersPage = lazy(() => import('./pages/platform/PlatformOwnersPag
 const PlatformHealthPage = lazy(() => import('./pages/platform/PlatformHealthPage'))
 const PlatformAuditPage = lazy(() => import('./pages/platform/PlatformAuditPage'))
 const PlatformInboxPage = lazy(() => import('./pages/platform/PlatformInboxPage'))
+const PlatformMailPage = lazy(() => import('./pages/platform/PlatformMailPage'))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore(s => s.token)
@@ -160,6 +162,7 @@ export default function App() {
           <Route index element={<DashboardOverview />} />
           <Route path="hrbot" element={<HRBotDashboard />} />
           <Route path="resumes" element={<ResumesPage />} />
+          <Route path="hrms" element={<HrmsPage />} />
 
           <Route path="activity" element={<ActivityPage />} />
 
@@ -221,6 +224,7 @@ export default function App() {
           <Route path="health" element={<PlatformHealthPage />} />
           <Route path="audit" element={<PlatformAuditPage />} />
           <Route path="inbox" element={<PlatformInboxPage />} />
+          <Route path="mail" element={<PlatformMailPage />} />
           <Route path="owners" element={<PlatformOwnersPage />} />
           <Route path="*" element={<Navigate to="/platform" replace />} />
         </Route>

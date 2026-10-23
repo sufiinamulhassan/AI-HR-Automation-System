@@ -20,9 +20,10 @@ from routes import billing
 from routes import data_governance
 from routes import company_mail, company_integrations, platform_domains
 from routes import model_tasks
+from routes import hrms
 from config.tenancy import TenantScopeMiddleware
 from config.settings import settings, validate_runtime_config, validate_security_config
-from routes import auth, jobs, resumes, candidates, interview, intel, admin_config, scenarios, offers, analytics, workflows, webhooks, sso, coding, rbac, saved_filters, company_settings, email_templates_admin, prompt_config, branding, notification_settings, integrations, user_guide, performance, security_policies, email_delivery, interviewer_scorecard, attention, cron, system, platform, careers, site, platform_inbox
+from routes import auth, jobs, resumes, candidates, interview, intel, admin_config, scenarios, offers, analytics, workflows, webhooks, sso, coding, rbac, saved_filters, company_settings, email_templates_admin, prompt_config, branding, notification_settings, integrations, user_guide, performance, security_policies, email_delivery, interviewer_scorecard, attention, cron, system, platform, careers, site, platform_inbox, platform_mail
 
 logging.basicConfig(
     level=logging.INFO,
@@ -195,6 +196,7 @@ app.include_router(branding.router,   prefix="/api/v1/branding",   tags=["hr_mod
 app.include_router(notification_settings.router, prefix="/api/v1/notification-settings", tags=["hr_module · Notification Settings"])
 app.include_router(user_guide.router, prefix="/api/v1/user-guide", tags=["hr_module · User Guide"])
 app.include_router(performance.router, prefix="/api/v1/performance", tags=["hr_module · Performance"])
+app.include_router(hrms.router, prefix="/api/v1/hrms", tags=["hr_module · HRMS"])
 app.include_router(security_policies.router, prefix="/api/v1/security-policies", tags=["hr_module · Security Policies"])
 app.include_router(email_delivery.router, prefix="/api/v1/email-delivery", tags=["hr_module · Email Delivery"])
 app.include_router(interviewer_scorecard.router, prefix="/api/v1/interviewer-scorecard", tags=["hr_module · Interviewer Scorecard"])
@@ -210,6 +212,7 @@ app.include_router(model_tasks.router, prefix="/api/v1/model-tasks", tags=["hr_m
 app.include_router(careers.router, prefix="/api/v1/careers", tags=["hr_module · Careers"])
 app.include_router(site.router, prefix="/api/v1/site", tags=["hr_module · Site"])
 app.include_router(platform_inbox.router, prefix="/api/v1/platform", tags=["hr_module · Platform"])
+app.include_router(platform_mail.router, prefix="/api/v1/platform", tags=["hr_module · Platform"])
 
 @app.get("/health", tags=["system"])
 async def health():

@@ -6,6 +6,13 @@ export interface SitePlanFeature {
   included: boolean
 }
 
+export interface SitePlanAllowances {
+  positions_per_month: number | null
+  resumes_per_position: number | null
+  interviews_per_position: number | null
+  resumes_kept: number | null
+}
+
 export interface SitePlan {
   tier: string
   label: string
@@ -14,6 +21,7 @@ export interface SitePlan {
   max_users_per_company: number | null
   monthly_ai_budget_usd: number | null
   max_storage_mb: number | null
+  allowances?: SitePlanAllowances
   features: SitePlanFeature[]
 }
 

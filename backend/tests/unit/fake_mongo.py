@@ -176,7 +176,8 @@ def apply_update(doc, update, flt=None) -> None:
         _pull(doc, path, cond)
     for path, item in (update.get("$push") or {}).items():
         current = next(iter(_resolve(doc, path.split("."))), None)
-        _set_path(doc, path, [*(current or []), copy.deepcopy(item)])
+        items = item["$each"] if isinstance(item, dict) and "$each" in item else [item]
+        _set_path(doc, path, [*(current or []), *copy.deepcopy(items)])
     unknown = set(update) - {"$set", "$unset", "$inc", "$pull", "$push", "$setOnInsert"}
     if unknown:
         raise NotImplementedError(f"update operator {sorted(unknown)} is not supported by the test stand-in")

@@ -174,7 +174,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         q: 'Can we use Hirely.ai next to our current system?',
-        a: 'It can work alongside one if the other system can receive what Hirely.ai sends. Signed webhooks and an HRMS push are available on Growth and Enterprise, and there are no prebuilt connectors to named applicant tracking products. See [integrations](/integrations).',
+        a: 'It can work alongside one if the other system can receive what Hirely.ai sends. Signed webhooks and an HRMS push are available on Growth, Max and Enterprise, and there are no prebuilt connectors to named applicant tracking products. See [integrations](/integrations).',
       },
       {
         q: 'Do applicant tracking systems have AI features too?',
@@ -230,7 +230,7 @@ export const COMPARISONS: Comparison[] = [
       [
         'Technical screening',
         'Whether coding is covered depends on the product.',
-        'Coding assessments run against hidden test cases, with a paste-blocked editor and typing analysis, from the same candidate record. They are not part of the Starter plan.',
+        'Coding assessments run against hidden test cases, with a paste-blocked editor and typing analysis, from the same candidate record. They are part of every plan, with one coding test per interview.',
       ],
       [
         'Candidate experience',

@@ -50,6 +50,7 @@ def public_plans() -> list[dict]:
             "max_users_per_company": plan.get("max_users_per_company"),
             "monthly_ai_budget_usd": plan.get("monthly_ai_budget_usd"),
             "max_storage_mb": plan.get("max_storage_mb"),
+            "allowances": dict(plan_service.TIERS[entry["tier"]].get("allowances") or {}),
             "features": [
                 {"key": key, "label": plan_service.FEATURE_LABELS.get(key, key), "included": bool((plan.get("features") or {}).get(key))}
                 for key in plan_service.FEATURES

@@ -469,7 +469,7 @@ async def test_an_accepted_offer_or_an_employee_refuses_with_409_and_changes_not
     response = await erase(client, superadmin_headers, p.cid)
     assert response.status_code == 409
     assert response.json()["detail"] == erasure_service.EMPLOYMENT_REFUSAL
-    assert "-" not in response.json()["detail"]
+    assert chr(0x2014) not in response.json()["detail"]
     db = get_db()
     assert (await db.candidates.find_one({"candidate_id": p.cid}))["name"] == p.name
     assert await db.resumes.count_documents({"resume_id": p.rid}) == 1

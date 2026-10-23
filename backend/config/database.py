@@ -100,7 +100,7 @@ _LEGACY_GLOBAL_UNIQUE = {
 _COMPANY_INDEXED = (
     "users", "jobs", "resumes", "candidates", "offers", "employees", "coding_submissions",
     "performance_reviews", "email_log", "cost_ledger", "audit_log", "webhook_subscriptions",
-    "workflow_rules",
+    "workflow_rules", "leave_requests", "attendance",
 )
 
 
@@ -189,6 +189,13 @@ async def _create_indexes():
     await _db.employees.create_index([("candidate_id", ASCENDING)])
     await _db.employees.create_index([("manager_id", ASCENDING)])
     await _db.employees.create_index([("department", ASCENDING)])
+    await _db.employees.create_index([("employee_code", ASCENDING)], sparse=True)
+    await _unique("leave_types", "leave_type_id")
+    await _unique("leave_requests", "request_id")
+    await _db.leave_requests.create_index([("employee_id", ASCENDING), ("start_date", ASCENDING)])
+    await _db.attendance.create_index([("company_id", ASCENDING), ("employee_id", ASCENDING), ("date", ASCENDING)], unique=True)
+    await _unique("holidays", "holiday_id")
+    await _db.holidays.create_index([("date", ASCENDING)])
     await _db.performance_cycles.create_index([("cycle_id", ASCENDING)], unique=True)
     await _db.performance_reviews.create_index([("review_id", ASCENDING)], unique=True)
     await _db.performance_reviews.create_index([("secure_token", ASCENDING)], unique=True, sparse=True)

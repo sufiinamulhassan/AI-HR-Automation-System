@@ -387,7 +387,7 @@ async def test_cost_summary_prices_each_area_and_they_add_up_to_the_total(
 
     keys = [c["key"] for c in cost["categories"]]
     assert keys == [
-        "resume_parsing", "interviews", "voice", "job_descriptions", "coding", "offers", "matching", "email", "other",
+        "resume_parsing", "interviews", "reports", "voice", "job_descriptions", "coding", "offers", "matching", "email", "other",
     ]
     areas = {c["key"]: c for c in cost["categories"]}
     assert areas["other"]["cost_usd"] >= 0.03 - 1e-9

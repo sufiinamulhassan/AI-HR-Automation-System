@@ -90,6 +90,7 @@ function JobCard({ job, now }: { job: CareersJobSummary; now: number }) {
           {place && <span className="cr-tag"><PinIcon />{place}</span>}
           {type && <span className="cr-tag">{type}</span>}
           {job.is_remote && <span className="cr-tag cr-tag-remote">Remote</span>}
+          {job.accepting === false && <span className="cr-tag cr-tag-closed">No more candidates accepted</span>}
         </div>
 
         {job.summary && <p className="cr-card-summary">{job.summary}</p>}

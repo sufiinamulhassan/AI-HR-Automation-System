@@ -361,3 +361,47 @@
   .xv-prose { max-width: none; font-size: 11pt; }
   .xv-prose a { color: var(--ink); text-decoration: none; }
 }
+
+.xv-to-top {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 90;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-right: env(safe-area-inset-right, 0px);
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(34, 32, 34, 0.22);
+  opacity: 0;
+  transform: translateY(1.25rem) scale(0.9);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.3s ease;
+}
+.xv-to-top-on {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.xv-to-top-on:hover { background: var(--accent-strong); transform: scale(1.1); }
+.xv-to-top svg { transition: transform 0.3s ease; }
+.xv-to-top:hover svg { transform: translateY(-2px); }
+.xv .xv-to-top:focus-visible { border-radius: 999px; }
+
+@media (min-width: 640px) {
+  .xv-to-top { width: 3.5rem; height: 3.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xv-to-top, .xv-to-top svg { transition: none; }
+  .xv-to-top-on:hover { transform: none; }
+  .xv-to-top:hover svg { transform: none; }
+}

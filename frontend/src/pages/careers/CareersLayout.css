@@ -159,3 +159,8 @@
     transition-duration: 0.01ms !important;
   }
 }
+.cr-tag-closed {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: transparent;
+  color: #b91c1c;
+}

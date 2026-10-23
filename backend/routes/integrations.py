@@ -6,6 +6,7 @@ from config.settings import sandbox_provider, sandbox_url, settings
 from config.database import get_db
 from shared.auth import require_admin
 from services.hr_module import department_access, hrms_service, mail_settings_service, meeting_service
+from services.hr_module.email_delivery_service import active_provider
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -28,9 +29,7 @@ async def integrations_status(_: dict = Depends(require_admin)):
         "sso": {"google": bool(settings.GOOGLE_OAUTH_CLIENT_ID)},
         "email": {
             "mode": "smtp" if own_mail else "platform",
-            "transport": "smtp" if own_mail else (
-                "ses" if settings.AWS_SES_ENABLED else ("smtp" if settings.EMAIL_HOST else None)
-            ),
+            "transport": "smtp" if own_mail else await active_provider(),
         },
         "coding_sandbox": {
             "provider": sandbox_provider(),

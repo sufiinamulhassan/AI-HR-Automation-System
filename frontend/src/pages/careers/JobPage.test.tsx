@@ -225,3 +225,23 @@ describe('JobPage: closed and failed', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('We could not load this job')
   })
 })
+
+describe('JobPage: resume limit reached', () => {
+  it('says no more candidates are accepted and hides the application form', async () => {
+    api.job.mockResolvedValue({ data: makeJob({ accepting: false }) })
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Senior Engineer' })
+    expect(screen.getByRole('heading', { level: 2, name: 'No more candidates accepted' })).toBeInTheDocument()
+    expect(screen.getAllByText('No more candidates accepted')).toHaveLength(2)
+    expect(screen.queryByRole('link', { name: 'Apply now' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Submit application' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'See open roles' })).toHaveAttribute('href', '/careers')
+  })
+
+  it('keeps the application form while the job is accepting', async () => {
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Senior Engineer' })
+    expect(screen.getByRole('button', { name: 'Submit application' })).toBeInTheDocument()
+    expect(screen.queryByText('No more candidates accepted')).not.toBeInTheDocument()
+  })
+})

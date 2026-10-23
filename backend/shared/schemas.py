@@ -79,6 +79,7 @@ class HRJobCreate(BaseModel):
     model_override: str | None = None
     deadline_days: int | None = None
     is_public: bool = True
+    max_resumes: int | None = Field(default=None, ge=0, le=100000)
 
 
 class HRJobUpdate(BaseModel):
@@ -93,6 +94,7 @@ class HRJobUpdate(BaseModel):
     company_name: str | None = None
     deadline_days: int | None = None
     is_public: bool | None = None
+    max_resumes: int | None = Field(default=None, ge=0, le=100000)
 
 
 class HRCandidateCreate(BaseModel):

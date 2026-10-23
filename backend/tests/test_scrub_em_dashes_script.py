@@ -103,8 +103,8 @@ async def test_find_changes_ignores_clean_text_and_other_types():
 
 async def test_find_changes_uses_the_runtime_scrubber():
     assert script.strip_em_dashes is strip_em_dashes
-    found = script.find_changes("a, b", "t")
-    assert found == [("t", "a, b", "a, b")]
+    found = script.find_changes(f"a {EM_DASH} b", "t")
+    assert found == [("t", f"a {EM_DASH} b", "a, b")]
 
 
 async def test_get_and_set_path_round_trip_through_lists():

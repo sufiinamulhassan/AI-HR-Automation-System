@@ -188,7 +188,7 @@ async def test_the_plan_catalog_lists_the_tiers_and_switches(client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert set(body) == {"default_tier", "tiers", "features"} and body["default_tier"] == "standard"
-    assert [t["tier"] for t in body["tiers"]] == ["standard", "starter", "growth", "enterprise"]
+    assert [t["tier"] for t in body["tiers"]] == ["standard", "starter", "growth", "max", "enterprise"]
     standard = body["tiers"][0]["plan"]
     assert standard["max_users_per_company"] is None and standard["price_monthly_usd"] is None
     assert standard["features"] == {flag: True for flag in plan_service.FEATURES}

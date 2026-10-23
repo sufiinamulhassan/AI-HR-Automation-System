@@ -83,13 +83,16 @@ async def test_plans_are_read_from_the_plan_catalogue_and_hide_the_internal_tier
     assert response.status_code == 200
     assert "max-age=300" in response.headers["cache-control"]
     plans = response.json()["plans"]
-    assert [p["tier"] for p in plans] == ["starter", "growth", "enterprise"]
-    assert [p["price_monthly_usd"] for p in plans] == [49.0, 199.0, 799.0]
-    assert plans[0]["max_companies"] == 1 and plans[0]["max_users_per_company"] == 5 and plans[0]["max_storage_mb"] == 1024
+    assert [p["tier"] for p in plans] == ["starter", "growth", "max", "enterprise"]
+    assert [p["price_monthly_usd"] for p in plans] == [109.0, 199.0, 379.0, None]
+    assert plans[0]["max_companies"] == 1 and plans[0]["max_users_per_company"] == 5 and plans[0]["max_storage_mb"] == 20480
     assert all(set(p) == {
         "tier", "label", "price_monthly_usd", "max_companies", "max_users_per_company",
-        "monthly_ai_budget_usd", "max_storage_mb", "features",
+        "monthly_ai_budget_usd", "max_storage_mb", "allowances", "features",
     } for p in plans)
+    assert [p["allowances"]["positions_per_month"] for p in plans] == [10, 15, 25, None]
+    assert [p["allowances"]["interviews_per_position"] for p in plans] == [10, 15, 20, None]
+    assert [p["allowances"]["resumes_per_position"] for p in plans] == [500, 750, 1000, None]
 
 
 async def test_each_plan_lists_every_feature_with_the_catalogue_labels(world):
@@ -98,8 +101,9 @@ async def test_each_plan_lists_every_feature_with_the_catalogue_labels(world):
         assert [f["key"] for f in plan["features"]] == list(plan_service.FEATURES)
         assert all(f["label"] == plan_service.FEATURE_LABELS[f["key"]] for f in plan["features"])
     included = {t: {f["key"] for f in p["features"] if f["included"]} for t, p in plans.items()}
-    assert "coding" not in included["starter"] and "integrations" not in included["starter"]
-    assert "oidc_sso" not in included["growth"] and "custom_domain" not in included["growth"] and "coding" in included["growth"]
+    assert "coding" in included["starter"] and "integrations" not in included["starter"]
+    assert "performance" not in included["growth"] and "workflows" in included["growth"]
+    assert "oidc_sso" not in included["max"] and "custom_domain" not in included["max"] and "performance" in included["max"]
     assert included["enterprise"] == set(plan_service.FEATURES)
 
 

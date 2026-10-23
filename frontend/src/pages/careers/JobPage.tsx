@@ -169,9 +169,10 @@ export default function JobPage() {
             {place && <span className="cr-tag">{place}</span>}
             {type && <span className="cr-tag">{type}</span>}
             {job.is_remote && <span className="cr-tag cr-tag-remote">Remote</span>}
+            {!job.accepting && <span className="cr-tag cr-tag-closed">No more candidates accepted</span>}
           </div>
         </div>
-        <a href="#apply" className="btn btn-primary cr-job-jump">Apply now</a>
+        {job.accepting && <a href="#apply" className="btn btn-primary cr-job-jump">Apply now</a>}
       </header>
 
       <div className="cr-job-grid">
@@ -206,7 +207,18 @@ export default function JobPage() {
         </div>
 
         <aside className="cr-job-aside" aria-label="Apply">
-          <ApplyForm jobId={job.job_id} jobTitle={job.title} company={job.company} />
+          {job.accepting ? (
+            <ApplyForm jobId={job.job_id} jobTitle={job.title} company={job.company} />
+          ) : (
+            <section className="cr-apply cr-apply-closed" id="apply" aria-labelledby="cr-apply-title">
+              <h2 className="cr-apply-title" id="cr-apply-title">No more candidates accepted</h2>
+              <p className="cr-apply-sub">
+                {job.company.name} has received all the applications it needs for this role, so it is not taking new
+                candidates. Browse other open roles instead.
+              </p>
+              <Link to="/careers" className="btn btn-ghost btn-sm cr-apply-closed-link">See open roles</Link>
+            </section>
+          )}
         </aside>
       </div>
     </div>

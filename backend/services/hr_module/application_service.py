@@ -11,7 +11,7 @@ from pydantic import EmailStr, TypeAdapter, ValidationError
 from config.database import get_db
 from config.settings import settings
 from config.tenancy import current_company, current_company_id
-from services.hr_module import careers_service, plan_service
+from services.hr_module import careers_service, job_capacity, plan_service
 from services.hr_module.audit_service import log_audit_event
 from services.hr_module.company_settings_service import display_name
 from services.hr_module.resume_intake_service import attach_to_pipeline, run_resume_agent
@@ -23,6 +23,7 @@ MAX_PHONE_CHARS = 30
 MAX_NOTE_CHARS = 2000
 MIN_READABLE_CHARS = 40
 CLOSED_MESSAGE = "This company is not accepting applications right now. Please try again later."
+NO_MORE_CANDIDATES = "No more candidates are being accepted for this job."
 
 _EMAIL = TypeAdapter(EmailStr)
 _PHONE = re.compile(r"^[0-9+()\-. ]{5,30}$")
@@ -129,10 +130,12 @@ async def submit_application(
     now = datetime.now(timezone.utc).isoformat()
     job = await db.jobs.find_one(
         {"$and": [{"job_id": job_id}, *careers_service.visibility_clauses(now)]},
-        {"_id": 0, "job_id": 1, "title": 1, "company_name": 1},
+        {"_id": 0, "job_id": 1, "title": 1, "company_name": 1, "max_resumes": 1, "candidate_pipeline": 1},
     )
     if not job:
         raise HTTPException(404, "This job is no longer open.")
+    if job_capacity.is_full(job):
+        raise HTTPException(409, NO_MORE_CANDIDATES)
 
     if await db.applications.find_one({"job_id": job_id, "email_normalized": form["email"]}, {"_id": 1}):
         raise HTTPException(409, "You have already applied to this job with this email address.")

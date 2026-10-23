@@ -48,10 +48,10 @@ def _parse_iso(value) -> datetime | None:
     return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
 
 
-def _log_only_note(count: int) -> str:
-    from services.hr_module.email_delivery_service import current_provider
+async def _log_only_note(count: int) -> str:
+    from services.hr_module.email_delivery_service import active_provider
 
-    if count and current_provider() is None:
+    if count and await active_provider() is None:
         return " No email provider is configured, so they were only written to the server log."
     return ""
 
@@ -60,7 +60,7 @@ async def _run_reminders() -> tuple[str, str]:
     from services.hr_module.workflow_engine import send_pending_reminders
 
     sent = await send_pending_reminders()
-    return "ok", f"Sent {sent} reminder(s)." + _log_only_note(sent)
+    return "ok", f"Sent {sent} reminder(s)." + await _log_only_note(sent)
 
 
 async def send_external_interview_reminders(
@@ -160,7 +160,7 @@ async def _run_external_reminders() -> tuple[str, str]:
     if result["skipped"]:
         detail += f", {result['skipped']} skipped"
     status = "error" if result["failed"] else "ok"
-    return status, detail + "." + _log_only_note(result["sent"])
+    return status, detail + "." + await _log_only_note(result["sent"])
 
 
 def summarise_sync(summary: dict) -> tuple[str, str]:

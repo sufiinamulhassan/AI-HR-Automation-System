@@ -326,7 +326,7 @@ async def notify(event: str, context: dict | None = None) -> bool:
 
 async def send_test_notification(db) -> dict:
     from config.settings import settings
-    from services.hr_module.email_delivery_service import current_provider
+    from services.hr_module.email_delivery_service import active_provider
     from services.hr_module.email_service import scrub_error_text, send_email
 
     doc = await db.notification_settings.find_one({"_id": SINGLETON_ID}) or {}
@@ -335,7 +335,7 @@ async def send_test_notification(db) -> dict:
         return {"sent": False, "to": None, "detail": "Set a notification email address first."}
     to = ", ".join(recipients)
 
-    provider = current_provider()
+    provider = await active_provider()
     if provider is None:
         return {
             "sent": False, "to": to,

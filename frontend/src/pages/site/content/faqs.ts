@@ -131,7 +131,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: 'Which features depend on the plan?',
-        a: 'Coding assessments, performance reviews, outbound webhooks, workflow automation, custom SMTP and the HRMS, Zoom and Teams integrations are not part of Starter. SSO with your own identity provider and a custom domain are Enterprise only; see [features](/features).',
+        a: 'Outbound webhooks, workflow automation, custom SMTP and the HRMS, Zoom and Teams integrations start on Growth. Performance reviews start on Max. SSO with your own identity provider and a custom domain are Enterprise only. Coding assessments are in every plan; see [features](/features).',
       },
       {
         q: 'What if we use up our AI budget early?',

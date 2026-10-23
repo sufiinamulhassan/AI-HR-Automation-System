@@ -118,7 +118,7 @@ def _google_oauth_configured() -> bool:
     )
 
 
-def _core_integrations() -> list[dict]:
+def _core_integrations(email_configured: bool) -> list[dict]:
     active_sandbox = sandbox_provider()
     return [
         {"id": "openai", "label": "OpenAI", "configured": bool(settings.OPENAI_API_KEY)},
@@ -138,15 +138,16 @@ def _core_integrations() -> list[dict]:
         {"id": "webhook_signing", "label": "Webhook Signing", "configured": bool(settings.WEBHOOK_SIGNING_SECRET)},
         {
             "id": "smtp_email", "label": "SMTP Email",
-            "configured": bool(settings.AWS_SES_ENABLED) or bool(settings.EMAIL_HOST),
+            "configured": email_configured,
         },
     ]
 
 
 async def get_integrations_status() -> dict:
+    from services.hr_module.email_delivery_service import active_provider
     from services.hr_module.job_sources import list_sources
 
     return {
-        "core": _core_integrations(),
+        "core": _core_integrations(await active_provider() is not None),
         "job_sources": list_sources(),
     }

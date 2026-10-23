@@ -24,7 +24,7 @@ def test_standard_is_the_default_everything_on_with_no_limits_and_no_price():
     }
     assert plan_service.DEFAULT_TIER == "standard"
     assert plan_service.resolve_plan(None) == standard
-    assert list(plan_service.TIERS) == ["standard", "starter", "growth", "enterprise"]
+    assert list(plan_service.TIERS) == ["standard", "starter", "growth", "max", "enterprise"]
 
 
 def test_every_tier_is_a_complete_plan_with_every_flag():
@@ -37,12 +37,15 @@ def test_every_tier_is_a_complete_plan_with_every_flag():
 
 
 def test_the_paid_tiers_grow_in_limits_features_and_price():
-    starter, growth, enterprise = (plan_service.tier_plan(n) for n in ("starter", "growth", "enterprise"))
+    starter, growth, top, enterprise = (plan_service.tier_plan(n) for n in ("starter", "growth", "max", "enterprise"))
     for key in ("max_users_per_company", "monthly_ai_budget_usd", "max_storage_mb", "price_monthly_usd"):
-        assert 0 < starter[key] < growth[key] < enterprise[key], key
+        assert 0 < starter[key] < growth[key] < top[key], key
+    assert starter["max_companies"] < growth["max_companies"] < top["max_companies"] < enterprise["max_companies"]
+    assert enterprise["price_monthly_usd"] is None and enterprise["monthly_ai_budget_usd"] is None
     on = lambda plan: {f for f, v in plan["features"].items() if v}
-    assert on(starter) < on(growth) < on(enterprise)
+    assert on(starter) < on(growth) < on(top) < on(enterprise)
     assert on(enterprise) == set(plan_service.FEATURES)
+    assert all(plan["features"]["coding"] for plan in (starter, growth, top, enterprise))
 
 
 def test_a_tier_is_a_copy_so_editing_it_never_changes_the_catalog():
@@ -74,7 +77,7 @@ def test_a_tier_replaces_the_plan_and_the_fields_sent_with_it_override_the_prese
     tuned = plan_service.merge_plan(None, {"tier": "growth", "max_users_per_company": 12, "name": "Growth plus", "features": {"webhooks": False}})
     assert tuned["max_users_per_company"] == 12 and tuned["name"] == "Growth plus"
     assert tuned["features"]["webhooks"] is False and tuned["features"]["coding"] is True
-    assert tuned["monthly_ai_budget_usd"] == 150.0
+    assert tuned["monthly_ai_budget_usd"] == 70.0
 
 
 def test_applying_a_tier_keeps_the_trial_the_client_already_has():

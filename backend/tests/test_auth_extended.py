@@ -115,7 +115,8 @@ async def test_create_and_list_users(client, admin_headers, superadmin_headers):
     emails = [u["email"] for u in list_resp.json()]
     roles = {u["role"] for u in list_resp.json()}
     assert "newuser@hirely.ai" in emails
-    assert {"superadmin", "admin", "standard"}.issubset(roles)
+    assert {"admin", "standard"}.issubset(roles)
+    assert "superadmin@hirely.ai" not in emails
     assert all("password_hash" not in u for u in list_resp.json())
 
 

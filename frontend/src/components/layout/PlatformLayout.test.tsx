@@ -39,7 +39,7 @@ beforeEach(() => {
 })
 
 describe('PlatformLayout', () => {
-  it('names the console and lists its nine pages', () => {
+  it('names the console and lists its ten pages', () => {
     renderAt()
     const nav = screen.getByRole('navigation', { name: 'Platform console' })
 
@@ -52,6 +52,7 @@ describe('PlatformLayout', () => {
       ['AI models', '/platform/ai'],
       ['Billing', '/platform/billing'],
       ['Health', '/platform/health'],
+      ['Email', '/platform/mail'],
       ['Audit', '/platform/audit'],
       ['Platform owners', '/platform/owners'],
     ])

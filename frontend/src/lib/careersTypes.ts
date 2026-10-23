@@ -21,6 +21,7 @@ export interface CareersJobSummary {
   skills: string[]
   posted_at: string
   deadline_at: string | null
+  accepting?: boolean
   company: CareersCompanyRef
 }
 

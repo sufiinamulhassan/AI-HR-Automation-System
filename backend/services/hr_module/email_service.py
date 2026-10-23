@@ -222,6 +222,22 @@ class CompanyMailError(Exception):
     pass
 
 
+class PlatformMailError(Exception):
+    pass
+
+
+def _mail_error(owner: str, reason: str) -> Exception:
+    return PlatformMailError(reason) if owner == "platform" else CompanyMailError(reason)
+
+
+async def _platform_mail() -> dict | None:
+    try:
+        return await mail_settings_service.load_platform_mail()
+    except Exception as exc:
+        logger.info("Platform mail lookup skipped: %s", type(exc).__name__)
+        return None
+
+
 async def _send_via_company_smtp(msg: MIMEMultipart, smtp: dict) -> None:
     import aiosmtplib
 
@@ -255,13 +271,17 @@ async def send_email(
     subject, to = _one_line(subject), _one_line(to)
     company = await _company_row()
 
+    owner = "company"
     try:
         smtp = mail_settings_service.smtp_settings((company or {}).get("mail"))
+        if smtp is None:
+            owner = "platform"
+            smtp = mail_settings_service.smtp_settings(await _platform_mail(), owner=owner)
     except mail_settings_service.MailConfigUnusable as exc:
-        logger.error("Company mail settings unusable | to=%s reason=%s", to, exc)
+        logger.error("%s mail settings unusable | to=%s reason=%s", owner.capitalize(), to, exc)
         await _log_email(
             db=db, to=to, subject=subject, template=template,
-            candidate_id=candidate_id, job_id=job_id, delivered=False, error=CompanyMailError(str(exc)),
+            candidate_id=candidate_id, job_id=job_id, delivered=False, error=_mail_error(owner, str(exc)),
         )
         return False
     if smtp is not None:
@@ -276,7 +296,7 @@ async def send_email(
                 from_name=smtp["from_name"] or sender_name(), from_address=smtp["from_address"],
             )
             await _send_via_company_smtp(msg, smtp)
-            logger.info("Email sent via the company's mail server | to=%s subject=%s", to, subject)
+            logger.info("Email sent via the %s's mail server | to=%s subject=%s", owner, to, subject)
             await _log_email(
                 db=db, to=to, subject=subject, template=template,
                 candidate_id=candidate_id, job_id=job_id, delivered=True,
@@ -284,10 +304,10 @@ async def send_email(
             return True
         except Exception as exc:
             reason = mail_settings_service.describe_failure(exc)
-            logger.error("Company mail failed | to=%s reason=%s", to, reason)
+            logger.error("%s mail failed | to=%s reason=%s", owner.capitalize(), to, reason)
             await _log_email(
                 db=db, to=to, subject=subject, template=template,
-                candidate_id=candidate_id, job_id=job_id, delivered=False, error=CompanyMailError(reason),
+                candidate_id=candidate_id, job_id=job_id, delivered=False, error=_mail_error(owner, reason),
             )
             return False
 

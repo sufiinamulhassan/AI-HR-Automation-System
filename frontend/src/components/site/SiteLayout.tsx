@@ -3,6 +3,7 @@ import './SiteLayout.css'
 import { Suspense, useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { prefetchChunksWhenIdle } from '../../lib/prefetch'
+import ScrollToTop from './ScrollToTop'
 import SiteFooter from './SiteFooter'
 import SiteHeader from './SiteHeader'
 
@@ -51,6 +52,7 @@ export default function SiteLayout() {
         </Suspense>
       </main>
       <SiteFooter />
+      <ScrollToTop />
     </div>
   )
 }

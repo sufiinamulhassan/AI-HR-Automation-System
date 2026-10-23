@@ -1423,7 +1423,7 @@ def _cron_row(doc: dict) -> dict:
 async def health() -> dict:
     raw = get_platform_db()
     mongo = await database_ping()
-    provider = email_delivery_service.current_provider()
+    provider = await email_delivery_service.active_provider()
     cron: list[dict] = []
     failed: list[dict] = []
     if raw is not None and mongo["ok"]:

@@ -19,6 +19,7 @@ PLATFORM_DB_USERS = {
     "routes/sso.py",
     "routes/oidc.py",
     "routes/platform.py",
+    "routes/platform_mail.py",
     "services/hr_module/workspace_service.py",
     "services/hr_module/domains_service.py",
     "services/hr_module/platform_service.py",
@@ -27,6 +28,7 @@ PLATFORM_DB_USERS = {
     "services/hr_module/platform_jobs.py",
     "services/hr_module/careers_service.py",
     "services/hr_module/site_service.py",
+    "services/hr_module/mail_settings_service.py",
     "scripts/seed_production_data.py",
     "scripts/seed_user_guides.py",
 }

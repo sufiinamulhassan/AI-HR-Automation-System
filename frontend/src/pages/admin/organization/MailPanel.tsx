@@ -10,6 +10,44 @@ import './OrgPanels.css'
 const TITLE = 'Company mail'
 const SMTP_PORTS = [25, 465, 587, 2525]
 
+export interface MailSource {
+  title: string
+  load: () => Promise<{ data: CompanyMail }>
+  save: (d: CompanyMailInput) => Promise<{ data: CompanyMail }>
+  verify: () => Promise<{ data: CheckResult }>
+  test: (to: string) => Promise<{ data: MailTestResult }>
+  defaultLabel: string
+  ownLabel: string
+  defaultHint: string
+  incompleteHint: string
+  completeHint: string
+  ownVia: MailTestResult['via']
+  ownViaText: string
+  defaultViaText: string
+  fromNamePlaceholder: string
+  fromAddressPlaceholder: string
+  replyToPlaceholder: string
+}
+
+const COMPANY_SOURCE: MailSource = {
+  title: TITLE,
+  load: () => companySettingsApi.getMail(),
+  save: d => companySettingsApi.updateMail(d),
+  verify: () => companySettingsApi.verifyMail(),
+  test: to => companySettingsApi.testMail(to),
+  defaultLabel: 'The platform',
+  ownLabel: 'Your own mail server',
+  defaultHint: "Messages go out from the platform's sender. Choose your own server to send from your address.",
+  incompleteHint: 'Incomplete. Your own server is used only when the settings are complete.',
+  completeHint: 'Complete. Messages go out through your own server from your address, and are not sent another way if it fails.',
+  ownVia: 'company',
+  ownViaText: 'your mail server',
+  defaultViaText: "the platform's sender",
+  fromNamePlaceholder: 'Acme Hiring',
+  fromAddressPlaceholder: 'hiring@example.com',
+  replyToPlaceholder: 'hr@example.com',
+}
+
 interface Draft {
   mode: 'platform' | 'smtp'
   from_name: string
@@ -54,7 +92,7 @@ function changesOf(saved: CompanyMail, d: Draft): CompanyMailInput {
   return input
 }
 
-function MailForm({ showToast }: { showToast: (msg: string) => void }) {
+export function MailForm({ showToast, source = COMPANY_SOURCE }: { showToast: (msg: string) => void; source?: MailSource }) {
   const [mail, setMail] = useState<CompanyMail | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [loading, setLoading] = useState(true)
@@ -76,7 +114,7 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
     setLoading(true)
     setLoadError('')
     try {
-      const r = await companySettingsApi.getMail()
+      const r = await source.load()
       setMail(r.data)
       setDraft(draftFrom(r.data))
     } catch (e) {
@@ -86,7 +124,7 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
     setLoading(false)
   }
 
-  if (blocked) return <PlanBlocked title={TITLE} sentence={blocked} />
+  if (blocked) return <PlanBlocked title={source.title} sentence={blocked} />
 
   const dirty = !!mail && !!draft && Object.keys(changesOf(mail, draft)).length > 0
   const portNumber = draft && draft.port.trim() !== '' ? Number(draft.port) : null
@@ -102,7 +140,7 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
     setSaving(true)
     setSaveError('')
     try {
-      const r = await companySettingsApi.updateMail(changesOf(mail, draft))
+      const r = await source.save(changesOf(mail, draft))
       setMail(r.data)
       setDraft(draftFrom(r.data))
       setCheck(null)
@@ -120,7 +158,7 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
     setChecking(true)
     setCheck(null)
     try {
-      const r = await companySettingsApi.verifyMail()
+      const r = await source.verify()
       setCheck(r.data)
     } catch (e) {
       setCheck({ ok: false, detail: errorText(e, 'Could not check the connection.') })
@@ -134,9 +172,9 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
     setSending(true)
     setSent(null)
     try {
-      const r = await companySettingsApi.testMail(address)
+      const r = await source.test(address)
       const result: MailTestResult = r.data
-      const via = result.via === 'company' ? 'your mail server' : "the platform's sender"
+      const via = result.via === source.ownVia ? source.ownViaText : source.defaultViaText
       setSent(result.delivered
         ? { ok: true, text: `Delivered via ${via}` }
         : { ok: false, text: `Not delivered via ${via}${result.detail ? `: ${result.detail}` : ''}` })
@@ -153,7 +191,7 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
     <section className="org-section">
       <div className="org-card card">
         <div className="card-header">
-          <span className="card-title">{TITLE}</span>
+          <span className="card-title">{source.title}</span>
           {mail && draft?.mode === 'smtp' && (
             <span className={`badge ${mail.complete ? 'badge-green' : 'badge-yellow'}`}>{mail.complete ? 'Complete' : 'Incomplete'}</span>
           )}
@@ -170,7 +208,7 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
             <div className="org-field">
               <span className="form-label" id="mail-mode-label">Send email through</span>
               <div className="org-segment" role="radiogroup" aria-labelledby="mail-mode-label">
-                {([['platform', 'The platform'], ['smtp', 'Your own mail server']] as const).map(([value, label]) => (
+                {([['platform', source.defaultLabel], ['smtp', source.ownLabel]] as const).map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
@@ -185,13 +223,13 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
                 ))}
               </div>
               {draft.mode === 'platform' && (
-                <span className="org-hint">Messages go out from the platform's sender. Choose your own server to send from your address.</span>
+                <span className="org-hint">{source.defaultHint}</span>
               )}
               {draft.mode === 'smtp' && !mail.complete && (
-                <span className="org-hint">Incomplete. Your own server is used only when the settings are complete.</span>
+                <span className="org-hint">{source.incompleteHint}</span>
               )}
               {draft.mode === 'smtp' && mail.complete && (
-                <span className="org-hint">Complete. Messages go out through your own server from your address, and are not sent another way if it fails.</span>
+                <span className="org-hint">{source.completeHint}</span>
               )}
             </div>
 
@@ -200,15 +238,15 @@ function MailForm({ showToast }: { showToast: (msg: string) => void }) {
                 <div className="org-form-grid">
                   <label className="org-field">
                     <span className="form-label">From name</span>
-                    <input className="form-input" value={draft.from_name} onChange={e => set('from_name', e.target.value)} placeholder="Acme Hiring" />
+                    <input className="form-input" value={draft.from_name} onChange={e => set('from_name', e.target.value)} placeholder={source.fromNamePlaceholder} />
                   </label>
                   <label className="org-field">
                     <span className="form-label">From address</span>
-                    <input className="form-input" type="email" value={draft.from_address} onChange={e => set('from_address', e.target.value)} placeholder="hiring@example.com" />
+                    <input className="form-input" type="email" value={draft.from_address} onChange={e => set('from_address', e.target.value)} placeholder={source.fromAddressPlaceholder} />
                   </label>
                   <label className="org-field">
                     <span className="form-label">Reply-to address</span>
-                    <input className="form-input" type="email" value={draft.reply_to} onChange={e => set('reply_to', e.target.value)} placeholder="hr@example.com" />
+                    <input className="form-input" type="email" value={draft.reply_to} onChange={e => set('reply_to', e.target.value)} placeholder={source.replyToPlaceholder} />
                   </label>
                   <label className="org-field">
                     <span className="form-label">Host</span>

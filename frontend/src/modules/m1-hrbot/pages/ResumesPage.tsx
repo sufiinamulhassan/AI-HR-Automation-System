@@ -4,6 +4,7 @@ import { resumesApi, type ResumeFilterParams } from '../../../lib/api'
 import { useAuthStore } from '../../../store/auth.store'
 import ResumeFilters from '../components/ResumeFilters'
 import ResumeFolders from '../components/ResumeFolders'
+import ResumeJobsModal from '../components/ResumeJobsModal'
 import ResumeViewerModal from '../components/ResumeViewerModal'
 import UploadResumesModal from '../components/UploadResumesModal'
 import {
@@ -102,6 +103,7 @@ export default function ResumesPage() {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [viewer, setViewer] = useState<{ resumeId: string; name: string } | null>(null)
+  const [jobScores, setJobScores] = useState<{ resumeId: string; name: string } | null>(null)
   const [notice, setNotice] = useState<ResumeNotice | null>(null)
   const [showUpload, setShowUpload] = useState(false)
 
@@ -440,6 +442,9 @@ export default function ResumesPage() {
                         <button className="btn btn-ghost btn-sm rs-act" onClick={() => setViewer({ resumeId: r.resume_id, name: label })} aria-label={`View file for ${label}`}>
                           View
                         </button>
+                        <button className="btn btn-ghost btn-sm rs-act" onClick={() => setJobScores({ resumeId: r.resume_id, name: label })} aria-label={`Job matches for ${label}`} title="See every job description this candidate is in, with scores">
+                          JDs
+                        </button>
                         {isAdmin && (
                           <button className="btn btn-danger btn-sm rs-act" onClick={() => setPendingDelete({ ids: [r.resume_id], label })} aria-label={`Delete ${label}`}>
                             Delete
@@ -494,6 +499,10 @@ export default function ResumesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {jobScores && (
+        <ResumeJobsModal resumeId={jobScores.resumeId} candidateName={jobScores.name} onClose={() => setJobScores(null)} />
       )}
 
       {viewer && (

@@ -12,7 +12,7 @@ from services.hr_module.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSION_
 
 pytestmark = pytest.mark.anyio
 
-EM_DASH = "-"
+EM_DASH = chr(0x2014)
 MEET_URL = "https://meet.google.com/abc-defg-hij"
 ZOOM_URL = "https://us06web.zoom.us/j/123456789?pwd=abc"
 

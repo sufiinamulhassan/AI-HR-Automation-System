@@ -10,7 +10,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 from config.settings import settings
-from services.hr_module import email_service
+from services.hr_module import email_service, mail_settings_service
 from services.hr_module.email_service import scrub_error_text
 from shared.utils import is_invite_expired
 
@@ -44,6 +44,27 @@ def current_provider() -> str | None:
     if settings.EMAIL_HOST:
         return "smtp"
     return None
+
+
+async def platform_mail_state() -> tuple[bool, dict | None]:
+    try:
+        stored = await mail_settings_service.load_platform_mail()
+    except Exception as exc:
+        logger.info("Platform mail lookup skipped: %s", type(exc).__name__)
+        return False, None
+    if not stored or stored.get("mode") != "smtp":
+        return False, None
+    try:
+        return True, mail_settings_service.smtp_settings(stored, owner="platform")
+    except mail_settings_service.MailConfigUnusable:
+        return True, None
+
+
+async def active_provider() -> str | None:
+    chosen, smtp = await platform_mail_state()
+    if chosen:
+        return "smtp" if smtp else None
+    return current_provider()
 
 
 def hostname_only(raw: str | None) -> str | None:
@@ -148,6 +169,15 @@ def _is_google_host(host: str | None) -> bool:
     )
 
 
+_GOOGLE_WARNING = {
+    "code": "google_app_password",
+    "message": (
+        "This server sends through Gmail or Google. Google requires an App Password "
+        "(with 2-step verification turned on), not the account password."
+    ),
+}
+
+
 def boto3_available() -> bool:
     try:
         import boto3
@@ -156,7 +186,7 @@ def boto3_available() -> bool:
     return True
 
 
-def build_warnings(provider: str | None) -> list[dict]:
+def build_warnings(provider: str | None, smtp: dict | None = None) -> list[dict]:
     warnings: list[dict] = []
 
     if not settings.DEBUG and _is_local_url(settings.FRONTEND_URL):
@@ -168,6 +198,11 @@ def build_warnings(provider: str | None) -> list[dict]:
                 "Set FRONTEND_URL to your public site address."
             ),
         })
+
+    if smtp is not None:
+        if _is_google_host(smtp["host"]):
+            warnings.append(_GOOGLE_WARNING)
+        return warnings
 
     if (settings.EMAIL_FROM_NAME or "").strip().lower() in _PLACEHOLDER_SENDER_NAMES:
         warnings.append({
@@ -200,13 +235,7 @@ def build_warnings(provider: str | None) -> list[dict]:
         })
 
     if provider == "smtp" and _is_google_host(hostname_only(settings.EMAIL_HOST)):
-        warnings.append({
-            "code": "google_app_password",
-            "message": (
-                "This server sends through Gmail or Google. Google requires an App Password "
-                "(with 2-step verification turned on), not the account password."
-            ),
-        })
+        warnings.append(_GOOGLE_WARNING)
 
     return warnings
 
@@ -216,7 +245,8 @@ def _utc_iso(delta: timedelta = timedelta()) -> str:
 
 
 async def get_delivery_health(db) -> dict:
-    provider = current_provider()
+    chosen, smtp = await platform_mail_state()
+    provider = ("smtp" if smtp else None) if chosen else current_provider()
 
     since = _utc_iso(-timedelta(days=HEALTH_WINDOW_DAYS))
     grouped = await db.email_log.aggregate([
@@ -235,11 +265,11 @@ async def get_delivery_health(db) -> dict:
     return {
         "configured": provider is not None,
         "provider": provider,
-        "from_address": settings.EMAIL_FROM if provider else None,
-        "from_name": (settings.EMAIL_FROM_NAME or None) if provider else None,
-        "host": hostname_only(settings.EMAIL_HOST) if provider == "smtp" else None,
+        "from_address": smtp["from_address"] if smtp else (settings.EMAIL_FROM if provider else None),
+        "from_name": (smtp["from_name"] or None) if smtp else ((settings.EMAIL_FROM_NAME or None) if provider else None),
+        "host": smtp["host"] if smtp else (hostname_only(settings.EMAIL_HOST) if provider == "smtp" else None),
         "frontend_url": settings.FRONTEND_URL or None,
-        "warnings": build_warnings(provider),
+        "warnings": build_warnings(provider, smtp),
         "waiting_invites": await count_waiting_invites(db),
         "last_7d": {
             "sent": by_status.get("sent", 0),
@@ -263,7 +293,7 @@ async def get_delivery_health(db) -> dict:
 
 
 async def send_test_email(db, *, to: str) -> dict:
-    provider = current_provider()
+    provider = await active_provider()
     if provider is None:
         return {
             "delivered": False,
@@ -440,6 +470,15 @@ async def _verify_ses() -> dict:
 
 
 async def verify_email_transport() -> dict:
+    chosen, smtp = await platform_mail_state()
+    if chosen:
+        if smtp is None:
+            return {
+                "ok": False, "provider": "smtp",
+                "detail": "The platform mail server settings cannot be used. Enter them again in the platform console.",
+            }
+        result = await mail_settings_service.verify_connection(smtp)
+        return {"ok": result["ok"], "provider": "smtp", "detail": result["detail"]}
     provider = current_provider()
     if provider is None:
         return {
@@ -565,7 +604,7 @@ async def resend_failed_invites(
 ) -> dict:
     ids = await _select_recent_failed_invites(db, limit) if log_ids is None else list(log_ids)
 
-    provider = current_provider()
+    provider = await active_provider()
     results: list[dict] = []
     to_send: list[tuple[str, dict]] = []
     seen_candidates: set[str] = set()
@@ -658,7 +697,7 @@ async def resend_waiting_invites(db, *, admin_email: str, limit: int) -> dict:
     waiting = await list_waiting_invites(db)
     batch = waiting[:limit]
 
-    if current_provider() is None:
+    if await active_provider() is None:
         return {"attempted": 0, "sent": 0, "failed": 0, "skipped": len(batch), "remaining": len(waiting)}
 
     to_send: list[dict] = []

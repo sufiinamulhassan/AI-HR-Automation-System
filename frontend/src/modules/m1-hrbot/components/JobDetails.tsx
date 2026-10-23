@@ -8,6 +8,57 @@ interface Props {
   job: Record<string, unknown>
 }
 
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+export function jobCapacity(job: Record<string, unknown>) {
+  const limit = numberOrNull(job.max_resumes)
+  const max = limit !== null && limit > 0 ? limit : null
+  const pipeline = Array.isArray(job.candidate_pipeline) ? job.candidate_pipeline.length : 0
+  const count = numberOrNull(job.resume_count) ?? pipeline
+  return { max, count, full: max !== null && count >= max }
+}
+
+function CapacityBlock({ job }: Props) {
+  const { max, count, full } = jobCapacity(job)
+  const share = max ? Math.min(100, Math.round((count / max) * 100)) : 0
+  return (
+    <div className="jd-section">
+      <h4 className="jd-section-title">Résumé Limit</h4>
+      {max === null ? (
+        <p className="jd-capacity-note">
+          No limit. {count.toLocaleString()} résumé{count === 1 ? '' : 's'} in the pipeline. Edit the job to set a maximum.
+        </p>
+      ) : (
+        <>
+          <div className="jd-capacity-head">
+            <span className="jd-capacity-count">{count.toLocaleString()} of {max.toLocaleString()} résumés taken</span>
+            <span className={`jd-careers-pill ${full ? 'is-full' : 'is-public'}`}>
+              {full ? 'Full, no more candidates accepted' : `${(max - count).toLocaleString()} left`}
+            </span>
+          </div>
+          <div
+            className="jd-capacity-bar"
+            role="progressbar"
+            aria-label="Résumés taken"
+            aria-valuemin={0}
+            aria-valuemax={max}
+            aria-valuenow={Math.min(count, max)}
+          >
+            <span className={`jd-capacity-fill${full ? ' is-full' : ''}`} style={{ width: `${share}%` }} />
+          </div>
+          <p className="jd-capacity-note">
+            {full
+              ? 'This JD takes no more résumés and the careers page tells candidates that no more candidates are accepted.'
+              : 'When the limit is reached, this JD stops taking résumés and the careers page stops accepting applications.'}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   manual: 'Manual', linkedin: 'LinkedIn',
   remotive: 'Remotive', arbeitnow: 'Arbeitnow',
@@ -148,6 +199,8 @@ export default function JobDetails({ job }: Props) {
           <h4 className="jd-section-title">Application Deadline</h4>
           <DeadlineBar createdAt={job.created_at as string} deadlineAt={(job.deadline_at as string) ?? null} />
         </div>
+
+        <CapacityBlock job={job} />
 
         <CareersBlock job={job} />
 

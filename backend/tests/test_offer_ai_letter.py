@@ -4,6 +4,7 @@ import pytest
 
 import config.llm as llm_module
 from services.hr_module import offer_service
+from shared.utils import EM_DASH
 
 pytestmark = pytest.mark.anyio
 
@@ -67,7 +68,7 @@ def _fake_ask_llm(responses: list[str]):
 
 
 async def test_em_dash_is_detected():
-    assert offer_service._contains_ai_writing_tell("We are thrilled, truly excited.") is True
+    assert offer_service._contains_ai_writing_tell(f"We are thrilled {EM_DASH} truly excited.") is True
 
 
 async def test_double_hyphen_is_detected():
@@ -99,13 +100,13 @@ async def ai_letter_offer(client, admin_headers):
 
 
 async def test_em_dash_llm_response_never_reaches_the_final_letter(monkeypatch, ai_letter_offer):
-    offending_text = "We are so excited to have you, you will do great things here."
+    offending_text = f"We are so excited to have you {EM_DASH} you will do great things here."
     fake = _fake_ask_llm([offending_text, offending_text])
     monkeypatch.setattr(llm_module, "ask_llm", fake)
 
     updated = await offer_service.generate_offer_letter_body(ai_letter_offer)
 
-    assert "-" not in updated["ai_letter_body"]
+    assert EM_DASH not in updated["ai_letter_body"]
     assert "--" not in updated["ai_letter_body"]
     assert updated["ai_letter_body"] == offer_service._FALLBACK_LETTER_BODY
     assert updated["ai_letter_source"] == "template_fallback"
@@ -124,7 +125,7 @@ async def test_llm_response_with_blocklisted_phrase_also_falls_back(monkeypatch,
 
 
 async def test_bad_first_attempt_then_clean_regeneration_is_used(monkeypatch, ai_letter_offer):
-    bad = "We are thrilled, welcome aboard."
+    bad = f"We are thrilled {EM_DASH} welcome aboard."
     clean = "We are glad to welcome you. The team is excited to start working with you."
     fake = _fake_ask_llm([bad, clean])
     monkeypatch.setattr(llm_module, "ask_llm", fake)

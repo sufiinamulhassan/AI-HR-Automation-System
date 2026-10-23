@@ -5,6 +5,7 @@ import JobForm from '../components/JobForm'
 import JobList from '../components/JobList'
 import JobBrowserModal from '../components/JobBrowserModal'
 import JobDetails from '../components/JobDetails'
+import LowMatchCleanup from '../components/LowMatchCleanup'
 import SourcingPanel from '../components/SourcingPanel'
 import UploadResumesModal from '../components/UploadResumesModal'
 import UploadProgressWidget from '../components/UploadProgressWidget'
@@ -47,7 +48,7 @@ export default function HRBotDashboard() {
   const [showJobBrowser, setShowJobBrowser] = useState(false)
   const [showCompare, setShowCompare] = useState(false)
   const [stats, setStats] = useState<IntelStats>({})
-  const [tab, setTab] = useState<'pipeline' | 'details' | 'sourcing'>('pipeline')
+  const [tab, setTab] = useState<'pipeline' | 'details' | 'sourcing' | 'cleanup'>('pipeline')
   const [search, setSearch] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [rematching, setRematching] = useState(false)
@@ -149,6 +150,13 @@ export default function HRBotDashboard() {
       const r = await jobsApi.get(id)
       setJobDetail(r.data)
     } catch { setJobDetail(null) }
+  }
+
+  async function refreshJobDetail(id: string) {
+    try {
+      const r = await jobsApi.get(id)
+      setJobDetail(current => (current && current.job_id !== id ? current : r.data))
+    } catch { }
   }
 
   async function findJob(id: string, known: Job[]): Promise<{ job: Job; full: boolean } | null> {
@@ -347,6 +355,11 @@ export default function HRBotDashboard() {
                 Sourcing
               </button>
               {isAdmin && (
+                <button className={`tab${tab === 'cleanup' ? ' active' : ''}`} onClick={() => setTab('cleanup')}>
+                  Remove Low Matches
+                </button>
+              )}
+              {isAdmin && (
                 <button type="button" className="btn btn-ghost btn-sm content-tabs-action" onClick={() => setShowCompare(true)}>
                   <CompareIcon /> Compare
                 </button>
@@ -364,6 +377,17 @@ export default function HRBotDashboard() {
             )}
             {tab === 'details' && <JobDetails job={jobDetail ?? selectedJob} />}
             {tab === 'sourcing' && <SourcingPanel jobId={selectedJob.job_id as string} />}
+            {tab === 'cleanup' && isAdmin && (
+              <section className="lmc-panel" aria-labelledby="lmc-panel-title">
+                <h3 className="lmc-panel-title" id="lmc-panel-title">Remove Low Matches</h3>
+                <LowMatchCleanup
+                  key={selectedJob.job_id as string}
+                  jobId={selectedJob.job_id as string}
+                  currentMinimum={typeof (jobDetail ?? selectedJob).min_match_score === 'number' ? (jobDetail ?? selectedJob).min_match_score as number : null}
+                  onDone={() => { refreshJobDetail(selectedJob.job_id as string); loadJobs(search || undefined) }}
+                />
+              </section>
+            )}
           </>
         ) : (
           <div className="hrbot-empty">

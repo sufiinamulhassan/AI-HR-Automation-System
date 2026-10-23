@@ -74,6 +74,13 @@ const InboxIcon = () => (
   </svg>
 )
 
+const MailIcon = () => (
+  <svg {...iconProps} aria-hidden>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M3 7l9 6 9-6" fill="none" />
+  </svg>
+)
+
 const LogoutIcon = () => (
   <svg {...iconProps} fill="none" aria-hidden>
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -98,6 +105,7 @@ const NAV: { to: string; label: string; icon: ReactNode; end?: boolean }[] = [
   { to: '/platform/ai', label: 'AI models', icon: <AiIcon /> },
   { to: '/platform/billing', label: 'Billing', icon: <BillingIcon /> },
   { to: '/platform/health', label: 'Health', icon: <HealthIcon /> },
+  { to: '/platform/mail', label: 'Email', icon: <MailIcon /> },
   { to: '/platform/audit', label: 'Audit', icon: <AuditIcon /> },
   { to: '/platform/owners', label: 'Platform owners', icon: <OwnersIcon /> },
 ]

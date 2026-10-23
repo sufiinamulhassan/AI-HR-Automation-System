@@ -22,6 +22,7 @@ export default function JobForm({ job, onSave, onClose }: Props) {
     salary_max: (job?.salary_max as number) || '',
     is_remote: (job?.is_remote as boolean) || false,
     deadline_days: (job?.deadline_days as number) ?? 30,
+    max_resumes: (job?.max_resumes as number) ?? 0,
     is_public: job ? isJobPublic(job) : true,
   })
   const [saving, setSaving] = useState(false)
@@ -52,6 +53,7 @@ export default function JobForm({ job, onSave, onClose }: Props) {
         salary_min: form.salary_min === '' ? null : form.salary_min,
         salary_max: form.salary_max === '' ? null : form.salary_max,
         deadline_days: form.deadline_days === ('' as unknown) ? null : Number(form.deadline_days),
+        max_resumes: form.max_resumes === ('' as unknown) ? 0 : Math.max(0, Math.floor(Number(form.max_resumes))),
       }
       if (job?.job_id) await jobsApi.update(job.job_id as string, payload)
       else await jobsApi.create(payload)
@@ -117,34 +119,34 @@ export default function JobForm({ job, onSave, onClose }: Props) {
             </label>
           </div>
 
-          <div className="form-row">
+          <div className="form-row form-row-4">
             <label>Salary Min (£)
               <input type="number" value={form.salary_min} onChange={e => set('salary_min', e.target.value === '' ? '' : Number(e.target.value))} placeholder="40000" />
             </label>
             <label>Salary Max (£)
               <input type="number" value={form.salary_max} onChange={e => set('salary_max', e.target.value === '' ? '' : Number(e.target.value))} placeholder="70000" />
             </label>
-            <label className="checkbox-label">
-              <input type="checkbox" checked={form.is_remote} onChange={e => set('is_remote', e.target.checked)} />
-              Remote OK
-            </label>
-          </div>
-
-          <div className="form-row">
-            <label>Days open
+            <label title="0 means no deadline">Days open
               <input type="number" min={0} max={365} value={form.deadline_days}
                 onChange={e => set('deadline_days', e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="30" />
-              <small className="form-hint">Application window in days. After it ends, no new candidates are matched. 0 = no deadline.</small>
+                placeholder="0 = no deadline" />
+            </label>
+            <label title="0 means no limit">Max résumés
+              <input type="number" min={0} max={100000} step={1} value={form.max_resumes}
+                onChange={e => set('max_resumes', e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="0 = no limit" />
             </label>
           </div>
 
-          <div className="careers-visibility">
-            <label className="checkbox-label">
-              <input type="checkbox" checked={form.is_public} onChange={e => set('is_public', e.target.checked)} />
-              Show on the careers page
+          <div className="form-toggles">
+            <label className="toggle-chip">
+              <input type="checkbox" checked={form.is_remote} onChange={e => set('is_remote', e.target.checked)} />
+              <span>Remote OK</span>
             </label>
-            <small className="form-hint">Anyone can see this job on the public careers page and apply with a résumé. Turn it off to keep the job internal.</small>
+            <label className="toggle-chip">
+              <input type="checkbox" checked={form.is_public} onChange={e => set('is_public', e.target.checked)} />
+              <span>Show on the careers page</span>
+            </label>
           </div>
 
           <div className="form-footer">

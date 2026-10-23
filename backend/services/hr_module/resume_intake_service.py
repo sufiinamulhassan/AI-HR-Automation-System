@@ -40,6 +40,18 @@ async def attach_to_pipeline(
     *,
     rescore: bool = False,
 ) -> None:
+    from services.hr_module import job_capacity
+
+    job = await db.jobs.find_one(
+        {"job_id": job_id}, {"_id": 0, "max_resumes": 1, "candidate_pipeline": 1, "removed_candidates": 1},
+    )
+    already = any(p.get("resume_id") == resume_id for p in (job or {}).get("candidate_pipeline") or [])
+    if job is not None and not already and job_capacity.is_full(job):
+        return
+    if resume_id in job_capacity.removed_ids(job):
+        await db.jobs.update_one(
+            {"job_id": job_id}, {"$pull": {"removed_candidates": {"resume_id": resume_id}}},
+        )
     if score is None and rescore:
         score = await score_against_job(db, job_id, resume_id)
     pushed = await db.jobs.update_one(

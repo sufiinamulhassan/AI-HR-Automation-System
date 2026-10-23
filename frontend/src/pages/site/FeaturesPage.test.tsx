@@ -23,14 +23,14 @@ const SECTION_HEADINGS = [
 ]
 
 const EXPECTED_PLAN_ROWS: Record<string, string[]> = {
-  'Coding assessments': ['Not included', 'Included', 'Included'],
-  'Performance reviews': ['Not included', 'Included', 'Included'],
-  'Outbound webhooks': ['Not included', 'Included', 'Included'],
-  'Workflow automation': ['Not included', 'Included', 'Included'],
-  'Custom SMTP': ['Not included', 'Included', 'Included'],
-  'SSO with your own identity provider': ['Not included', 'Not included', 'Included'],
-  'Custom domain': ['Not included', 'Not included', 'Included'],
-  'HRMS, Zoom and Teams integrations': ['Not included', 'Included', 'Included'],
+  'Coding assessments': ['Included', 'Included', 'Included', 'Included'],
+  'Performance reviews': ['Not included', 'Not included', 'Included', 'Included'],
+  'Outbound webhooks': ['Not included', 'Included', 'Included', 'Included'],
+  'Workflow automation': ['Not included', 'Included', 'Included', 'Included'],
+  'Custom SMTP': ['Not included', 'Included', 'Included', 'Included'],
+  'SSO with your own identity provider': ['Not included', 'Not included', 'Not included', 'Included'],
+  'Custom domain': ['Not included', 'Not included', 'Not included', 'Included'],
+  'HRMS, Zoom and Teams integrations': ['Not included', 'Included', 'Included', 'Included'],
 }
 
 describe('FeaturesPage', () => {
@@ -72,12 +72,12 @@ describe('FeaturesPage', () => {
     expect(screen.getByText(/off by default, and it is switched on only in the deployment settings/i)).toBeInTheDocument()
   })
 
-  it('compares plans with three plan columns and the right values', () => {
+  it('compares plans with four plan columns and the right values', () => {
     renderPage(<FeaturesPage />)
     const table = screen.getByRole('table', { name: 'Features by plan' })
     const headers = within(table).getAllByRole('columnheader').map(cell => cell.textContent)
-    expect(headers).toEqual(['Feature', 'Starter', 'Growth', 'Enterprise'])
-    expect(headers.slice(1)).toHaveLength(3)
+    expect(headers).toEqual(['Feature', 'Starter', 'Growth', 'Max', 'Enterprise'])
+    expect(headers.slice(1)).toHaveLength(4)
 
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(Object.keys(EXPECTED_PLAN_ROWS).length)

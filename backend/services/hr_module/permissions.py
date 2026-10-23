@@ -56,6 +56,8 @@ PERMISSION_CATALOG: list[str] = [
     "email:manage",
 
     "performance:manage", "performance:review", "performance:read",
+
+    "hrms:read", "hrms:manage",
 ]
 
 _PERMISSION_SET: set[str] = set(PERMISSION_CATALOG)
@@ -63,7 +65,7 @@ _PERMISSION_SET: set[str] = set(PERMISSION_CATALOG)
 _STANDARD_PERMISSIONS: set[str] = {
     "jobs:read", "resumes:read", "intel:read", "candidates:read",
     "coding:read", "scenarios:read",
-    "offers:read", "analytics:read",
+    "offers:read", "analytics:read", "hrms:read",
 }
 
 _ADMIN_EXCLUDED: set[str] = {"users:manage", "rbac:manage", "security:manage", "candidates:erase"}

@@ -286,7 +286,8 @@ The diagrams under [How it works](#how-it-works) show the whole path, and [Using
 | | |
 |---|---|
 | **Job descriptions that parse themselves** | Write or import a JD. It becomes structured criteria, a vector, and a match against the résumé pool, so a job posted today finds candidates uploaded last month. |
-| **Bulk résumé intake** | Up to 500 résumés per batch, with text extraction, classification, content hash deduplication, matching and scoring. A **Résumés** page holds the whole pool with filters, an in page viewer and bulk delete. |
+| **Résumé limits and low match cleanup** | A JD can stop at a maximum number of résumés. Once it is full, matching stops adding to it and its careers page says no more candidates are accepted. After sourcing, HR removes the résumés below a minimum match score, either from that JD only or from the whole system. |
+| **Bulk résumé intake** | Up to 500 résumés per batch, with text extraction, classification, content hash deduplication, matching and scoring. A **Résumés** page holds the whole pool with filters, an in page viewer, bulk delete and a **JDs** button that lists every job a résumé is in with its score. |
 | **A public careers site** | `/careers` lists every open, public job of every active company, with search and filters. Each job has its own page with the full description and an apply form. A candidate uploads a résumé (PDF, DOC, DOCX or TXT, up to 4 MB), and it goes only to the company that owns the job, scored and added to that job's pipeline tagged **Career page**. |
 | **Two thresholds, one review step** | `0.35` decides what a recruiter sees. `0.70` decides what the system acts on without a human, once auto invite is on. The gap between them is the review step. |
 | **AI voice interviews** | A token linked interview. The AI asks, the candidate speaks, and each answer is transcribed and confirmed back to them. |
@@ -299,6 +300,8 @@ The diagrams under [How it works](#how-it-works) show the whole path, and [Using
 | **Sourcing and comparison** | Boolean search strings (strict, balanced, broad) generated from a JD for external sites, side by side candidate comparison and interview guides for human interviewers. |
 | **A needs attention queue** | A menu in the top bar surfaces what is stuck: invites nobody opened, interviews starting soon, offers with no response and failed emails. |
 | **Performance reviews** | Cycles scoped to the organization, a department or a job grade, with self, manager, peer and skip level reviews and configurable rating dimensions. |
+| **HRMS** | Employees, leave, attendance and holidays after the hire. A directory with offboarding, leave types with yearly allowances that count working days only, a daily attendance sheet with a monthly summary, and a company holiday calendar. Accepted offers become employees automatically. |
+| **People insights** | **Hire quality** puts the résumé match and AI interview score of everyone hired through Hirely next to their performance and attendance, and says in plain words whether interview scores predict performance. A **flight risk and burnout radar** lists the reasons behind every score. A **coverage guard** warns before approving leave that would leave a team under half strength. All of it is computed from your own data, with no AI calls. |
 | **Data governance** | Erase a candidate from every store, including vectors, and keep an anonymised tombstone. Set retention periods and a daily job erases what has aged out. |
 | **Many companies, one deployment** | Each company is an isolated workspace with its own logins, roles, branding, mail, sign-in, webhooks, audit log and AI spend. An operator console at `/platform` covers clients, usage per feature, AI spend, billing statements with optional Stripe, health and platform owner accounts. |
 | **Sign in your way** | Password, an emailed one-time code, an authenticator app with recovery codes, Google, or a company's own OpenID Connect provider. |
@@ -500,6 +503,8 @@ A public site that needs no account. `/careers` lists every open, public job of 
 
 Company admins switch a job on or off with the **Show on the careers page** checkbox in the job form. **Job Details** then shows a **Careers page** block with the public link, a **Copy** button and **Open page**.
 
+**Résumé limit.** A job with **Max résumés** set stays listed once its pipeline is full, but its page shows **No more candidates accepted** in place of the apply form, its card carries the same tag, and an application is refused with 409. Removing low matches frees places again.
+
 **Why it opens quickly.** The page uses the same header and footer as the home page, so moving to it redraws only the middle. The server keeps the job list, the filters and the company index in memory for `CAREERS_CACHE_SECONDS` and sends `Cache-Control: public, max-age=30, stale-while-revalidate=60`. The browser fetches the page code and the first page of jobs when you point at the **Careers** link, and while it is idle. When you change a filter the current jobs stay on screen, and placeholders appear only if the answer takes longer than about a second.
 
 **What a visitor sees.** A safe public view only: title, a short summary, location, employment type, remote flag, up to 6 skills, posting and closing dates, and the company name and logo. The job page adds the full description and the company's website, privacy and terms links when set. Salary, internal fields and company ids are never returned.
@@ -513,7 +518,9 @@ flowchart TD
     C -->|rejected| X(["Clear error<br/>400, 413, 415, 422 or 429"])
     C -->|passed| D["Job still public and open,<br/>company active"]
     D -->|no| Y(["404 This job is no longer open"])
-    D -->|yes| E["One application per email per job"]
+    D -->|yes| L["Job still under its résumé limit"]
+    L -->|full| V(["409 No more candidates are accepted"])
+    L -->|yes| E["One application per email per job"]
     E -->|already applied| Z(["409"])
     E -->|first time| F["Company capacity<br/>hourly cap, AI budget, storage"]
     F -->|over a limit| W(["429 for the hourly cap,<br/>503 when budget or storage is used up"])
@@ -527,8 +534,8 @@ flowchart TD
     classDef stop fill:#222022,stroke:#222022,color:#ffffff
     classDef done fill:#4778f3,stroke:#385fc0,color:#ffffff
     class A start
-    class B,C,D,E,F,G,H,I step
-    class X,Y,Z,W stop
+    class B,C,D,L,E,F,G,H,I step
+    class X,Y,Z,W,V stop
     class J done
 ```
 
@@ -679,7 +686,7 @@ These are compliance rules, not style.
 
 ## Using the app
 
-After sign in, a sidebar leads to **Overview**, **Recruiting**, **Résumés**, **Performance**, the admin pages and the in-app **User Guide**. The top bar shows who you are and holds the needs attention menu. What you see depends on your [role](#roles-and-permissions), and the examples below were captured in demo mode.
+After sign in, a sidebar leads to **Overview**, **Recruiting**, **Résumés**, **HRMS**, **Performance**, the admin pages and the in-app **User Guide**. The top bar shows who you are and holds the needs attention menu. What you see depends on your [role](#roles-and-permissions), and the examples below were captured in demo mode.
 
 ### 1. Sign in
 
@@ -697,11 +704,12 @@ Sign in with a password, or through **Sign in with Google** or the company's own
 
 <img src="docs/assets/recruiting.png" alt="The Recruiting page with a job list and a candidate pipeline filtered by stage and minimum match score" width="900">
 
-The list on the left holds your job descriptions, with **Re-match** and a search box. For the selected job there are three tabs.
+The list on the left holds your job descriptions, with **Re-match** and a search box. For the selected job there are four tabs.
 
 - **Candidate Pipeline** lists candidates with their stage, match score, interview score and skills. Filter by **all**, **matched**, **shortlisted**, **invited**, **interviewing**, **completed**, **hired** and **rejected**, set a minimum match score, and use the row actions such as **Resend invite**. **Compare** puts candidates side by side.
-- **Job Details** shows the job description and its settings, and a **Careers page** block with the job's public link, a **Copy** button and **Open page**. Candidates who applied there carry a **Career page** tag in the pipeline.
+- **Job Details** shows the job description and its settings, a **Résumé Limit** block (how many résumés are taken out of **Max résumés**, and whether the JD is full), and a **Careers page** block with the job's public link, a **Copy** button and **Open page**. Candidates who applied there carry a **Career page** tag in the pipeline.
 - **Sourcing** generates boolean search strings (strict, balanced, broad) for external sites.
+- **Remove Low Matches** (HR Admin and Super Admin) takes a minimum match score and lists the résumés below it before anything changes. **Remove from this JD only** keeps the résumé in the system and in its other JDs, and the JDs popup on the Résumés page then shows that JD as **Low score, removed by admin**. **Delete from the system completely** deletes the résumé, its file and its place in every JD. Hired candidates are always kept, and new matches below the minimum are not added to that JD later.
 
 ### 4. Résumés
 
@@ -713,10 +721,26 @@ The whole résumé pool in one place. The page opens on **Domain Folders**: one 
 - **Filters** are Domain, Skill (several at once), Seniority, Status, and Min and Max years of experience. **More filters** adds Role, Education, Industry, Min and Max salary and **Worked At**, which searches career history. Active filters show as chips with **Clear all**.
 - **Saved Searches** keeps the filters you have applied under a name, so you can reapply them later. They belong to you.
 - **Table:** open a résumé in the in page viewer with **View**, **Delete** one or select many, and press **Upload Résumés** to add up to 500 files per batch. Each row shows the parsed profile: domain, seniority and top skills.
+- **JDs** opens a scrollable popup of every job description the résumé is in, highest score first, for example "Ana Ruiz scored 59 against this JD". A JD the résumé was removed from as a low match shows **Low score, removed by admin** with no score.
 
 Role and Worked At use fields that are read from the résumé text when it is parsed (the latest job title and recent employers). Résumés parsed before these filters existed fill them only after they are read again. `python -m scripts.backfill_resume_profiles --company <company_id>` counts them and estimates the cost without calling the model, and `--apply` does the work with your OpenAI key. A new upload reads a little more text, which adds about $0.0003 per résumé.
 
-### 5. Settings
+### 5. HRMS
+
+Everything about people after they are hired, on one page with six tabs. HR Admin and Super Admin manage it, and recruiters can read it.
+
+| Tab | What it does |
+|---|---|
+| **Overview** | Six tiles (headcount, on leave today, present today, pending leave, 30 day attendance and 12 month attrition) that each open their tab, then charts over a 6, 12 or 24 month range: headcount, joiners and leavers, the daily attendance rate, leave taken by type, headcount by department, and tenure with the employment type mix. Every chart has a hover readout and a **Show table** view. On leave today, new joiners and upcoming holidays sit underneath. |
+| **People Insights** | **Hire quality**: the résumé match and AI interview score each hire had, next to their performance score and attendance, a verdict per person, and a plain answer to whether interview scores predict performance. **Flight risk and burnout radar**: a score from 0 to 100 per employee with its reasons, such as single sick days next to weekends, a fall in attendance, long days, no leave in 120 days, no manager or a low review. HR Admin and Super Admin only. |
+| **Employees** | A directory with search and department and status filters. Columns sort on a click, the list is paged (10, 25, 50 or 100 rows) and **Export CSV** downloads what the filters show. Add, edit, view and offboard. People hired through accepted offers appear automatically with their candidate name and email. The profile shows the leave balance for the year. |
+| **Leave** | Requests for an employee, approve, reject or cancel, searched and paged on the server with a count on every status filter, and leave types with yearly allowances (Annual 14, Sick 8 and Casual 6 to start). Only working days count, overlaps and requests over the balance are refused, and approved leave fills the attendance sheet. **Approve** first checks team coverage and stops to show who else is off when the department would be under half strength. |
+| **Attendance** | A daily sheet to mark present, remote, half day, absent or on leave with check in and check out times, searchable and paged, where the status totals double as filters, and a monthly summary with hours, an attendance rate bar and **Export CSV**. |
+| **Holidays** | The company holiday calendar by year. Holidays are skipped when leave is counted. |
+
+The data lives in the company's own `employees`, `leave_types`, `leave_requests`, `attendance` and `holidays` collections, behind the `hrms:read` and `hrms:manage` permissions.
+
+### 6. Settings
 
 <img src="docs/assets/settings.png" alt="Platform Settings with the System tab, platform overview tiles and Models by Job" width="900">
 
@@ -731,17 +755,17 @@ A company's configuration lives on four settings pages, each a tabbed page drive
 
 Under **Models by Job** a company can route each AI job (interview questions and scoring, interview guides, scenario scoring, interviewer voice, candidate answer transcription, CV classification, JD parsing, match second opinion, offer letter drafting) to its own model, and re-index when the embedding model changes. Prompt overrides are still served by `/api/v1/prompt-config`, but there is no settings tab for them.
 
-### 6. Performance
+### 7. Performance
 
 <img src="docs/assets/performance.png" alt="The Performance page with the Cycles, Rating Config, Employees and My Reports tabs" width="900">
 
 A review cycle module for existing employees. Run cycles scoped to the organization, a department or a job grade, with self, manager, peer and skip level reviews. Self and peer reviewers use a token link (`/performance-review/:token`), and managers use the **My Reports** tab. Rating dimensions and the rating scale are configurable per company under **Rating Config**, and tabs are shown by permission.
 
-### 7. The platform console
+### 8. The platform console
 
 Platform owners see `/platform` instead of the recruiting screens: Overview, Clients (with a page per client and per company), Inbox, Usage, AI models, Billing, Health, Audit and Platform owners. See [The platform console](#the-platform-console).
 
-### 8. The careers site
+### 9. The careers site
 
 The public side of your jobs. It needs no account, and anyone can open it, including the candidates you want to reach.
 
@@ -777,9 +801,9 @@ There are three built in roles per company, plus custom roles an admin authors, 
 
 | Role | Sidebar reads | Can do |
 |---|---|---|
-| `standard` | Recruiter Portal | Read only access to jobs, résumés, intel, candidates, coding, scenarios, offers and analytics (8 of 58 permissions) |
-| `admin` | HR Admin Portal | 54 of 58 permissions and the four admin pages. Everything except `users:manage`, `rbac:manage`, `security:manage` and `candidates:erase` |
-| `superadmin` | Super Admin Portal | All 58: users, roles and custom roles, security policies, erasure and retention, and the company's own mail, sign-in and integrations |
+| `standard` | Recruiter Portal | Read only access to jobs, résumés, intel, candidates, coding, scenarios, offers, analytics and HRMS (9 of 60 permissions) |
+| `admin` | HR Admin Portal | 56 of 60 permissions and the four admin pages. Everything except `users:manage`, `rbac:manage`, `security:manage` and `candidates:erase` |
+| `superadmin` | Super Admin Portal | All 60: users, roles and custom roles, security policies, erasure and retention, and the company's own mail, sign-in and integrations |
 | platform owner | Platform console | An account flag, `is_platform_admin`, not a role. Reaches `/platform` and the `/api/v1/platform` routes, and sees counts and spend rather than company data |
 
 The public [careers pages](#careers-page) (`/careers` and `/careers/:jobId`) and the four `/api/v1/careers` routes need no account at all. What appears there is controlled by the job's **Show on the careers page** setting, which is saved through `jobs:update` (to set it when creating a job, `jobs:create`). Those permissions belong to **HR Admin** (`admin`) and **Super Admin** (`superadmin`), not to the read only `standard` role.
@@ -1115,7 +1139,7 @@ AI-HR-Automation-System/
     scripts/              migrate_multitenant, backfill_pinecone_company, seed_production_data (demo data),
                           seed_user_guides (the in-app User Guide), backfill_resume_profiles, sandbox installer
     docs/                 hr_module.md, api_reference.json
-    tests/                92 API test modules plus 78 in tests/unit/ (no DB needed)
+    tests/                92 API test modules plus 82 in tests/unit/ (no DB needed)
 
   frontend/
     scripts/setup-mediapipe.mjs   vendors about 15 MB of proctoring assets at build time
@@ -1131,31 +1155,32 @@ AI-HR-Automation-System/
 # backend
 cd backend
 venv/Scripts/python -c "import main"        # the highest value check in the repo
-venv/Scripts/python -m pytest -q tests/unit # 2,578 tests, no database required
-venv/Scripts/python -m pytest -q            # all 4,489 tests, needs a MongoDB test database
+venv/Scripts/python -m pytest -q tests/unit # 2,668 tests, no database required
+venv/Scripts/python -m pytest -q            # all 4,579 tests, needs a MongoDB test database
 
 # frontend
 cd frontend
 npx tsc -b                                  # typecheck
 npm run lint                                # eslint .
-npm test                                    # vitest run, 3,508 tests in 162 files
+npm test                                    # vitest run, 3,584 tests in 172 files
 npm run build                               # tsc -b, then vite build
 ```
 
-**Testing status.** The frontend is clean: `tsc -b` and `eslint .` report nothing, `vite build` succeeds, and all 3,508 tests pass. In the backend, 4,489 tests are collected. `tests/unit` (2,578 tests) passes without a database. The other 1,900 or so exercise the API against MongoDB and need a throwaway test database (`MONGODB_TEST_URI` and `MONGODB_TEST`), so they are not run in a plain checkout and no pass count is claimed for them here. `python -c "import main"` resolves the entire router and service graph, so a bad import shows up as one line instead of a collection error across every test file. The database backed tests also read `PINECONE_API_KEY_TEST` and `PINECONE_INDEX_NAME_TEST` for the vector tests, they never touch `MONGODB_DB`, and they run as the Default company. The suite covers tenant isolation, the platform console API, plan limits, billing webhooks and erasure.
+**Testing status.** The frontend is clean: `tsc -b` and `eslint .` report nothing, `vite build` succeeds, and all 3,584 tests pass. In the backend, 4,579 tests are collected. `tests/unit` (2,668 tests) passes without a database. The other 1,900 or so exercise the API against MongoDB and need a throwaway test database (`MONGODB_TEST_URI` and `MONGODB_TEST`), so they are not run in a plain checkout and no pass count is claimed for them here. `python -c "import main"` resolves the entire router and service graph, so a bad import shows up as one line instead of a collection error across every test file. The database backed tests also read `PINECONE_API_KEY_TEST` and `PINECONE_INDEX_NAME_TEST` for the vector tests, they never touch `MONGODB_DB`, and they run as the Default company. The suite covers tenant isolation, the platform console API, plan limits, billing webhooks and erasure.
 
 <details>
 <summary>API reference</summary>
 
-All routers are mounted under `/api/v1`, plus `/health` and `/health/ready` at the root. That is 332 operations under `/api/v1` and 2 probes, **334 operations** in total. Interactive docs are served at `/api/docs` when `DEBUG` or `EXPOSE_API_DOCS` is on, and the in-app **API Reference** page lives at `/dashboard/api-reference`.
+All routers are mounted under `/api/v1`, plus `/health` and `/health/ready` at the root. That is 366 operations under `/api/v1` and 2 probes, **368 operations** in total. Interactive docs are served at `/api/docs` when `DEBUG` or `EXPOSE_API_DOCS` is on, and the in-app **API Reference** page lives at `/dashboard/api-reference`.
 
 | Prefix | Endpoints | Area |
 |---|---:|---|
-| `/platform` | 34 | Owner console: clients, companies, owners, usage, AI, plans, billing statements, health, audit, custom domains, contact inbox |
+| `/platform` | 38 | Owner console: clients, companies, owners, usage, AI, plans, billing statements, health, audit, custom domains, contact inbox, platform mail |
 | `/auth` | 29 | Login, OTP, authenticator app, password reset, users and invites, own profile, model default |
 | `/candidates` | 29 | Pipeline, profiles, notes, timeline, external interviews, erasure |
 | `/performance` | 27 | Cycles, reviews, goals, employees, rating config, public review links |
-| `/jobs` | 21 | JD CRUD, import, sources, deadlines, scheduled sync, pipeline |
+| `/hrms` | 25 | Employees and offboarding, charts data, leave types, leave requests and coverage, attendance and monthly summary, holidays, overview, hire quality, flight risk radar |
+| `/jobs` | 22 | JD CRUD, import, sources, deadlines, résumé limit, scheduled sync, pipeline, removing low matches |
 | `/company-settings` | 18 | Profile, mail, SSO, integrations, onboarding, retention, usage |
 | `/interview` | 17 | Prepare, turn loop, evaluate, report, report sharing |
 | `/coding` | 17 | Question bank, sessions, live view, execution, submissions |
@@ -1163,7 +1188,7 @@ All routers are mounted under `/api/v1`, plus `/health` and `/health/ready` at t
 | `/admin` | 12 | Departments, designations, job grades |
 | `/intel` | 9 | Bulk ingest batches, extraction insights, cost |
 | `/rbac` | 9 | Roles, permission matrix, audit log |
-| `/resumes` | 11 | Upload, list and search, domain folders, filter options, semantic search, versions, download, bulk delete |
+| `/resumes` | 12 | Upload, list and search, domain folders, filter options, semantic search, job matches per résumé, versions, download, bulk delete |
 | `/workflows` | 8 | Trigger, condition and action rules |
 | `/webhooks` | 8 | Outbound webhook config and delivery |
 | `/branding` | 6 | Logo, colours, public branding |
@@ -1198,7 +1223,8 @@ The token pages (`/interview/:token`, `/coding/:token`, `/offer/:token`, `/perfo
 |---|---|---|
 | `/dashboard` | `PrivateRoute` | Overview, with the onboarding checklist and cost overview |
 | `/dashboard/hrbot` | `PrivateRoute` | Recruiting: jobs, candidate pipeline, sourcing, comparison |
-| `/dashboard/resumes` | `PrivateRoute` | Résumés: the whole pool, filters, viewer, bulk delete |
+| `/dashboard/resumes` | `PrivateRoute` | Résumés: the whole pool, filters, viewer, job matches popup, bulk delete |
+| `/dashboard/hrms` | `PrivateRoute` | HRMS: overview, people insights (admins), employees, leave, attendance, holidays |
 | `/dashboard/performance` | `PrivateRoute` | Performance: cycles, rating config, employees, my reports (by permission) |
 | `/dashboard/activity`, `/dashboard/profile`, `/dashboard/guide`, `/dashboard/api-reference` | `PrivateRoute` | Ingestion batches, own profile with password and authenticator app, role specific guide, in-app API reference |
 | `/dashboard/users` | `AdminRoute` | Users & Roles, with `?tab=roles` and `?tab=audit` |

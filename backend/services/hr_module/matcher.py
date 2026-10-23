@@ -4,6 +4,7 @@ from typing import Any
 
 from config.database import get_db, get_pinecone
 from config.settings import settings
+from services.hr_module import job_capacity
 from services.hr_module.vector_scope import query_filter
 
 logger = logging.getLogger(__name__)
@@ -110,16 +111,25 @@ async def match_resume_to_jds(
 
     docs = await db.jobs.find(
         {"job_id": {"$in": [c["job_id"] for c in candidates]}},
-        {"_id": 0, "job_id": 1, "deadline_at": 1},
+        {
+            "_id": 0, "job_id": 1, "deadline_at": 1, "max_resumes": 1, "min_match_score": 1,
+            "candidate_pipeline": 1, "removed_candidates": 1,
+        },
     ).to_list(length=len(candidates))
-    open_ids = {d["job_id"] for d in docs if _job_is_open(d)}
+    open_jobs = {d["job_id"]: d for d in docs if _job_is_open(d)}
 
     matches: list[dict] = []
     for c in candidates:
-        if c["job_id"] not in open_ids:
+        job = open_jobs.get(c["job_id"])
+        if job is None or resume_id in job_capacity.removed_ids(job):
+            continue
+        if job_capacity.below_minimum(job, c["score"]):
+            continue
+        already = any(p.get("resume_id") == resume_id for p in job.get("candidate_pipeline") or [])
+        if not already and job_capacity.is_full(job):
             continue
         await db.jobs.update_one(
-            {"job_id": c["job_id"], "candidate_pipeline.resume_id": {"$ne": resume_id}},
+            job_capacity.push_filter(c["job_id"], resume_id),
             {"$push": {"candidate_pipeline": {
                 "resume_id": resume_id,
                 "similarity_score": c["score"],
@@ -143,7 +153,13 @@ async def match_jd_to_resume_pool(
     if pinecone is None or db is None:
         return []
 
-    job_doc = await db.jobs.find_one({"job_id": job_id}, {"_id": 0, "deadline_at": 1})
+    job_doc = await db.jobs.find_one(
+        {"job_id": job_id},
+        {
+            "_id": 0, "deadline_at": 1, "max_resumes": 1, "min_match_score": 1,
+            "candidate_pipeline": 1, "removed_candidates": 1,
+        },
+    )
     if job_doc is None:
         return []
     if not _job_is_open(job_doc):
@@ -188,14 +204,26 @@ async def match_jd_to_resume_pool(
         ).to_list(length=len(wanted))
     }
 
+    removed = job_capacity.removed_ids(job_doc)
+    in_pipeline = {p.get("resume_id") for p in job_doc.get("candidate_pipeline") or []}
+    slots = job_capacity.remaining_slots(job_doc)
+    scored.sort(key=lambda item: item[1], reverse=True)
+
     matches: list[dict] = []
     for resume_id, score in scored:
         if resume_id not in present:
             logger.info("Matcher skipped a vector with no resume in this company | resume_id=%s", resume_id)
             continue
+        if resume_id in removed or job_capacity.below_minimum(job_doc, score):
+            continue
+        if resume_id not in in_pipeline:
+            if slots is not None and slots <= 0:
+                continue
+            if slots is not None:
+                slots -= 1
 
         await db.jobs.update_one(
-            {"job_id": job_id, "candidate_pipeline.resume_id": {"$ne": resume_id}},
+            job_capacity.push_filter(job_id, resume_id),
             {"$push": {"candidate_pipeline": {
                 "resume_id": resume_id,
                 "similarity_score": score,

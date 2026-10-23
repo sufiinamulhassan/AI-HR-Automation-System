@@ -3,6 +3,7 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   margin-top: clamp(2rem, 1.5rem + 2vw, 3.5rem);
+  align-items: stretch;
 }
 
 .xv-plan {
@@ -14,27 +15,66 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #fff;
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
 }
-.xv-plan-skeleton { min-height: 28rem; background: linear-gradient(100deg, var(--paper) 30%, #f7f9fb 50%, var(--paper) 70%); background-size: 200% 100%; animation: xv-plan-shimmer 1.4s linear infinite; }
+.xv-plan:hover { box-shadow: 0 18px 40px rgba(34, 32, 34, 0.08); border-color: rgba(71, 120, 243, 0.35); }
+.xv-plan.is-popular {
+  border: 2px solid var(--accent);
+  background: linear-gradient(180deg, rgba(71, 120, 243, 0.06) 0%, #fff 38%);
+  box-shadow: 0 18px 40px rgba(71, 120, 243, 0.14);
+}
+.xv-plan-skeleton { min-height: 34rem; background: linear-gradient(100deg, var(--paper) 30%, #f7f9fb 50%, var(--paper) 70%); background-size: 200% 100%; animation: xv-plan-shimmer 1.4s linear infinite; }
 @keyframes xv-plan-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
-.xv-plan-name { font-size: 1.5rem; font-weight: 500; color: var(--ink); }
+.xv-plan-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.xv-plan-name { margin: 0; font-size: 1.5rem; font-weight: 600; color: var(--ink); }
+.xv-plan-badge {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.xv-plan-tagline { margin: -0.5rem 0 0; font-size: 0.95rem; line-height: 1.45; color: var(--muted); min-height: 2.8em; }
+
 .xv-plan-price { display: flex; align-items: baseline; gap: 0.25rem; margin: 0; }
 .xv-plan-amount { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: clamp(2.5rem, 2rem + 2vw, 3.25rem); font-weight: 500; letter-spacing: -0.04em; line-height: 1; color: var(--ink); }
 .xv-plan-unit { font-size: 0.95rem; color: var(--muted); }
+.xv-plan-each { margin: 0.5rem 0 0; font-size: 0.9rem; font-weight: 600; color: var(--accent-strong); }
 
-.xv-plan-limits { margin: 0; display: grid; gap: 0.5rem; padding-block: 1rem; border-block: 1px solid var(--line); }
-.xv-plan-limits div { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.95rem; }
-.xv-plan-limits dt { color: var(--muted); }
-.xv-plan-limits dd { margin: 0; font-weight: 700; color: var(--ink); text-align: right; }
+.xv-plan .xv-btn { align-self: stretch; justify-content: space-between; min-width: 0; }
+.xv-plan .xv-btn-label { min-width: 0; white-space: normal; text-align: left; line-height: 1.25; }
 
-.xv-plan-features { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.6rem; flex: 1; }
+.xv-plan-highlights {
+  margin: 0;
+  padding: 1rem 0;
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+  border-block: 1px solid var(--line);
+}
+.xv-plan-highlights li { position: relative; padding-left: 1rem; font-size: 0.95rem; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.xv-plan-highlights li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.xv-plan-group { display: flex; flex-direction: column; gap: 0.75rem; flex: 1; }
+.xv-plan-group-title { margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-strong); }
+.xv-plan-features { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
 .xv-plan-features li { display: flex; gap: 0.6rem; align-items: flex-start; font-size: 0.95rem; line-height: 1.4; color: var(--ink-700); }
-.xv-plan-features li.is-excluded { color: var(--muted); }
 .xv-plan-mark { flex: none; display: grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: var(--accent); color: #fff; }
-.xv-plan-features li.is-excluded .xv-plan-mark { background: rgba(34, 32, 34, 0.1); color: var(--muted); }
-
-.xv-plan .xv-btn { align-self: stretch; }
+.xv-plan-mark.is-off { background: rgba(34, 32, 34, 0.1); color: var(--muted); }
 
 .xv-plan-note { margin-top: 1.5rem; font-size: 0.95rem; color: var(--muted); }
 .xv-plan-note a, .xv-plan-error a:not(.xv-btn) { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
@@ -43,19 +83,82 @@
 .xv-plan-error p { margin-bottom: 1rem; color: var(--ink-700); }
 .xv-plan-error-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 
-.xv-plan-tables { display: flex; flex-direction: column; gap: 1rem; margin-top: clamp(1.5rem, 1rem + 2vw, 2.5rem); }
+.xv-compare-wrap {
+  margin-top: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.xv-compare-wrap:focus-visible { outline: 3px solid rgba(71, 120, 243, 0.35); outline-offset: 2px; }
+.xv-compare { width: 100%; min-width: 46rem; border-collapse: separate; border-spacing: 0; font-size: 0.925rem; line-height: 1.45; }
+.xv-compare th, .xv-compare td { padding: 0.8rem 1rem; border-bottom: 1px solid var(--line); text-align: center; vertical-align: middle; }
+.xv-compare tbody th[scope='row'] { text-align: left; font-weight: 500; color: var(--ink-700); }
+.xv-compare th[scope='row'], .xv-compare-corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+  min-width: 14rem;
+}
+.xv-compare thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-block: 1.1rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.xv-compare thead .xv-compare-corner {
+  z-index: 3;
+  background: var(--paper);
+  text-align: left;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.xv-compare-plan { display: block; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 1.05rem; font-weight: 600; color: var(--ink); }
+.xv-compare-price { display: block; margin-top: 0.15rem; font-size: 0.85rem; font-weight: 600; color: var(--accent-strong); }
+.xv-compare thead th.is-popular { background: var(--accent); }
+.xv-compare thead th.is-popular .xv-compare-plan, .xv-compare thead th.is-popular .xv-compare-price { color: #fff; }
+.xv-compare td.is-popular { background: rgba(71, 120, 243, 0.05); }
+.xv-compare td { font-weight: 600; color: var(--ink); }
+.xv-compare td .xv-plan-mark { margin-inline: auto; }
+.xv-compare-group th {
+  padding-block: 0.6rem;
+  background: var(--paper);
+  text-align: left;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+.xv-compare-group th[scope='colgroup'] { position: sticky; left: 0; }
+.xv-compare tbody:last-of-type tr:last-child th, .xv-compare tbody:last-of-type tr:last-child td { border-bottom: 0; }
+.xv-compare tbody tr:not(.xv-compare-group):hover th[scope='row'],
+.xv-compare tbody tr:not(.xv-compare-group):hover td { background: #f7f9fc; }
 
 @media (max-width: 639px) {
-  .xv-plan-tables .xv-table { min-width: 0; font-size: 0.8125rem; }
-  .xv-plan-tables .xv-table th, .xv-plan-tables .xv-table td { padding: 0.6rem 0.5rem; }
-  .xv-plan-tables .xv-table thead th { font-size: 10.5px; letter-spacing: 0.03em; }
+  .xv-compare { font-size: 0.8125rem; min-width: 38rem; }
+  .xv-compare th, .xv-compare td { padding: 0.6rem 0.55rem; }
+  .xv-compare th[scope='row'], .xv-compare-corner { min-width: 9.5rem; }
+  .xv-plan-tagline { min-height: 0; }
 }
 
 @media (min-width: 768px) {
-  .xv-plan-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .xv-plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .xv-plan { padding: 1.5rem; }
 }
 
-@media (min-width: 1024px) {
-  .xv-plan { padding: 2rem; }
+@media (min-width: 1200px) {
+  .xv-plan-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xv-plan { transition: none; }
 }

@@ -265,6 +265,10 @@ async def _delete_resumes(db, ids: list[str]) -> dict[str, list[str]]:
             {"candidate_pipeline.resume_id": {"$in": targets}},
             {"$pull": {"candidate_pipeline": {"resume_id": {"$in": targets}}}},
         )
+        await db.jobs.update_many(
+            {"removed_candidates.resume_id": {"$in": targets}},
+            {"$pull": {"removed_candidates": {"resume_id": {"$in": targets}}}},
+        )
         await db.resumes.update_many(
             {"superseded_by": {"$in": targets}}, {"$set": {"superseded_by": None}}
         )
@@ -319,6 +323,73 @@ async def bulk_delete_resumes(
     if result["deleted"]:
         asyncio.create_task(_audit_resume_deletes(db, user, result["deleted"]))
     return result
+
+
+@router.get("/{resume_id}/jobs")
+async def get_resume_job_scores(resume_id: str, user: dict = Depends(get_current_user)):
+    from services.hr_module.permissions import get_department_scope
+
+    db = get_db()
+    if db is None:
+        raise HTTPException(503, "Database unavailable")
+    resume = await db.resumes.find_one(
+        {"resume_id": resume_id}, {"_id": 0, "resume_id": 1, "candidate_name": 1, "filename": 1},
+    )
+    if not resume:
+        raise HTTPException(404, "Resume not found")
+
+    query: dict = {
+        "doc_type": "job",
+        "$or": [
+            {"candidate_pipeline.resume_id": resume_id},
+            {"removed_candidates.resume_id": resume_id},
+        ],
+    }
+    scope = await get_department_scope(user)
+    if scope is not None:
+        query["department_id"] = {"$in": [scope, None]}
+    jobs = await db.jobs.find(
+        query,
+        {"_id": 0, "job_id": 1, "title": 1, "deadline_at": 1, "candidate_pipeline": 1, "removed_candidates": 1},
+    ).to_list(length=1000)
+
+    scored: list[dict] = []
+    removed: list[dict] = []
+    for job in jobs:
+        entry = next((p for p in job.get("candidate_pipeline") or [] if p.get("resume_id") == resume_id), None)
+        if entry is not None:
+            score = entry.get("similarity_score")
+            unscored = bool(entry.get("targeted_upload")) and not score
+            scored.append({
+                "job_id": job["job_id"],
+                "title": job.get("title") or "",
+                "score": None if unscored or not isinstance(score, (int, float)) else round(float(score), 4),
+                "stage": entry.get("pipeline_stage") or "matched",
+                "added_at": entry.get("added_at"),
+                "status": "active",
+            })
+            continue
+        gone = next((r for r in job.get("removed_candidates") or [] if r.get("resume_id") == resume_id), None)
+        if gone is not None:
+            removed.append({
+                "job_id": job["job_id"],
+                "title": job.get("title") or "",
+                "score": None,
+                "stage": None,
+                "removed_at": gone.get("removed_at"),
+                "removed_by": gone.get("removed_by"),
+                "min_match_score": gone.get("min_match_score"),
+                "status": "removed",
+            })
+
+    scored.sort(key=lambda r: (r["score"] is None, -(r["score"] or 0), r["title"].lower()))
+    removed.sort(key=lambda r: r["title"].lower())
+    return {
+        "resume_id": resume_id,
+        "candidate_name": resume.get("candidate_name") or resume.get("filename") or "",
+        "jobs": scored + removed,
+        "total": len(scored) + len(removed),
+    }
 
 
 @router.get("/{resume_id}")

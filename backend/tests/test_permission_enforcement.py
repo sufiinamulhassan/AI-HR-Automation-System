@@ -24,6 +24,10 @@ EXEMPT: dict[str, str] = {
     "POST /api/v1/company-settings/mail/test-send": "Super Admin only and plan feature custom_smtp; no catalog permission for company mail; rate limited and audited",
     "PUT /api/v1/company-settings/integrations/{name}": "Super Admin only and plan feature integrations; no catalog permission for company integrations",
     "PATCH /api/v1/branding": "no catalog permission for branding",
+    "POST /api/v1/branding/logo": "no catalog permission for branding; size and type checked on upload",
+    "DELETE /api/v1/branding/logo": "no catalog permission for branding",
+    "PUT /api/v1/model-tasks/{task}": "no catalog permission for the AI model per task settings",
+    "POST /api/v1/model-tasks/embedding/reindex": "no catalog permission for the AI model per task settings; batched and capped",
     "PATCH /api/v1/notification-settings": "no catalog permission for notification settings",
     "POST /api/v1/notification-settings/test": "no catalog permission for notification settings",
     "PUT /api/v1/email-templates/{key}": "no catalog permission for email templates",
@@ -95,6 +99,14 @@ PLATFORM_ROUTES = {
     "PATCH /api/v1/platform/clients/{client_id}/subscription",
     "POST /api/v1/platform/clients/{client_id}/billing/checkout",
     "POST /api/v1/platform/clients/{client_id}/billing/portal",
+    "GET /api/v1/platform/ai",
+    "GET /api/v1/platform/mail",
+    "PUT /api/v1/platform/mail",
+    "POST /api/v1/platform/mail/verify",
+    "POST /api/v1/platform/mail/test-send",
+    "GET /api/v1/platform/contact-requests",
+    "PATCH /api/v1/platform/contact-requests/{request_id}",
+    "DELETE /api/v1/platform/contact-requests/{request_id}",
 }
 
 
